@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from router import auth
+from api import auth
 
 app = FastAPI(title="Snapocket API", version="0.1.0")
 
