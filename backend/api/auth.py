@@ -2,7 +2,7 @@ from fastapi import APIRouter, Response, status
 from pydantic import BaseModel
 import uuid
 from jose import jwt, JWTError
-from core.security import create_access_token #, create_refresh_token
+from core.security import createAccessToken #, createRefreshToken
 
 router = APIRouter(prefix="/auth")
 
@@ -36,7 +36,7 @@ def login(User : UserCreate, response : Response):
     # db와 로그인 정보 비교
 
     # JWT 토큰 생성
-    accessToken = create_access_token(data={"sub": User.email})
+    accessToken = createAccessToken(data={"sub": User.email})
 
     return {"success": True, "message": "로그인을 성공했습니다!", "data": {"data.access_token": accessToken, "data.token_type": "bearer"}}
 
