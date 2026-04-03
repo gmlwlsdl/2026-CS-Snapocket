@@ -1,7 +1,6 @@
 from fastapi import APIRouter, Response, status
 from pydantic import BaseModel
 import uuid
-from jose import jwt, JWTError
 from core.security import createAccessToken #, createRefreshToken
 
 router = APIRouter(prefix="/auth")

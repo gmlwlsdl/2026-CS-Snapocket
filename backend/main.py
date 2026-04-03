@@ -4,6 +4,9 @@ from api import auth
 from graph import schema
 from strawberry.fastapi import GraphQLRouter
 
+from routers.documents import router as documents_router
+from routers.tags import router as tags_router
+
 app = FastAPI(title="Snapocket API", version="0.1.0")
 
 app.add_middleware(
@@ -14,11 +17,17 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+<<<<<<< Updated upstream
 app.include_router(auth.router)
 app.include_router(schema.router)
 
 graphql_app = GraphQLRouter(schema)
 app.include_router(graphql_app, prefix="/graphql")
+=======
+app.include_router(documents_router)
+app.include_router(tags_router)
+
+>>>>>>> Stashed changes
 
 @app.get("/")
 def root():
