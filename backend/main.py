@@ -17,7 +17,7 @@ app.add_middleware(
 app.include_router(auth.router)
 app.include_router(schema.router)
 
-graphql_app = GraphQLRouter(schema)
+graphql_app = GraphQLRouter(schema.data)
 app.include_router(graphql_app, prefix="/graphql")
 
 @app.get("/")

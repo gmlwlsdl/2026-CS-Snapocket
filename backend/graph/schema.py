@@ -40,29 +40,36 @@ class Query:
 
         # db조회 후 노드생성
 
+        nodes = []
+
+        # 카테고리에 따라 선택적으로 결과값 리턴
         if category:
             return
-        return
+        return nodes
     
     @strawberry.field
     def edges(self) -> List[Edge]:
 
         # db조회 후 엣지생성
 
-        return
+        edges = []
+
+        return edges
     
     @strawberry.field
-    def search_nodes(self, query: str) -> List[SearchNode]:
+    def searchNodes(self, query: str) -> List[SearchNode]:
         
         # db 조회 후 결과생성
 
-        return
+        nodes = []
+
+        return nodes
     
-schema = strawberry.Schema(query=Query)
+data = strawberry.Schema(query=Query)
 
 @router.get("/summary")
 def summary():
 
     # db에서 요약데이터 조회
 
-    return
+    return {"success": True, "message": "조회 성공", "data": {}}

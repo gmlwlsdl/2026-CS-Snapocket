@@ -25,7 +25,7 @@ def sighup(User : UserCreate, response : Response):
 
     # http 상태 코드 설정
     response.status_code = status.HTTP_201_CREATED
-    return {"success": True, "message": "회원가입을 성공했습니다!", "data": {"data.user_id": userId}}
+    return {"success": True, "message": "회원가입을 성공했습니다!", "data": {"user_id": userId}}
 
 
 # 로그인
@@ -38,10 +38,10 @@ def login(User : UserCreate, response : Response):
     # JWT 토큰 생성
     accessToken = createAccessToken(data={"sub": User.email})
 
-    return {"success": True, "message": "로그인을 성공했습니다!", "data": {"data.access_token": accessToken, "data.token_type": "bearer"}}
+    return {"success": True, "message": "로그인을 성공했습니다!", "data": {"access_token": accessToken, "token_type": "bearer"}}
 
 # 현재 사용자 정보
 @router.get("/me")
 def me():
     
-    return
+    return {"success": True, "message": "", "data": {}}
