@@ -21,6 +21,7 @@ app.add_middleware(
 app.include_router(documents_router)
 app.include_router(tags_router)
 app.include_router(upload_router)
+app.include_router(analysis_router)
 
 
 @app.get("/")
