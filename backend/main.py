@@ -1,11 +1,12 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-import models  # noqa
+import models  # noqa: F401
 
 from routers.documents import router as documents_router
 from routers.tags import router as tags_router
 from routers.upload import router as upload_router
+from routers.analysis import router as analysis_router
 
 app = FastAPI(title="Snapocket API", version="0.1.0")
 
