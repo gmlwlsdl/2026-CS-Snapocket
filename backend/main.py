@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from models import user, document, tag, document_tag, analysis_job # noqa: F401
+import models  # noqa
 
 from routers.documents import router as documents_router
 from routers.tags import router as tags_router
