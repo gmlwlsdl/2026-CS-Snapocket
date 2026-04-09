@@ -1,7 +1,6 @@
-from fastapi import APIRouter, Response, status
+from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel
 import uuid
-from jose import jwt, JWTError
 from core.security import createAccessToken #, createRefreshToken
 
 router = APIRouter(prefix="/auth")
@@ -13,27 +12,65 @@ class UserCreate(BaseModel):
 
 # 회원가입
 # 유저가 입력한 정보를 받아 유효성 검사 후 유저 id생성
-@router.post("/signup")
-def sighup(User : UserCreate, response : Response):
+@router.post("/signup", status_code = status.HTTP_201_CREATED)
+def sighup(User : UserCreate):
 
     # 유효성 검사 부분
+    if False:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "success": False,
+                "message": "비밀번호 조건 미충족",
+                "data": {"error_code": "INVALID_PASSWORD"}
+            }
+        )
+    
+    if False:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "success": False,
+                "message": "중복된 이메일 주소입니다.",
+                "data": {"error_code": "EMAIL_ALREADY_EXISTS"}
+            }
+        )
 
     # 유저 id생성
     userId = uuid.uuid1()
 
     # 유저정보 db저장 부분
 
-    # http 상태 코드 설정
-    response.status_code = status.HTTP_201_CREATED
     return {"success": True, "message": "회원가입을 성공했습니다!", "data": {"user_id": userId}}
 
 
 # 로그인
 # 로그인 정보를 받아 유저db와 비교 후 JWT토큰 발행
 @router.post("/login")
-def login(User : UserCreate, response : Response):
+def login(User : UserCreate):
 
     # db와 로그인 정보 비교
+
+    
+    if False:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail={
+                "success": False,
+                "message": "비밀번호가 일치하지 않습니다.",
+                "data": {"error_code": "INVALID_CREDENTIALS"}
+            }
+        )
+    
+    if False:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail={
+                "success": False,
+                "message": "존재하지 않는 계정입니다.",
+                "data": {"error_code": "ACCOUNT_NOT_FOUND"}
+            }
+        )
 
     # JWT 토큰 생성
     accessToken = createAccessToken(data={"sub": User.email})

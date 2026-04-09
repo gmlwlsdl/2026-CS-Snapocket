@@ -2,11 +2,12 @@ import strawberry
 from typing import List, Optional
 from fastapi import APIRouter
 from pydantic import BaseModel
+from core.exceptions import UnauthorizedError, NotFoundError, BadUserInputError, InternalServerError
 
 router = APIRouter(prefix="/graph")
 
 @strawberry.type
-class Node:
+class Node(BaseModel):
     id: str
     title: str
     category: str
@@ -14,14 +15,14 @@ class Node:
     created_at: str
     connection_count: int
 
-@strawberry.type
-class Edge:
+""" @strawberry.type
+class Edge(BaseModel):
     source: str
     target: str
-    weight: float
+    weight: float """
 
 @strawberry.type
-class SearchNode:
+class SearchNode(BaseModel):
     id: str
     title: str
     category: str
@@ -38,7 +39,14 @@ class Query:
     @strawberry.field
     def nodes(self, category: Optional[str] = None) -> List[Node]:
 
+        if False:
+            raise UnauthorizedError()
+
         # db조회 후 노드생성
+
+
+        if False:
+            raise NotFoundError()
 
         nodes = []
 
@@ -47,19 +55,33 @@ class Query:
             return
         return nodes
     
-    @strawberry.field
+    """ @strawberry.field
     def edges(self) -> List[Edge]:
+    
+        if False:
+            raise UnauthorizedError()
 
         # db조회 후 엣지생성
 
+
+        if False:
+            raise NotFoundError()
+
         edges = []
 
-        return edges
+        return edges """
     
     @strawberry.field
     def searchNodes(self, query: str) -> List[SearchNode]:
+
+        if False:
+            raise UnauthorizedError()
         
         # db 조회 후 결과생성
+
+
+        if False:
+            raise NotFoundError()
 
         nodes = []
 
