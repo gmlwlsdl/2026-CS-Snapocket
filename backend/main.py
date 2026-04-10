@@ -18,7 +18,8 @@ app.add_middleware(
 app.include_router(auth.router)
 app.include_router(router)
 
-graphql_app = GraphQLRouter(data, context_getter=getContext)
+# , context_getter=getContext 토큰인증 나중에 추가
+graphql_app = GraphQLRouter(data)
 app.include_router(graphql_app, prefix="/graphql")
 
 @app.get("/")
