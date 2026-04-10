@@ -1,7 +1,8 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from api import auth
-from graph import schema
+from graph.schema import data, router
+from graph.context import getContext
 from strawberry.fastapi import GraphQLRouter
 
 app = FastAPI(title="Snapocket API", version="0.1.0")
@@ -15,9 +16,9 @@ app.add_middleware(
 )
 
 app.include_router(auth.router)
-app.include_router(schema.router)
+app.include_router(router)
 
-graphql_app = GraphQLRouter(schema.data)
+graphql_app = GraphQLRouter(data, context_getter=getContext)
 app.include_router(graphql_app, prefix="/graphql")
 
 @app.get("/")

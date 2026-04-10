@@ -1,4 +1,5 @@
 import strawberry
+from strawberry.types import Info
 from typing import List, Optional
 from fastapi import APIRouter
 from pydantic import BaseModel
@@ -7,7 +8,7 @@ from core.exceptions import UnauthorizedError, NotFoundError, BadUserInputError,
 router = APIRouter(prefix="/graph")
 
 @strawberry.type
-class Node(BaseModel):
+class Node:
     id: str
     title: str
     category: str
@@ -16,13 +17,13 @@ class Node(BaseModel):
     connection_count: int
 
 """ @strawberry.type
-class Edge(BaseModel):
+class Edge:
     source: str
     target: str
     weight: float """
 
 @strawberry.type
-class SearchNode(BaseModel):
+class SearchNode:
     id: str
     title: str
     category: str
@@ -37,29 +38,36 @@ class GraphSummaryData(BaseModel):
 @strawberry.type
 class Query:
     @strawberry.field
-    def nodes(self, category: Optional[str] = None) -> List[Node]:
+    def profile(self, info: Info) -> str:
+        user = info.context.get("user")
 
-        if False:
+        if not user:
             raise UnauthorizedError()
 
-        # db조회 후 노드생성
+    @strawberry.field
+    def nodes(self, category: Optional[str] = None) -> List[Node]:
 
+        try:
 
-        if False:
-            raise NotFoundError()
+            # db 조회 후 결과생성
+            
 
-        nodes = []
+            if False:
+                raise NotFoundError()
 
-        # 카테고리에 따라 선택적으로 결과값 리턴
-        if category:
-            return
-        return nodes
+            nodes = []
+
+            # 카테고리에 따라 선택적으로 결과값 리턴
+            if category:
+                return
+            return nodes
+            
+        except Exception as e:
+            print()
+            raise InternalServerError()
     
     """ @strawberry.field
     def edges(self) -> List[Edge]:
-    
-        if False:
-            raise UnauthorizedError()
 
         # db조회 후 엣지생성
 
@@ -75,17 +83,23 @@ class Query:
     def searchNodes(self, query: str) -> List[SearchNode]:
 
         if False:
-            raise UnauthorizedError()
+            raise BadUserInputError()
         
-        # db 조회 후 결과생성
+        try:
+
+            # db 조회 후 결과생성
 
 
-        if False:
-            raise NotFoundError()
+            if False:
+                raise NotFoundError()
 
-        nodes = []
+            nodes = []
 
-        return nodes
+            return nodes
+            
+        except Exception as e:
+            print()
+            raise InternalServerError()
     
 data = strawberry.Schema(query=Query)
 
