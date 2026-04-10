@@ -26,9 +26,17 @@ app.include_router(analysis_router)
 
 @app.get("/")
 def root():
-    return {"status": "ok", "message": "Snapocket API is running"}
+    return {
+        "success": True, 
+        "message": "Snapocket API is running", 
+        "data": {}
+    }
 
 
 @app.get("/health")
 def health():
-    return {"status": "healthy"}
+    return {
+        "success": True, 
+        "message": "Server is healthy", 
+        "data": {"status": "healthy"}
+    }
