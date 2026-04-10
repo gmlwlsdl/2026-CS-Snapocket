@@ -38,14 +38,12 @@ class GraphSummaryData(BaseModel):
 @strawberry.type
 class Query:
     @strawberry.field
-    def profile(self, info: Info) -> str:
+    def nodes(self, info:Info, category: Optional[str] = None) -> List[Node]:
+
         user = info.context.get("user")
 
         if not user:
             raise UnauthorizedError()
-
-    @strawberry.field
-    def nodes(self, category: Optional[str] = None) -> List[Node]:
 
         try:
 
@@ -67,7 +65,7 @@ class Query:
             raise InternalServerError()
     
     """ @strawberry.field
-    def edges(self) -> List[Edge]:
+    def edges(self, info:Info) -> List[Edge]:
 
         # db조회 후 엣지생성
 
@@ -80,9 +78,14 @@ class Query:
         return edges """
     
     @strawberry.field
-    def searchNodes(self, query: str) -> List[SearchNode]:
+    def searchNodes(self, info:Info, query: str) -> List[SearchNode]:
 
-        if False:
+        user = info.context.get("user")
+
+        if not user:
+            raise UnauthorizedError()
+
+        if not query:
             raise BadUserInputError()
         
         try:
