@@ -22,7 +22,7 @@ def sighup(User : UserCreate):
             detail={
                 "success": False,
                 "message": "비밀번호 조건 미충족",
-                "data": {"error_code": "INVALID_PASSWORD"}
+                "error_code": "INVALID_PASSWORD"
             }
         )
     
@@ -32,7 +32,7 @@ def sighup(User : UserCreate):
             detail={
                 "success": False,
                 "message": "중복된 이메일 주소입니다.",
-                "data": {"error_code": "EMAIL_ALREADY_EXISTS"}
+                "error_code": "EMAIL_ALREADY_EXISTS"
             }
         )
 
@@ -58,7 +58,7 @@ def login(User : UserCreate):
             detail={
                 "success": False,
                 "message": "비밀번호가 일치하지 않습니다.",
-                "data": {"error_code": "INVALID_CREDENTIALS"}
+                "error_code": "INVALID_CREDENTIALS"
             }
         )
     
@@ -68,7 +68,7 @@ def login(User : UserCreate):
             detail={
                 "success": False,
                 "message": "존재하지 않는 계정입니다.",
-                "data": {"error_code": "ACCOUNT_NOT_FOUND"}
+                "error_code": "ACCOUNT_NOT_FOUND"
             }
         )
 
