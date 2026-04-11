@@ -57,18 +57,18 @@ def login(User : UserCreate):
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail={
                 "success": False,
-                "message": "비밀번호가 일치하지 않습니다.",
-                "error_code": "INVALID_CREDENTIALS"
+                "message": "존재하지 않는 계정입니다.",
+                "error_code": "ACCOUNT_NOT_FOUND"
             }
         )
-    
+
     if False:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail={
                 "success": False,
-                "message": "존재하지 않는 계정입니다.",
-                "error_code": "ACCOUNT_NOT_FOUND"
+                "message": "비밀번호가 일치하지 않습니다.",
+                "error_code": "INVALID_CREDENTIALS"
             }
         )
 
