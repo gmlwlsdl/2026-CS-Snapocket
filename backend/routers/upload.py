@@ -1,62 +1,99 @@
 import os
+import uuid
 from datetime import datetime
 
 from fastapi import APIRouter, UploadFile, File, Form, Depends
+from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
 from core.database import get_db
 from models.document import Document
 
-router = APIRouter(prefix="/upload", tags=["upload"])
+router = APIRouter(prefix="/documents/upload", tags=["upload"])
 
 UPLOAD_DIR = "uploads"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
-CATEGORIES = ["lecture", "assignment", "notice", "receipt", "memo"]
+ALLOWED_EXTENSIONS = ["pdf", "png", "jpg", "jpeg", "mp3", "wav", "mp4"]
+
+FILE_TYPE_MAP = {
+    "png": "image",
+    "jpg": "image",
+    "jpeg": "image",
+    "mp3": "audio",
+    "wav": "audio",
+    "pdf": "document",
+    "mp4": "document",
+}
 
 
 @router.post("")
 async def upload_file(
-    user_id: int = Form(...),
-    title: str = Form(...),
-    category: str = Form(...),
     file: UploadFile = File(...),
+    autoAnalyze: bool = Form(True),
     db: Session = Depends(get_db),
 ):
-    if category not in CATEGORIES:
-        return {"error": f"잘못된 category 값입니다: {category}"}
+    if not file.filename or "." not in file.filename:
+        return JSONResponse(
+            status_code=400,
+            content={
+                "success": False,
+                "message": "파일 이름이 올바르지 않습니다.",
+                "error_code": "INVALID_FILE_NAME",
+            },
+        )
 
-    filename = f"{datetime.now().timestamp()}_{file.filename}"
-    file_path = os.path.join(UPLOAD_DIR, filename)
+    file_ext = file.filename.split(".")[-1].lower()
+
+    if file_ext not in ALLOWED_EXTENSIONS:
+        return JSONResponse(
+            status_code=400,
+            content={
+                "success": False,
+                "message": "지원하지 않는 파일 형식입니다.",
+                "error_code": "UNSUPPORTED_FILE_TYPE",
+            },
+        )
+
+    file_type = FILE_TYPE_MAP.get(file_ext, "document")
+
+    unique_name = f"{datetime.now().timestamp()}_{uuid.uuid4().hex}_{file.filename}"
+    file_path = os.path.join(UPLOAD_DIR, unique_name)
 
     with open(file_path, "wb") as buffer:
         content = await file.read()
         buffer.write(content)
 
-    ext = os.path.splitext(file.filename)[1].lower().replace(".", "")
+    status = "processing" if autoAnalyze else "uploaded"
 
+    # auth 붙기 전까지는 임시 user_id 사용
+    # 나중에 토큰 기반으로 교체
     new_document = Document(
-        user_id=user_id,
+        user_id=1,
         original_filename=file.filename,
-        stored_filename=filename,
+        stored_filename=unique_name,
         file_path=file_path,
-        file_type=ext,
-        title=title,
-        category=category,
+        file_type=file_type,
+        title=file.filename,
+        category="memo",
         summary="업로드된 문서",
-        status="uploaded",
+        status=status,
     )
 
     db.add(new_document)
     db.commit()
     db.refresh(new_document)
 
-    return {
-        "message": "파일 업로드 성공",
-        "document_id": new_document.id,
-        "original_filename": file.filename,
-        "stored_filename": filename,
-        "file_path": file_path,
-        "category": category,
-        "status": new_document.status,
-    }
+    return JSONResponse(
+        status_code=201,
+        content={
+            "success": True,
+            "message": "파일 업로드 성공",
+            "data": {
+                "document_id": new_document.id,
+                "file_url": f"/{file_path}",
+                "file_type": file_type,
+                "status": status,
+            },
+        },
+    )
