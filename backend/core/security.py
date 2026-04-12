@@ -35,12 +35,10 @@ def jwtAuth(credentials: HTTPAuthorizationCredentials = Depends(security)):
     token = credentials.credentials
     
     try:
-        # 1단계에서 만든 순수 해독 함수를 여기서 씁니다!
         payload = verifyToken(token)
         return payload
         
     except (JWTError, ValueError):
-        # 에러가 나면 REST API가 알아들을 수 있는 401 에러로 번역해서 던집니다.
         raise HTTPException(
             status_code=401,
             detail="유효하지 않거나 만료된 토큰입니다.",
