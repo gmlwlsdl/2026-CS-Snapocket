@@ -25,6 +25,7 @@ from app.schemas.infer import InferPage, InferResult, OCRBlock
 from app.services.cache import ResultCache
 from app.services.domain_transformer import build_domain_payload
 from app.services.file_types import (
+    is_audio_content_type,
     is_image_content_type,
     is_office_content_type,
     is_pdf_content_type,
@@ -33,6 +34,7 @@ from app.services.file_types import (
 from app.services.ingestion import ingest_office_document, to_ocr_blocks
 from app.services.image_processor import ImageProcessor
 from app.services.metrics import MetricsStore
+from app.services.asr.qwen_asr_engine import QwenASREngine
 from app.services.ocr.router import OCREngineRouter
 
 
@@ -57,22 +59,22 @@ class InferencePipeline:
         result_cache: ResultCache | None = None,
         max_concurrency: int = 4,
         metrics: MetricsStore | None = None,
-        fallback_confidence_threshold: float = 0.4,
         vlm_ocr_verify_langs: str = "kor+eng",
         vlm_ocr_verify_timeout_s: float = 1.2,
         vlm_ocr_verify_max_chars: int = 800,
         category_provider: Callable[[], list[str]] | None = None,
+        qwen_asr_engine: QwenASREngine | None = None,
     ) -> None:
         self.router = router
         self.prefer_embedded_pdf_text = prefer_embedded_pdf_text
         self.preprocessor = image_preprocessor or ImageProcessor(enabled=False)
         self.cache = result_cache
         self.metrics = metrics
-        self.fallback_confidence_threshold = max(0.0, min(1.0, float(fallback_confidence_threshold)))
         self.vlm_ocr_verify_langs = str(vlm_ocr_verify_langs or "kor+eng").strip() or "kor+eng"
         self.vlm_ocr_verify_timeout_s = max(0.2, float(vlm_ocr_verify_timeout_s))
         self.vlm_ocr_verify_max_chars = max(64, int(vlm_ocr_verify_max_chars))
         self.category_provider = category_provider
+        self.qwen_asr_engine = qwen_asr_engine
         self._tesseract_binary: str | None = None
         self._tesseract_checked = False
         self._semaphore = asyncio.Semaphore(max_concurrency)
@@ -303,12 +305,6 @@ class InferencePipeline:
         if engine_hint and engine_hint != "auto":
             return engine_hint
         return "unknown"
-
-    @staticmethod
-    def _average_confidence(blocks: list[OCRBlock]) -> float:
-        if not blocks:
-            return 0.0
-        return float(sum(float(b.confidence) for b in blocks) / max(len(blocks), 1))
 
     @staticmethod
     def _source_loc(page_no: int, bbox: list[float] | None) -> str:
@@ -643,6 +639,15 @@ class InferencePipeline:
                 missing_regions = [f"p{p.page_no}:no-extractable-content" for p in ingested.page_units] or [
                     "p1:no-extractable-content"
                 ]
+        elif is_audio_content_type(content_type):
+            blocks, ocr_ms = await self._process_audio_async(
+                filename=filename,
+                file_bytes=file_bytes,
+            )
+            page_count = 1
+            preprocessing_ms = 0
+            if not blocks:
+                missing_regions = ["p1:no-asr-text"]
         else:
             raise ValueError("Unsupported file type")
 
@@ -692,6 +697,40 @@ class InferencePipeline:
                 "transform_ms": transform_ms,
             },
         )
+
+    async def _process_audio_async(
+        self,
+        *,
+        filename: str,
+        file_bytes: bytes,
+    ) -> tuple[list[OCRBlock], int]:
+        if self.qwen_asr_engine is None:
+            raise RuntimeError("Qwen ASR engine is not configured")
+        if not self.qwen_asr_engine.available():
+            detail = self.qwen_asr_engine.availability_detail()
+            message = str(detail.get("last_error") or "Qwen ASR runtime unavailable")
+            raise RuntimeError(f"{message}. Install qwen-asr and verify QWEN_ASR_* settings.")
+
+        started = time.perf_counter()
+        transcription = await self.qwen_asr_engine.transcribe_async(
+            audio_bytes=file_bytes,
+            filename=filename,
+        )
+        asr_ms = int((time.perf_counter() - started) * 1000)
+        normalized_text = self._normalize_text(transcription.text)
+        if not normalized_text:
+            return [], asr_ms
+        block = OCRBlock(
+            block_id="asr-qwen-p1-b1",
+            page_no=1,
+            text_raw=transcription.text,
+            text_corrected=normalized_text,
+            confidence=float(transcription.confidence),
+            source_loc="p1:audio",
+            block_type="text",
+            reading_order=1,
+        )
+        return [block], asr_ms
 
     async def _process_pdf_async(
         self,
@@ -950,47 +989,7 @@ class InferencePipeline:
             page_no=page_no,
             vlm_verify_with_ocr=vlm_verify_with_ocr,
         )
-        primary_conf = self._average_confidence(primary_blocks)
-
-        if engine_hint and engine_hint in {"paddle", "glm"}:
-            return primary_blocks, primary_ocr_ms, primary_verify_ms
-
-        fallback_engine = self.router.select_with_fallback(
-            primary_engine=primary_engine.name,
-            primary_confidence=primary_conf,
-            threshold=self.fallback_confidence_threshold,
-            image_bytes=image_bytes,
-            text_hint="\n".join(block.text_corrected for block in primary_blocks),
-        )
-        if fallback_engine is None:
-            return primary_blocks, primary_ocr_ms, primary_verify_ms
-
-        fallback_blocks, fallback_ocr_ms, fallback_verify_ms = await self._process_image_async(
-            engine=fallback_engine,
-            image_bytes=image_bytes,
-            page_no=page_no,
-            vlm_verify_with_ocr=vlm_verify_with_ocr,
-        )
-        fallback_conf = self._average_confidence(fallback_blocks)
-        if fallback_conf > primary_conf:
-            logger.info(
-                "[router_fallback] page=%d primary=%s(%.3f) -> fallback=%s(%.3f)",
-                page_no,
-                primary_engine.name,
-                primary_conf,
-                fallback_engine.name,
-                fallback_conf,
-            )
-            return (
-                fallback_blocks,
-                primary_ocr_ms + fallback_ocr_ms,
-                primary_verify_ms + fallback_verify_ms,
-            )
-        return (
-            primary_blocks,
-            primary_ocr_ms + fallback_ocr_ms,
-            primary_verify_ms + fallback_verify_ms,
-        )
+        return primary_blocks, primary_ocr_ms, primary_verify_ms
 
     async def _process_image_async(
         self,

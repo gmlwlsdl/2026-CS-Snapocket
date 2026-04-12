@@ -28,12 +28,6 @@ _PROFILE_PROMPTS: dict[str, str] = {
         "Extract all visible text exactly as written. "
         "Preserve line breaks. Return plain text only without explanation."
     ),
-    "glm": (
-        "You are an OCR engine for document images. "
-        "Extract all visible text exactly as written. "
-        "Preserve line breaks and keep Korean/English tokens unchanged. "
-        "Return plain text only without explanation."
-    ),
 }
 _STOP_TOKENS = ["</s>", "<|end_of_sentence|>"]
 

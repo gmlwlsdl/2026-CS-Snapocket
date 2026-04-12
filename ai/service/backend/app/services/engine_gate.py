@@ -6,12 +6,12 @@ from threading import Lock
 
 
 class EngineRequestGate:
-    """엔진 이름(`paddle`/`glm`)별 간단한 mutex 래퍼."""
+    """엔진 이름별 간단한 mutex 래퍼."""
 
     def __init__(self) -> None:
         self._locks: dict[str, Lock] = {
             "paddle": Lock(),
-            "glm": Lock(),
+            "qwen-asr": Lock(),
         }
 
     def try_acquire(self, engine: str) -> bool:

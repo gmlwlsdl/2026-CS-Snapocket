@@ -21,13 +21,11 @@
       <tr><th>Server Secret Key Configured</th><td>{{ server_secret_key_configured }}</td></tr>
       <tr><th>LLM Backend URL</th><td>{{ settings.llm_base_url }}</td></tr>
       <tr><th>Paddle Model</th><td>{{ settings.llm_model_paddle }}</td></tr>
-      <tr><th>GLM Model</th><td>{{ settings.llm_model_glm }}</td></tr>
       <tr><th>Backend Timeout</th><td>{{ settings.llm_request_timeout_s }} sec</td></tr>
       <tr><th>Backend Keep Alive</th><td>{{ settings.llm_keep_alive }}</td></tr>
       <tr><th>Backend Temperature</th><td>{{ settings.llm_temperature }}</td></tr>
       <tr><th>Backend Image Max Side</th><td>{{ settings.llm_image_max_side_px }} px</td></tr>
       <tr><th>Backend Max Tokens</th><td>{{ settings.llm_max_tokens }}</td></tr>
-      <tr><th>Hint OCR Enabled</th><td>{{ settings.local_model_hint_ocr_enable }}</td></tr>
       <tr><th>Hint OCR Languages</th><td>{{ settings.local_model_hint_ocr_langs }}</td></tr>
       <tr><th>Hint OCR Timeout</th><td>{{ settings.local_model_hint_ocr_timeout_s }} sec</td></tr>
       <tr><th>Hint OCR Max Chars</th><td>{{ settings.local_model_hint_ocr_max_chars }}</td></tr>
@@ -39,7 +37,6 @@
       <tr><th>Image Assumed Input DPI</th><td>{{ settings.image_assumed_input_dpi }}</td></tr>
       <tr><th>Image Apply Otsu</th><td>{{ settings.image_apply_otsu }}</td></tr>
       <tr><th>Image Max Side</th><td>{{ settings.image_max_side_px }} px</td></tr>
-      <tr><th>OCR Fallback Threshold</th><td>{{ settings.ocr_fallback_confidence_threshold }}</td></tr>
       <tr><th>Database URL</th><td>{{ settings.database_url }}</td></tr>
       <tr><th>Redis URL</th><td>{{ settings.redis_url }}</td></tr>
       <tr><th>Job Timeout</th><td>{{ settings.job_timeout_s }} sec</td></tr>
@@ -55,16 +52,6 @@
         <th>Paddle Profile</th>
         <td>
           {% if settings.paddle_enable %}
-            <span class="badge ok">Enabled</span>
-          {% else %}
-            <span class="badge err">Disabled</span>
-          {% endif %}
-        </td>
-      </tr>
-      <tr>
-        <th>GLM Profile</th>
-        <td>
-          {% if settings.glm_enable %}
             <span class="badge ok">Enabled</span>
           {% else %}
             <span class="badge err">Disabled</span>

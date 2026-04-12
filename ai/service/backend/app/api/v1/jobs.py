@@ -10,6 +10,7 @@ from app.api.errors import api_error
 from app.api.idempotency import job_request_hash
 from app.api.uploads import validate_upload
 from app.api.utils import ok_response
+from app.services.file_types import is_audio_content_type, resolve_content_type
 from app.schemas.job import JobStatus
 from app.schemas.server import ServerKind
 from app.services.dispatch_service import DispatchRequestError
@@ -62,16 +63,21 @@ async def create_job(
     # 파일 정책 검증을 먼저 통과해야 큐에 작업을 넣을 수 있다.
     payload = await file.read()
     validate_upload(state, file, payload)
+    filename = file.filename or "upload.bin"
+    resolved_content_type = resolve_content_type(filename, file.content_type, payload)
+    is_audio_upload = is_audio_content_type(resolved_content_type)
     active_server = state.dispatch.active_server()
     if active_server.kind == ServerKind.local:
-        try:
-            resolved_engine = resolve_local_engine_hint(state, engine_hint)
-        except RuntimeError as exc:
-            raise api_error(status.HTTP_409_CONFLICT, "MODEL_NOT_READY", str(exc)) from exc
+        if is_audio_upload:
+            resolved_engine = "qwen-asr"
+        else:
+            try:
+                resolved_engine = resolve_local_engine_hint(state, engine_hint)
+            except RuntimeError as exc:
+                raise api_error(status.HTTP_409_CONFLICT, "MODEL_NOT_READY", str(exc)) from exc
     else:
         # 원격 서버는 서버별 라우팅 정책을 따르므로 힌트만 정규화해서 전달한다.
-        resolved_engine = normalize_engine_hint(engine_hint) or "auto"
-    filename = file.filename or "upload.bin"
+        resolved_engine = "qwen-asr" if is_audio_upload else (normalize_engine_hint(engine_hint) or "auto")
 
     req_hash = job_request_hash(
         payload=payload,
@@ -102,7 +108,7 @@ async def create_job(
         job_id = state.dispatch.create_job(
             filename=filename,
             file_bytes=payload,
-            content_type=file.content_type,
+            content_type=resolved_content_type,
             engine_hint=resolved_engine,
             doc_id=doc_id,
         )

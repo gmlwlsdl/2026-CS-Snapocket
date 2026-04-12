@@ -613,7 +613,7 @@
           <div class="ctrl-group">
             <span class="ctrl-label">Engine (Fixed)</span>
             <select id="engineSelect" disabled>
-              <option value="auto">auto (Models page active model)</option>
+              <option value="auto">auto (local paddle fixed)</option>
             </select>
           </div>
           <div class="ctrl-group">
@@ -850,14 +850,11 @@
   var isRunning = false;
   var inferResult = null;
   var serverTimeoutMs = {{ playground_timeout_ms }};
-  var activeEngine = '{{ active_engine }}';
   var modelMap = {
-    paddle: {{ model_map.paddle|tojson }},
-    glm: {{ model_map.glm|tojson }}
+    paddle: {{ model_map.paddle|tojson }}
   };
   var defaultRuntime = {
-    paddle: {{ 'true' if runtime_engines.paddle else 'false' }},
-    glm: {{ 'true' if runtime_engines.glm else 'false' }}
+    paddle: {{ 'true' if runtime_engines.paddle else 'false' }}
   };
 
   /* ── Elements ── */
@@ -1017,8 +1014,7 @@
       var body = await resp.json();
       if (!body || !body.runtime) return defaultRuntime;
       return {
-        paddle: !!body.runtime.paddle,
-        glm: !!body.runtime.glm
+        paddle: !!body.runtime.paddle
       };
     } catch (_err) {
       return defaultRuntime;
@@ -1048,8 +1044,7 @@
   function resolvePlannedRoute(requestedEngine, runtime) {
     var chosen = requestedEngine;
     if (requestedEngine === 'auto') {
-      if (activeEngine === 'paddle' && runtime.paddle) chosen = 'paddle';
-      else if (activeEngine === 'glm' && runtime.glm) chosen = 'glm';
+      if (runtime.paddle) chosen = 'paddle';
       else chosen = 'auto';
     }
     return {
@@ -1112,9 +1107,7 @@
     var requestedEngine = document.getElementById('engineSelect').value;
     var unavailable = false;
     if (requestedEngine === 'auto') {
-      if (activeEngine !== 'paddle' && activeEngine !== 'glm') unavailable = true;
-      if (activeEngine === 'paddle' && !runtime.paddle) unavailable = true;
-      if (activeEngine === 'glm' && !runtime.glm) unavailable = true;
+      if (!runtime.paddle) unavailable = true;
     }
 
     var planned = resolvePlannedRoute(requestedEngine, runtime);
@@ -1124,14 +1117,14 @@
       ['engine_hint', requestedEngine],
       ['default_engine', '{{ default_engine }}'],
       ['verify_branch', verifyEnabled ? 'enabled' : 'disabled'],
-      ['runtime', 'paddle=' + runtime.paddle + ', glm=' + runtime.glm],
+      ['runtime', 'paddle=' + runtime.paddle],
       ['resolved_engine', planned.engine],
       ['model', planned.model]
     ]);
     await sleep(200);
     if (unavailable) {
       setNodeState('route', 'error');
-      showError('활성 모델이 없거나(active model), 활성 모델 런타임이 준비되지 않았습니다. Models 페이지에서 먼저 활성화하세요.');
+      showError('paddle 런타임이 준비되지 않았습니다. 서버 모델 상태를 확인하세요.');
       finishRun();
       return;
     }

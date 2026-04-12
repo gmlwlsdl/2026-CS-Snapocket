@@ -22,8 +22,6 @@ def _canonical_model_id(model_id: str) -> str:
     token = str(model_id or "").strip()
     if token == "ollama-paddleocr-vl":
         return "llamacpp-paddleocr-vl"
-    if token == "ollama-glm-ocr":
-        return "llamacpp-glm-ocr"
     return token
 
 

@@ -22,7 +22,6 @@ from app.services.ocr.base import OCREngineBusyError
 from app.services.model_runtime import (
     activate_model_runtime,
     deactivate_model_runtime,
-    is_engine_active,
     resolve_effective_engine,
 )
 from app.services.state import AppState
@@ -54,29 +53,17 @@ def _paddle_model_ref(state: AppState) -> str:
     return f"llm:{model}"
 
 
-def _glm_model_ref(state: AppState) -> str:
-    model = str(getattr(state.router.glm_engine, "model", "") or "").strip()
-    if not model:
-        model = state.settings.llm_model_glm
-    return f"llm:{model}"
-
-
 def _model_ref_for_row(state: AppState, model_id: str, engine: str) -> str:
     if model_id in {"llamacpp-paddleocr-vl", "ollama-paddleocr-vl", "llama-paddleocr-vl"}:
         return f"llm:{state.settings.llm_model_paddle}"
-    if model_id in {"llamacpp-glm-ocr", "ollama-glm-ocr", "llama-glm-ocr"}:
-        return f"llm:{state.settings.llm_model_glm}"
     if engine == "paddle":
         return _paddle_model_ref(state)
-    if engine == "glm":
-        return _glm_model_ref(state)
     return "llm:unknown"
 
 
 def _model_map(state: AppState) -> dict[str, str]:
     return {
         "paddle": _paddle_model_ref(state),
-        "glm": _glm_model_ref(state),
     }
 
 
@@ -84,8 +71,6 @@ def _canonical_model_id(model_id: str) -> str:
     token = str(model_id or "").strip()
     if token == "ollama-paddleocr-vl":
         return "llamacpp-paddleocr-vl"
-    if token == "ollama-glm-ocr":
-        return "llamacpp-glm-ocr"
     return token
 
 
@@ -123,7 +108,7 @@ def _ops_common_context(state: AppState) -> dict:
                 "cancelled": 0,
                 "total": 0,
             },
-            "ops_runtime": {"paddle": False, "glm": False},
+            "ops_runtime": {"paddle": False},
         }
 
     active = state.dispatch.active_server()
@@ -142,9 +127,7 @@ def _ops_common_context(state: AppState) -> dict:
 def ops_dashboard(request: Request, state: AppState = Depends(get_state)):
     resolve_effective_engine(state, sync_registry=True)
     paddle_up = state.router.paddle_engine.available()
-    glm_up = state.router.glm_engine.available()
     paddle_model_ref = _paddle_model_ref(state)
-    glm_model_ref = _glm_model_ref(state)
 
     engines = [
         {
@@ -153,15 +136,9 @@ def ops_dashboard(request: Request, state: AppState = Depends(get_state)):
             "enabled": state.router.paddle_engine.enabled,
             "available": paddle_up,
         },
-        {
-            "name": "GLM-OCR",
-            "model": glm_model_ref,
-            "enabled": state.router.glm_engine.enabled,
-            "available": glm_up,
-        },
     ]
 
-    engine_avail = {"paddle": paddle_up, "glm": glm_up}
+    engine_avail = {"paddle": paddle_up}
     models = state.model_registry.list_models()
     for m in models:
         if m.active:
@@ -197,8 +174,7 @@ def ops_models(request: Request, state: AppState = Depends(get_state)):
     if tab not in {"models", "servers"}:
         tab = "models"
     paddle_up = state.router.paddle_engine.available()
-    glm_up = state.router.glm_engine.available()
-    engine_avail = {"paddle": paddle_up, "glm": glm_up}
+    engine_avail = {"paddle": paddle_up}
     flash_message = request.query_params.get("message", "").strip()
     flash_level = request.query_params.get("level", "").strip().lower()
     if flash_level not in {"ok", "warn", "err"}:
@@ -581,7 +557,6 @@ def ops_playground(request: Request, state: AppState = Depends(get_state)):
     )
     runtime_engines = {
         "paddle": state.router.paddle_engine.available(),
-        "glm": state.router.glm_engine.available(),
     }
     backend_label = f"llama.cpp @ {state.settings.llm_base_url}"
     if state.dispatch is not None:
@@ -610,7 +585,6 @@ def ops_playground_runtime(state: AppState = Depends(get_state)):
     else:
         runtime = {
             "paddle": state.router.paddle_engine.available(),
-            "glm": state.router.glm_engine.available(),
         }
     return {"ok": True, "runtime": runtime}
 
@@ -640,7 +614,7 @@ async def ops_playground_infer(
             content={
                 "error": {
                     "code": "PLAYGROUND_ENGINE_FIXED",
-                    "message": "Playground engine selection is fixed to auto. Change active model in Models page.",
+                    "message": "Playground engine selection is fixed to auto.",
                 }
             },
         )
@@ -654,41 +628,17 @@ async def ops_playground_infer(
     active_server = state.dispatch.active_server()
     resolved: str | None = None
     if active_server.kind == ServerKind.local:
-        active = resolve_effective_engine(state, sync_registry=True)
-        if active == "paddle":
-            if not is_engine_active(state, "paddle"):
-                return _JSONResponse(
-                    status_code=409,
-                    content={"error": {"code": "MODEL_NOT_READY", "message": "Paddle model is not active"}},
-                )
-            if not state.router.paddle_engine.available():
-                return _JSONResponse(
-                    status_code=409,
-                    content={"error": {"code": "MODEL_NOT_READY", "message": "Active Paddle model is unavailable"}},
-                )
-            resolved = "paddle"
-        elif active == "glm":
-            if not is_engine_active(state, "glm"):
-                return _JSONResponse(
-                    status_code=409,
-                    content={"error": {"code": "MODEL_NOT_READY", "message": "GLM model is not active"}},
-                )
-            if not state.router.glm_engine.available():
-                return _JSONResponse(
-                    status_code=409,
-                    content={"error": {"code": "MODEL_NOT_READY", "message": "Active GLM model is unavailable"}},
-                )
-            resolved = "glm"
-        else:
+        if not state.router.paddle_engine.available():
             return _JSONResponse(
                 status_code=409,
                 content={
                     "error": {
                         "code": "MODEL_NOT_READY",
-                        "message": "No active model. Activate one from Models page first.",
+                        "message": "Paddle OCR model is unavailable.",
                     }
                 },
             )
+        resolved = "paddle"
     else:
         resolved = "auto"
 
@@ -778,7 +728,6 @@ def ops_settings(request: Request, state: AppState = Depends(get_state)):
         ("DISPATCH_UPSTREAM_TIMEOUT_S", "dispatch_upstream_timeout_s", "180"),
         ("LLM_BASE_URL", "llm_base_url", "http://llama-server:8080"),
         ("LLM_MODEL_PADDLE", "llm_model_paddle", "PaddleOCR-VL-1.5-BF16.gguf"),
-        ("LLM_MODEL_GLM", "llm_model_glm", "PaddleOCR-VL-1.5-BF16.gguf"),
         ("LLM_REQUEST_TIMEOUT_S", "llm_request_timeout_s", "120"),
         ("LLM_KEEP_ALIVE", "llm_keep_alive", "10m"),
         ("LLM_TEMPERATURE", "llm_temperature", "0"),
@@ -807,13 +756,11 @@ def ops_settings(request: Request, state: AppState = Depends(get_state)):
     model_checks: list[dict[str, str | bool]] = []
     engines = {
         "paddle": state.router.paddle_engine,
-        "glm": state.router.glm_engine,
     }
     configured = {
         "paddle": state.settings.llm_model_paddle,
-        "glm": state.settings.llm_model_glm,
     }
-    for name in ("paddle", "glm"):
+    for name in ("paddle",):
         engine = engines[name]
         detail = {}
         if hasattr(engine, "availability_detail"):

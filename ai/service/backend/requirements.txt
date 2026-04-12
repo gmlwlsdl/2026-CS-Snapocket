@@ -13,3 +13,4 @@ kiwipiepy==0.19.1
 langdetect==1.0.9
 cachetools==5.5.0
 cryptography==46.0.2
+qwen-asr

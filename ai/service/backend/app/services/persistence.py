@@ -228,8 +228,44 @@ class PersistenceStore:
     def sync_models(self, models: list[ModelInfo]) -> None:
         if self._engine is None:
             return
-        for model in models:
-            self.upsert_model(model)
+        target_ids = {str(model.model_id) for model in models}
+        try:
+            with self._engine.begin() as conn:
+                existing_rows = conn.execute(select(self.models_table.c.model_id)).all()
+                existing_ids = {str(row.model_id) for row in existing_rows}
+
+                for model in models:
+                    values = {
+                        "model_id": model.model_id,
+                        "name": model.name,
+                        "engine": model.engine,
+                        "version": model.version,
+                        "active": model.active,
+                        "status": model.status,
+                        "updated_at": _utcnow(),
+                    }
+                    row = conn.execute(
+                        select(self.models_table.c.model_id).where(
+                            self.models_table.c.model_id == model.model_id
+                        )
+                    ).first()
+                    if row:
+                        conn.execute(
+                            update(self.models_table)
+                            .where(self.models_table.c.model_id == model.model_id)
+                            .values(**values)
+                        )
+                    else:
+                        conn.execute(insert(self.models_table).values(**values))
+
+                stale_ids = existing_ids - target_ids
+                if stale_ids:
+                    conn.execute(
+                        delete(self.models_table).where(self.models_table.c.model_id.in_(sorted(stale_ids)))
+                    )
+            self._last_error = None
+        except Exception as exc:  # pragma: no cover - env-dependent
+            self._last_error = str(exc)
 
     def list_models(self) -> list[dict[str, Any]]:
         """DB에 저장된 모델 행을 조회한다(best effort)."""

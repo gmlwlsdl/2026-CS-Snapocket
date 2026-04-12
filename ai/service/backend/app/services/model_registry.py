@@ -31,18 +31,8 @@ class ModelRegistry:
                 name="PaddleOCR-VL",
                 engine="paddle",
                 version="llama.cpp",
-                active=False,
-                status="inactive",
-            )
-        )
-        self.register_model(
-            ModelInfo(
-                model_id="llamacpp-glm-ocr",
-                name="GLM-OCR",
-                engine="glm",
-                version="llama.cpp",
-                active=False,
-                status="inactive",
+                active=True,
+                status="ready",
             )
         )
 

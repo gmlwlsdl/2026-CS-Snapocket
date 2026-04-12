@@ -9,7 +9,6 @@ from pydantic import BaseModel, Field
 class EngineHint(str, Enum):
     auto = "auto"
     paddle = "paddle"
-    glm = "glm"
 
 
 class BlockType(str, Enum):
