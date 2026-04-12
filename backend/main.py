@@ -5,6 +5,13 @@ from graph.schema import data, router
 from graph.context import getContext
 from graph.qlRouter import CustomGraphQLRouter
 
+import models  # noqa: F401
+
+from routers.documents import router as documents_router
+from routers.tags import router as tags_router
+from routers.upload import router as upload_router
+from routers.analysis import router as analysis_router
+
 app = FastAPI(title="Snapocket API", version="0.1.0")
 
 app.add_middleware(
@@ -18,14 +25,26 @@ app.add_middleware(
 app.include_router(auth.router)
 app.include_router(router)
 
+app.include_router(documents_router)
+app.include_router(tags_router)
+app.include_router(upload_router)
+app.include_router(analysis_router)
+
 graphql_app = CustomGraphQLRouter(data, context_getter=getContext)
 app.include_router(graphql_app, prefix="/graphql")
-
 @app.get("/")
 def root():
-    return {"status": "ok", "message": "Snapocket API is running"}
+    return {
+        "success": True, 
+        "message": "Snapocket API is running", 
+        "data": {}
+    }
 
 
 @app.get("/health")
 def health():
-    return {"status": "healthy"}
+    return {
+        "success": True, 
+        "message": "Server is healthy", 
+        "data": {"status": "healthy"}
+    }
