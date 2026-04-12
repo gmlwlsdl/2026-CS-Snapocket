@@ -1,5 +1,9 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from api import auth
+from graph.schema import data, router
+from graph.context import getContext
+from graph.qlRouter import CustomGraphQLRouter
 
 import models  # noqa: F401
 
@@ -18,12 +22,16 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(auth.router)
+app.include_router(router)
+
 app.include_router(documents_router)
 app.include_router(tags_router)
 app.include_router(upload_router)
 app.include_router(analysis_router)
 
-
+graphql_app = CustomGraphQLRouter(data, context_getter=getContext)
+app.include_router(graphql_app, prefix="/graphql")
 @app.get("/")
 def root():
     return {
