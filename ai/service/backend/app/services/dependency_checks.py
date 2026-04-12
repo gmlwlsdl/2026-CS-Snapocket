@@ -1,4 +1,4 @@
-"""Low-level dependency probes used by readiness/status endpoints."""
+"""ready/status 엔드포인트에서 사용하는 의존성 헬스체크 유틸."""
 
 from __future__ import annotations
 
@@ -15,6 +15,7 @@ class CheckResult:
 
 
 def ping_redis(redis_url: str | None, timeout_s: float = 1.5) -> CheckResult:
+    """Redis 연결 가능 여부를 최소 프로토콜로 점검한다."""
     if not redis_url:
         return CheckResult(configured=False, ok=True, error=None)
 
@@ -30,7 +31,7 @@ def ping_redis(redis_url: str | None, timeout_s: float = 1.5) -> CheckResult:
         with socket.create_connection((host, port), timeout=timeout_s) as conn:
             conn.settimeout(timeout_s)
             if password:
-                # Minimal RESP AUTH command to avoid extra redis client dependency.
+                # redis-py 없이도 인증 여부를 확인하기 위한 최소 RESP AUTH.
                 encoded = password.encode("utf-8")
                 auth_cmd = (
                     f"*2\r\n$4\r\nAUTH\r\n${len(encoded)}\r\n".encode("utf-8")
@@ -42,7 +43,7 @@ def ping_redis(redis_url: str | None, timeout_s: float = 1.5) -> CheckResult:
                 if not auth_reply.startswith(b"+OK"):
                     return CheckResult(configured=True, ok=False, error="redis auth failed")
 
-            # Minimal RESP PING command.
+            # 경량 상태 확인용 PING 명령.
             conn.sendall(b"*1\r\n$4\r\nPING\r\n")
             reply = conn.recv(256)
             if reply.startswith(b"+PONG"):

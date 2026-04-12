@@ -1,1 +1,1 @@
-"""Business services: OCR pipeline, orchestration, metrics, persistence."""
+"""OCR 처리, 오케스트레이션, 메트릭, 영속화를 담당하는 서비스 계층."""

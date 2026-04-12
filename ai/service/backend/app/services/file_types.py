@@ -1,4 +1,4 @@
-"""File type resolution helpers for multimodal ingestion routing."""
+"""멀티모달 입력 라우팅을 위한 파일 타입 판별 유틸."""
 
 from __future__ import annotations
 
@@ -75,7 +75,7 @@ def _mime_from_magic(payload: bytes) -> str | None:
 
 
 def resolve_content_type(filename: str, given_type: str | None, payload: bytes | None = None) -> str:
-    """Resolve best-effort MIME using explicit type, extension, and magic bytes."""
+    """명시 타입/확장자/매직바이트를 조합해 MIME을 최대한 정확히 추정한다."""
     normalized = _normalize_content_type(given_type)
     if normalized and normalized not in GENERIC_MIME_TYPES:
         return normalized
@@ -103,8 +103,3 @@ def is_pdf_content_type(content_type: str) -> bool:
 
 def is_office_content_type(content_type: str) -> bool:
     return _normalize_content_type(content_type) in OFFICE_MIME_TYPES
-
-
-def is_supported_content_type(content_type: str) -> bool:
-    token = _normalize_content_type(content_type)
-    return token in IMAGE_MIME_TYPES or token in PDF_MIME_TYPES or token in OFFICE_MIME_TYPES

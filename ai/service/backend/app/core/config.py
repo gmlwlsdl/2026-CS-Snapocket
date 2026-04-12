@@ -1,4 +1,4 @@
-"""Environment-driven runtime settings for the API service."""
+"""환경변수 기반 런타임 설정 로더."""
 
 from __future__ import annotations
 
@@ -65,8 +65,7 @@ class Settings:
     llm_max_tokens: int = int(os.getenv("LLM_MAX_TOKENS", os.getenv("OLLAMA_MAX_TOKENS", "96")))
     dispatch_upstream_timeout_s: float = float(os.getenv("DISPATCH_UPSTREAM_TIMEOUT_S", "180"))
 
-    # VLM OCR result verification with Tesseract
-    local_model_hint_ocr_enable: bool = _as_bool(os.getenv("LOCAL_MODEL_HINT_OCR_ENABLE"), True)
+    # VLM OCR 결과 검증(Tesseract) 설정
     local_model_hint_ocr_langs: str = os.getenv("LOCAL_MODEL_HINT_OCR_LANGS", "kor+eng")
     local_model_hint_ocr_timeout_s: float = float(
         os.getenv("LOCAL_MODEL_HINT_OCR_TIMEOUT_S", "1.2")
@@ -172,7 +171,6 @@ def load_settings() -> Settings:
         ),
         llm_max_tokens=int(os.getenv("LLM_MAX_TOKENS", os.getenv("OLLAMA_MAX_TOKENS", "96"))),
         dispatch_upstream_timeout_s=float(os.getenv("DISPATCH_UPSTREAM_TIMEOUT_S", "180")),
-        local_model_hint_ocr_enable=_as_bool(os.getenv("LOCAL_MODEL_HINT_OCR_ENABLE"), True),
         local_model_hint_ocr_langs=os.getenv("LOCAL_MODEL_HINT_OCR_LANGS", "kor+eng"),
         local_model_hint_ocr_timeout_s=float(
             os.getenv("LOCAL_MODEL_HINT_OCR_TIMEOUT_S", "1.2")

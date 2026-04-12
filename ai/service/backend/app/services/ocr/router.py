@@ -1,4 +1,4 @@
-"""Policy router that picks an available OCR engine based on hint/runtime."""
+"""힌트/가용성/성능 지표를 바탕으로 OCR 엔진을 선택하는 라우터."""
 
 from __future__ import annotations
 
@@ -26,12 +26,14 @@ class OCREngineRouter:
         self.performance_provider = performance_provider
 
     def _resolve_hint(self, engine_hint: str | None) -> str:
+        """요청 힌트가 없으면 기본 엔진 설정을 사용한다."""
         if engine_hint:
             return str(engine_hint).strip().lower()
         return str(self.default_engine).strip().lower()
 
     @staticmethod
     def _detect_language(text_hint: str | None) -> tuple[str, float]:
+        """텍스트 힌트가 충분할 때만 언어 감지를 시도한다."""
         text = (text_hint or "").strip()
         if len(text) < 8:
             return "unknown", 0.0
@@ -46,6 +48,7 @@ class OCREngineRouter:
 
     @staticmethod
     def _complexity_score(image_bytes: bytes | None) -> float:
+        """이미지 라플라시안 분산으로 문서 복잡도를 근사한다."""
         if not image_bytes:
             return 0.0
         try:
@@ -54,7 +57,7 @@ class OCREngineRouter:
             if gray is None or gray.size == 0:
                 return 0.0
             variance = float(cv2.Laplacian(gray, cv2.CV_64F).var())
-            # Normalize to [0,1] with a soft cap around dense text/graphics docs.
+            # 문서 밀도(텍스트/그래픽)가 높은 경우를 고려해 [0,1] 범위로 완만하게 정규화.
             return max(0.0, min(1.0, variance / 250.0))
         except Exception:
             return 0.0
@@ -109,6 +112,7 @@ class OCREngineRouter:
         return score
 
     def _available_candidates(self) -> list[tuple[str, OCREngine]]:
+        """현재 available()인 엔진만 후보로 반환한다."""
         candidates: list[tuple[str, OCREngine]] = []
         if self.paddle_engine.available():
             candidates.append(("paddle", self.paddle_engine))
@@ -123,6 +127,7 @@ class OCREngineRouter:
         image_bytes: bytes | None = None,
         text_hint: str | None = None,
     ) -> OCREngine:
+        """요청 힌트 및 점수 기반 정책으로 주 엔진을 선택한다."""
         hint = self._resolve_hint(engine_hint)
 
         if hint == EngineHint.paddle.value:
@@ -139,6 +144,7 @@ class OCREngineRouter:
         if len(candidates) == 1:
             return candidates[0][1]
         if len(candidates) > 1:
+            # 자동 모드에서는 언어/복잡도/실측 성능을 조합한 점수로 선택한다.
             language, language_conf = self._detect_language(text_hint)
             complexity = self._complexity_score(image_bytes)
             perf = self._performance_stats()
@@ -201,6 +207,7 @@ class OCREngineRouter:
         image_bytes: bytes | None = None,
         text_hint: str | None = None,
     ) -> OCREngine | None:
+        """주 엔진 confidence가 임계치 미만이면 대체 엔진을 반환한다."""
         if primary_confidence >= threshold:
             return None
         return self.alternate(

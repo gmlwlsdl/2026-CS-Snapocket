@@ -772,7 +772,7 @@
             <tr><td style="color:var(--muted);width:130px">Doc ID</td><td id="rs-docid" style="font-family:monospace;font-size:12px">—</td></tr>
             <tr><td style="color:var(--muted)">Filename</td><td id="rs-filename">—</td></tr>
             <tr><td style="color:var(--muted)">Content Type</td><td id="rs-ctype">—</td></tr>
-            <tr><td style="color:var(--muted)">Doc Type</td><td id="rs-doctype">—</td></tr>
+            <tr><td style="color:var(--muted)">Category</td><td id="rs-category">—</td></tr>
             <tr><td style="color:var(--muted)">Title</td><td id="rs-title">—</td></tr>
             <tr><td style="color:var(--muted)">VLM→OCR Verify</td><td id="rs-verify">—</td></tr>
           </tbody>
@@ -1228,8 +1228,8 @@
     /* ── Step 5: Transform ── */
     setNodeState('transform', 'running');
     showStepDetail('transform', [
-      ['doc_type', (data.domain && data.domain.doc_type) || 'unknown'],
-      ['entities', data.domain ? JSON.stringify(Object.keys(data.domain.entities || {})) : '[]'],
+      ['category', (data.domain && data.domain.category) || 'unknown'],
+      ['tags', data.domain ? String((data.domain.tag || []).length) : '0'],
       ['corrected_chars', data.corrected_text ? data.corrected_text.length : 0]
     ]);
     await sleep(180);
@@ -1324,7 +1324,7 @@
     document.getElementById('rs-docid').textContent      = d.doc_id || '—';
     document.getElementById('rs-filename').textContent   = d.filename || '—';
     document.getElementById('rs-ctype').textContent      = d.content_type || '—';
-    document.getElementById('rs-doctype').textContent    = (d.domain && d.domain.doc_type) || '—';
+    document.getElementById('rs-category').textContent   = (d.domain && d.domain.category) || '—';
     document.getElementById('rs-title').textContent      = (d.domain && d.domain.title) || '—';
     document.getElementById('rs-verify').textContent     = d.vlm_ocr_verify ? 'enabled' : 'disabled';
 
@@ -1340,24 +1340,25 @@
     /* Domain */
     var domainEl = document.getElementById('rs-domain-content');
     if (d.domain) {
-      var ents = d.domain.entities || {};
-      var groups = Object.entries(ents);
+      var tags = d.domain.tag || [];
       var html = '';
+      html += '<table style="margin-bottom:12px"><tbody>';
+      html += '<tr><td style="color:var(--muted);width:130px">req_id</td><td style="font-family:monospace">' + esc(d.domain.req_id || '—') + '</td></tr>';
+      html += '<tr><td style="color:var(--muted)">title</td><td>' + esc(d.domain.title || '—') + '</td></tr>';
+      html += '<tr><td style="color:var(--muted)">category</td><td>' + esc(d.domain.category || '—') + '</td></tr>';
+      html += '</tbody></table>';
       if (d.domain.summary) {
         html += '<div class="result-text-box" style="margin-bottom:14px;font-size:13px;font-family:inherit">' + esc(d.domain.summary) + '</div>';
       }
-      html += '<div class="entity-groups">';
-      groups.forEach(function(pair) {
-        var key = pair[0], vals = pair[1];
-        if (!vals || vals.length === 0) return;
-        html += '<div class="entity-group">';
-        html += '<div class="entity-group-title">' + esc(key) + '</div>';
-        vals.forEach(function(v) {
-          html += '<span class="entity-tag">' + esc(v) + '</span>';
-        });
+      if (tags.length > 0) {
+        html += '<div class="entity-group" style="margin-bottom:12px">';
+        html += '<div class="entity-group-title">tag</div>';
+        tags.forEach(function(v) { html += '<span class="entity-tag">' + esc(v) + '</span>'; });
         html += '</div>';
-      });
-      html += '</div>';
+      }
+      if (d.domain.raw_text) {
+        html += '<div class="result-text-box" style="max-height:220px">' + esc(d.domain.raw_text) + '</div>';
+      }
       domainEl.innerHTML = html;
     } else {
       domainEl.innerHTML = '<p class="empty">No domain data.</p>';

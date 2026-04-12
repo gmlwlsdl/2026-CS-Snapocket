@@ -1,4 +1,4 @@
-"""System endpoints for liveness/readiness/metrics/status."""
+"""시스템 상태 점검 API(live/ready/metrics/status)."""
 
 from __future__ import annotations
 
@@ -16,11 +16,13 @@ router = APIRouter(tags=["system"])
 
 @router.get("/health/live")
 def live():
+    # 프로세스 생존 여부만 빠르게 확인하는 경량 엔드포인트.
     return {"ok": True}
 
 
 @router.get("/health/ready")
 def ready(state: AppState = Depends(get_state)):
+    # readiness는 엔진 설정/런타임 + 핵심 인프라(DB/Redis) 상태를 종합 판단한다.
     resolve_effective_engine(state, sync_registry=True)
     configured = {
         "paddle": state.settings.paddle_enable and bool(state.settings.llm_model_paddle),
@@ -44,7 +46,7 @@ def ready(state: AppState = Depends(get_state)):
         },
     }
 
-    # Ready policy: OCR configuration present AND core infra dependencies reachable.
+    # Ready 정책: OCR 설정이 존재하고, 핵심 인프라 의존성이 모두 정상이어야 한다.
     ready_ok = any(configured.values()) and db.get("ok", False) and redis.ok
     return {
         "ok": ready_ok,
@@ -56,11 +58,13 @@ def ready(state: AppState = Depends(get_state)):
 
 @router.get("/metrics", response_class=PlainTextResponse)
 def metrics(state: AppState = Depends(get_state)):
+    # Prometheus scrape 포맷으로 내부 메트릭을 노출한다.
     return state.metrics.to_prometheus()
 
 
 @router.get("/v1/system/status", dependencies=[Depends(require_api_key)])
 def system_status(request: Request, state: AppState = Depends(get_state)):
+    # 운영 화면/디버깅용으로 런타임 상태를 상세 스냅샷으로 제공한다.
     resolve_effective_engine(state, sync_registry=True)
     db = state.persistence.health(timeout_s=state.settings.readiness_timeout_s)
     redis = ping_redis(

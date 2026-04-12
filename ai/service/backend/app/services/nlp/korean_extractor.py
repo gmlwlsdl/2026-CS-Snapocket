@@ -1,22 +1,14 @@
-"""Korean morphological analysis and entity extraction using kiwipiepy."""
+"""후처리에서 사용하는 한국어 형태소 분석 유틸."""
 
 from __future__ import annotations
 
-import re
 import logging
+import re
 from collections import Counter
 
 logger = logging.getLogger(__name__)
 
-# Pattern constants
-_PHONE_RE  = re.compile(r"\b0\d{1,2}-\d{3,4}-\d{4}\b")
-_EMAIL_RE  = re.compile(r"[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}")
-_DATE_RE   = re.compile(r"\b(20\d{2}[./-]\d{1,2}[./-]\d{1,2}|\d{1,2}[./-]\d{1,2})\b")
-_AMOUNT_RE = re.compile(r"\b\d{1,3}(?:,\d{3})*(?:\.\d{1,2})?\s*(?:원|KRW|₩|\$|USD)\b", re.I)
-_ORG_RE    = re.compile(r"(?:주식회사|㈜|\(주\)|유한회사|재단법인|사단법인)\s*[가-힣A-Za-z]+")
-_PERSON_RE = re.compile(r"\b([가-힣]{2,4})(?:\s*)(?:님|씨|대표|교수|원장)\b")
-
-# Document type keywords with weights
+# 카테고리 fallback 점수 계산에 사용하는 문서 유형 키워드 사전
 _DOC_KEYWORDS: dict[str, list[str]] = {
     "notice":   ["공지", "안내", "신청", "마감", "기간", "일정", "모집", "공고"],
     "lecture":  ["강의", "수업", "과제", "시험", "출석", "주차", "교수", "학점", "수강"],
@@ -30,7 +22,7 @@ _DOC_KEYWORDS: dict[str, list[str]] = {
 
 
 def classify_doc_type_enhanced(text: str) -> str:
-    """Score text against all document type keywords; return best match or 'unknown'."""
+    """문서 유형별 키워드 출현 점수를 계산해 최고 점수 타입을 반환한다."""
     lowered = text.lower()
     scores: dict[str, int] = {}
     for doc_type, keywords in _DOC_KEYWORDS.items():
@@ -40,7 +32,7 @@ def classify_doc_type_enhanced(text: str) -> str:
 
 
 class KoreanExtractor:
-    """kiwipiepy 기반 한국어 형태소 분석 + 패턴 기반 개체명 추출."""
+    """kiwipiepy 기반 한국어 명사 추출기."""
 
     def __init__(self) -> None:
         self._kiwi = None
@@ -54,7 +46,7 @@ class KoreanExtractor:
             logger.warning("kiwipiepy not installed; falling back to regex tokenizer")
 
     def extract_nouns(self, text: str) -> list[str]:
-        """명사(NNG/NNP) 추출. kiwipiepy 미설치 시 정규식 폴백."""
+        # 모델이 없는 환경에서도 후처리가 깨지지 않게 정규식 토크나이저로 폴백한다.
         if self._kiwi is None:
             tokens = re.findall(r"[가-힣]{2,}", text)
             return [w for w, _ in Counter(tokens).most_common(20)]
@@ -65,21 +57,3 @@ class KoreanExtractor:
             if token.tag in ("NNG", "NNP") and len(token.form) >= 2:
                 nouns.append(token.form)
         return [w for w, _ in Counter(nouns).most_common(20)]
-
-    def extract_phones(self, text: str) -> list[str]:
-        return list(dict.fromkeys(_PHONE_RE.findall(text)))
-
-    def extract_emails(self, text: str) -> list[str]:
-        return list(dict.fromkeys(_EMAIL_RE.findall(text)))
-
-    def extract_dates(self, text: str) -> list[str]:
-        return list(dict.fromkeys(m.group(0) for m in _DATE_RE.finditer(text)))
-
-    def extract_amounts(self, text: str) -> list[str]:
-        return list(dict.fromkeys(m.group(0) for m in _AMOUNT_RE.finditer(text)))
-
-    def extract_orgs(self, text: str) -> list[str]:
-        return list(dict.fromkeys(_ORG_RE.findall(text)))
-
-    def extract_persons(self, text: str) -> list[str]:
-        return list(dict.fromkeys(m.group(1) for m in _PERSON_RE.finditer(text)))

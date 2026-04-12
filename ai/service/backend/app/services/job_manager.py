@@ -1,4 +1,4 @@
-"""Thread-based job runner with retry/backoff/timeout and persistence hooks."""
+"""스레드 기반 비동기 Job 실행기(재시도/백오프/타임아웃/영속화)."""
 
 from __future__ import annotations
 
@@ -38,7 +38,7 @@ class JobManager:
         persistence: PersistenceStore | None = None,
     ) -> None:
         self._executor = ThreadPoolExecutor(max_workers=max_workers)
-        # These policies are global defaults for each submitted job.
+        # 아래 정책은 submit되는 모든 Job의 기본값으로 적용된다.
         self._timeout_s = timeout_s
         self._max_retries = max_retries
         self._retry_backoff_s = retry_backoff_s
@@ -56,6 +56,7 @@ class JobManager:
         job_meta: dict[str, Any] | None = None,
         **kwargs,
     ) -> str:
+        """함수 실행을 Job으로 등록하고 즉시 큐잉한다."""
         job_id = str(uuid4())
         now = datetime.now(timezone.utc)
         info = JobInfo(
@@ -73,7 +74,7 @@ class JobManager:
         self._persist_job(job_id)
 
         def _runner() -> Any:
-            # Retry loop is local to one logical job_id.
+            # 재시도 루프는 하나의 logical job_id에 대해 순차로 수행된다.
             attempts_allowed = self._max_retries + 1
             for attempt in range(1, attempts_allowed + 1):
                 self._set_status(job_id, JobStatus.running)
@@ -91,7 +92,7 @@ class JobManager:
                 except Exception as exc:
                     should_retry = attempt < attempts_allowed and not self._is_cancel_requested(job_id)
                     if should_retry:
-                        # Linear backoff: backoff * attempt.
+                        # 선형 백오프: retry_backoff_s * attempt
                         self._set_error(
                             job_id,
                             f"{exc}. retrying {attempt}/{self._max_retries}",
@@ -114,8 +115,7 @@ class JobManager:
         if self._timeout_s <= 0:
             return fn(*args, **kwargs)
 
-        # Timeout wrapper runs the actual task in a temporary worker and returns
-        # immediately on timeout without blocking caller shutdown path.
+        # 타임아웃 관리를 위해 내부 임시 executor에서 실제 함수를 실행한다.
         inner_executor = ThreadPoolExecutor(max_workers=1)
         inner_future = inner_executor.submit(fn, *args, **kwargs)
         try:
@@ -124,7 +124,7 @@ class JobManager:
             inner_future.cancel()
             raise TimeoutError(f"TIMEOUT: exceeded {self._timeout_s:.1f}s") from exc
         finally:
-            # Do not block caller after timeout; best-effort cleanup only.
+            # 타임아웃 이후 호출자 블로킹을 피하기 위해 best-effort 정리만 수행한다.
             inner_executor.shutdown(wait=False, cancel_futures=True)
 
     def _set_status(self, job_id: str, status: JobStatus) -> None:
@@ -177,7 +177,7 @@ class JobManager:
                 and result is not None
             )
             if persist_result:
-                # Prevent duplicate inserts on repeated status updates.
+                # 상태 갱신 중복 호출에서도 결과 insert는 1회만 수행한다.
                 state.result_persisted = True
         payload = result.model_dump() if hasattr(result, "model_dump") else result
         self._persistence.upsert_job(info, request_meta=request_meta, result_data=payload)
@@ -240,8 +240,8 @@ class JobManager:
             self._set_error(job_id, "Cancelled by user")
             return True
 
-        # Running jobs are cooperatively cancelled on next retry/sleep boundary.
-        # Python threads cannot be force-killed safely here.
+        # 실행 중 Job은 다음 경계(재시도/대기 구간)에서 협조 취소된다.
+        # 파이썬 스레드는 안전한 강제 종료가 어렵다.
         self._set_error(job_id, "Cancellation requested")
         return True
 

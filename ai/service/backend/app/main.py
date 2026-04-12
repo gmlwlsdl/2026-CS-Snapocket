@@ -21,6 +21,7 @@ _FRONTEND_CANDIDATES = (
     Path(__file__).resolve().parents[1] / "frontend",
     Path(__file__).resolve().parents[2] / "frontend",
 )
+# 실행 위치가 달라도 정적 리소스를 찾을 수 있도록 후보 경로를 순차 탐색한다.
 _FRONTEND_DIR = next((p for p in _FRONTEND_CANDIDATES if p.exists()), _FRONTEND_CANDIDATES[0])
 
 app = FastAPI(title="Snapocket ML/AIOps API", version="1.0.0")
@@ -93,7 +94,7 @@ def shutdown_event() -> None:
     container = getattr(app.state, "container", None)
     if container is None:
         return
-    # Graceful teardown for background workers and SQL connections.
+    # 백그라운드 워커/DB 연결을 안전하게 내려서 종료 중 데이터 손실을 막는다.
     if container.model_prober is not None:
         container.model_prober.stop()
     container.job_manager.shutdown()

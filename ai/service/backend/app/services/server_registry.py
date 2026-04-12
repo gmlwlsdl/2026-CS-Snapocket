@@ -1,4 +1,4 @@
-"""Persistent server registry for dispatching local/remote AI workloads."""
+"""로컬/원격 OCR 처리 서버를 관리하는 영속 레지스트리."""
 
 from __future__ import annotations
 
@@ -32,6 +32,7 @@ def _normalize_base_url(
     allow_hostname: bool,
     allow_zrok: bool,
 ) -> str:
+    """보안 정책(공인IP/호스트/zrok) 검증을 포함해 base_url을 정규화한다."""
     token = str(base_url or "").strip().rstrip("/")
     if not token:
         raise ValueError("base_url is empty")
@@ -96,6 +97,7 @@ class ServerRegistry:
         self.ensure_local_default()
 
     def ensure_local_default(self) -> None:
+        """최초 부팅 시 로컬 서버 레코드를 기본값으로 보장한다."""
         rows = self.persistence.list_servers()
         if not rows:
             self.persistence.upsert_server(
@@ -145,6 +147,7 @@ class ServerRegistry:
         return self._row_to_record(row)
 
     def get_active_server(self) -> ServerRecord:
+        """현재 활성 서버를 반환한다. 없으면 로컬 서버를 활성화한다."""
         active = self.persistence.get_active_server()
         if active:
             return self._row_to_record(active)
@@ -155,6 +158,7 @@ class ServerRegistry:
         return self._row_to_record(row)
 
     def create_remote_server(self, payload: ServerCreateRequest) -> ServerRecord:
+        """원격 서버를 생성하고 필요 시 활성 서버로 전환한다."""
         if not self.cipher.enabled:
             raise RuntimeError("AIOPS_SERVER_SECRET_KEY is required to add remote servers")
 
@@ -186,6 +190,7 @@ class ServerRegistry:
         return self.get_server(server_id)
 
     def activate_server(self, server_id: str) -> ServerRecord:
+        """지정 서버를 활성 서버로 설정한다."""
         row = self.persistence.get_server(server_id)
         if not row:
             raise KeyError(server_id)
@@ -210,6 +215,7 @@ class ServerRegistry:
         ok: bool,
         error_message: str = "",
     ) -> None:
+        """헬스체크 결과를 서버 상태 필드에 반영한다."""
         try:
             row = self.persistence.get_server(server_id)
             if not row:
@@ -293,6 +299,7 @@ class ServerRegistry:
         )
 
     def get_server_secrets(self, server_id: str) -> tuple[str, str]:
+        """원격 서버 접속용 base_url/api_key를 복호화해 반환한다."""
         row = self.persistence.get_server(server_id)
         if not row:
             raise KeyError(server_id)

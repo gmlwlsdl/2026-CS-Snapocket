@@ -1,4 +1,4 @@
-"""Minimal in-memory counter store with Prometheus text export."""
+"""Prometheus 텍스트 내보내기를 지원하는 경량 메모리 메트릭 저장소."""
 
 from __future__ import annotations
 
@@ -14,14 +14,17 @@ class MetricsStore:
         self._observations: dict[str, list[float]] = defaultdict(list)
 
     def inc(self, name: str, value: float = 1.0) -> None:
+        """카운터형 메트릭을 증가시킨다."""
         with self._lock:
             self._counters[name] += value
 
     def snapshot(self) -> dict[str, float]:
+        """현재 카운터 스냅샷을 사본으로 반환한다."""
         with self._lock:
             return dict(self._counters)
 
     def observe(self, name: str, value: float) -> None:
+        """분포형 메트릭 샘플(관측값)을 추가한다."""
         with self._lock:
             if math.isfinite(value):
                 self._observations[name].append(float(value))
@@ -46,6 +49,7 @@ class MetricsStore:
         return summary
 
     def to_prometheus(self) -> str:
+        """카운터/요약 통계를 Prometheus exposition format으로 변환한다."""
         lines: list[str] = []
         snapshot = self.snapshot()
         for key, value in sorted(snapshot.items()):
@@ -53,7 +57,7 @@ class MetricsStore:
             lines.append(f"# TYPE {metric_name} counter")
             lines.append(f"{metric_name} {value}")
 
-        # Derived metric: cache hit ratio.
+        # 파생 메트릭: 캐시 적중률.
         hit = float(snapshot.get("cache_hit_total", 0.0))
         miss = float(snapshot.get("cache_miss_total", 0.0))
         total = hit + miss

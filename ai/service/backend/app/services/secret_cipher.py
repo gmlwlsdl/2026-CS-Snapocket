@@ -1,4 +1,4 @@
-"""AES-GCM helper for encrypting remote server credentials at rest."""
+"""원격 서버 자격증명 저장 시 사용하는 AES-GCM 암복호화 유틸."""
 
 from __future__ import annotations
 
@@ -28,7 +28,7 @@ class SecretCipher:
         if not token:
             return b""
 
-        # Recommended format: url-safe base64 encoded 32-byte key.
+        # 권장 형식: url-safe base64로 인코딩된 32바이트 키.
         try:
             decoded = _b64decode_padded(token)
         except Exception as exc:
@@ -39,9 +39,11 @@ class SecretCipher:
 
     @property
     def enabled(self) -> bool:
+        """유효한 암호화 키가 설정되었는지 여부."""
         return self._aes is not None
 
     def encrypt_text(self, plaintext: str) -> str:
+        """평문 문자열을 URL-safe 토큰으로 암호화한다."""
         if self._aes is None:
             raise RuntimeError("AIOPS_SERVER_SECRET_KEY is not configured")
         payload = str(plaintext or "").encode("utf-8")
@@ -51,6 +53,7 @@ class SecretCipher:
         return token
 
     def decrypt_text(self, token: str) -> str:
+        """저장된 토큰을 복호화해 평문 문자열로 반환한다."""
         if self._aes is None:
             raise RuntimeError("AIOPS_SERVER_SECRET_KEY is not configured")
         try:

@@ -1,1 +1,1 @@
-"""OCR engine interfaces and concrete adapters."""
+"""OCR 엔진 인터페이스와 구현 어댑터 모듈."""

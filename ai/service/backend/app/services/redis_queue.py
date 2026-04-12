@@ -1,4 +1,4 @@
-"""Redis-backed job queue manager with cooperative cancellation and retries."""
+"""Redis 기반 Job 큐 매니저(협조 취소/재시도 지원)."""
 
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ from uuid import uuid4
 from app.schemas.job import JobInfo, JobStatus
 from app.services.persistence import PersistenceStore
 
-try:  # Optional dependency for environments that enable redis backend.
+try:  # Redis 백엔드를 사용하는 환경에서만 필요한 선택 의존성.
     import redis as redis_lib
 except Exception:  # pragma: no cover - dependency optional
     redis_lib = None
@@ -45,6 +45,7 @@ def _json_object_hook(value: dict[str, Any]) -> Any:
 
 
 class RedisJobManager:
+    """JobManager와 유사한 인터페이스를 제공하는 Redis 실행기."""
     def __init__(
         self,
         *,
@@ -101,6 +102,7 @@ class RedisJobManager:
         job_meta: dict[str, Any] | None = None,
         **kwargs,
     ) -> str:
+        """요청된 함수 호출을 Redis 작업(task)으로 직렬화해 큐에 넣는다."""
         task_name = self._task_names_by_callable.get(id(fn))
         if task_name is None:
             raise RuntimeError("Unsupported task for redis queue backend")
@@ -113,6 +115,7 @@ class RedisJobManager:
         return self._submit_task(task=task, job_meta=job_meta)
 
     def _submit_task(self, *, task: dict[str, Any], job_meta: dict[str, Any] | None = None) -> str:
+        """실제 Redis hash/index/queue를 구성해 작업을 등록한다."""
         job_id = str(uuid4())
         now = _utcnow()
 
@@ -177,6 +180,7 @@ class RedisJobManager:
             self._persistence.insert_result(job_id=job_id, result_data=result_data)
 
     def _worker_loop(self) -> None:
+        """워커 루프: 대기열에서 job_id를 꺼내 실행하고 실패해도 루프를 유지한다."""
         while not self._stop_event.is_set():
             try:
                 item = self._redis.brpop(self._queue_key, timeout=1)
@@ -191,10 +195,11 @@ class RedisJobManager:
             try:
                 self._execute_job(job_id)
             except Exception:
-                # Worker must keep polling even on task failure.
+                # 작업 실패가 나도 워커는 다음 작업 폴링을 계속해야 한다.
                 continue
 
     def _execute_job(self, job_id: str) -> None:
+        """단일 작업을 재시도 정책에 따라 실행한다."""
         job_hash = self._load_hash(job_id)
         if job_hash.get("cancel_requested") == "1":
             self._save_fields(job_id, status=JobStatus.cancelled.value, error="Cancelled by user")
@@ -316,7 +321,7 @@ class RedisJobManager:
 
         self._save_fields(job_id, cancel_requested="1")
 
-        # If still queued, remove from queue immediately.
+        # 아직 queued 상태라면 대기열에서 즉시 제거한다.
         removed = self._redis.lrem(self._queue_key, 0, job_id)
         if removed > 0:
             self._save_fields(job_id, status=JobStatus.cancelled.value, error="Cancelled by user")

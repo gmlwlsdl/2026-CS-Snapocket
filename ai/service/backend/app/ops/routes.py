@@ -784,7 +784,6 @@ def ops_settings(request: Request, state: AppState = Depends(get_state)):
         ("LLM_TEMPERATURE", "llm_temperature", "0"),
         ("LLM_IMAGE_MAX_SIDE_PX", "llm_image_max_side_px", "1536"),
         ("LLM_MAX_TOKENS", "llm_max_tokens", "96"),
-        ("LOCAL_MODEL_HINT_OCR_ENABLE", "local_model_hint_ocr_enable", "true"),
         ("LOCAL_MODEL_HINT_OCR_LANGS", "local_model_hint_ocr_langs", "kor+eng"),
         ("LOCAL_MODEL_HINT_OCR_TIMEOUT_S", "local_model_hint_ocr_timeout_s", "1.2"),
         ("LOCAL_MODEL_HINT_OCR_MAX_CHARS", "local_model_hint_ocr_max_chars", "800"),

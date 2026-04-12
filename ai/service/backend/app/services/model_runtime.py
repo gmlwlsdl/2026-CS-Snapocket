@@ -1,4 +1,4 @@
-"""Helpers to keep registry active model aligned with runtime availability."""
+"""레지스트리 모델 상태와 실제 런타임 엔진 상태를 연결하는 헬퍼."""
 
 from __future__ import annotations
 
@@ -12,8 +12,8 @@ logger = logging.getLogger(__name__)
 
 def resolve_effective_engine(state: AppState, *, sync_registry: bool = True) -> str:
     # NOTE:
-    # `sync_registry` is intentionally ignored for now because automatic active-model
-    # mutation makes explicit operator ON/OFF control impossible.
+    # 자동 동기화로 active 상태를 바꿔버리면 운영자의 명시적 ON/OFF 제어가 어려워져
+    # 현재는 sync_registry 인자를 의도적으로 사용하지 않는다.
     del sync_registry
     active = state.model_registry.active_engine()
     return active if active in {"paddle", "glm"} else "auto"
@@ -27,6 +27,7 @@ def _find_model(state: AppState, model_id: str) -> ModelInfo:
 
 
 def _engine_adapter(state: AppState, engine: str):
+    """엔진 이름을 실제 런타임 어댑터 객체로 매핑한다."""
     if engine == "paddle":
         return state.router.paddle_engine
     if engine == "glm":
@@ -76,6 +77,7 @@ def is_engine_active(state: AppState, engine: str) -> bool:
 
 
 def activate_model_runtime(state: AppState, model_id: str) -> tuple[ModelInfo, dict[str, str | bool]]:
+    """모델 활성화 + 엔진 리바인딩 + warmup까지 원자적으로 수행한다."""
     model = _find_model(state, model_id)
     engine = _engine_adapter(state, model.engine)
     currently_active = _active_model(state)
@@ -83,7 +85,7 @@ def activate_model_runtime(state: AppState, model_id: str) -> tuple[ModelInfo, d
     if currently_active is not None and currently_active.model_id != model_id:
         prev_engine = _engine_adapter(state, currently_active.engine)
 
-    # Free memory from currently loaded engine before loading another large VLM.
+    # 대형 VLM 중복 적재를 피하기 위해 기존 활성 엔진을 먼저 내린다.
     if prev_engine is not None:
         if hasattr(prev_engine, "set_pinned"):
             try:
@@ -98,7 +100,7 @@ def activate_model_runtime(state: AppState, model_id: str) -> tuple[ModelInfo, d
     target_ref = _resolve_model_ref(state, model)
     _rebind_engine_model_ref(engine, target_ref)
 
-    # Some engines expose `set_pinned` to keep model runtime prepared while active.
+    # 일부 엔진은 set_pinned(True)로 활성 상태 유지 시 메모리를 고정할 수 있다.
     if hasattr(engine, "set_pinned"):
         try:
             engine.set_pinned(True)
@@ -126,6 +128,7 @@ def activate_model_runtime(state: AppState, model_id: str) -> tuple[ModelInfo, d
 
 
 def deactivate_model_runtime(state: AppState, model_id: str) -> tuple[ModelInfo, dict[str, str | bool]]:
+    """모델 비활성화 + 엔진 unload를 수행한다."""
     model = _find_model(state, model_id)
     engine = _engine_adapter(state, model.engine)
     deactivated = state.model_registry.deactivate(model_id)

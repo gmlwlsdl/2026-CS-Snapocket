@@ -1,4 +1,4 @@
-"""End-to-end OCR pipeline from file bytes to domain-shaped JSON output."""
+"""입력 파일을 OCR/후처리해 도메인 결과로 변환하는 파이프라인."""
 
 from __future__ import annotations
 
@@ -12,6 +12,7 @@ import shutil
 import subprocess
 import tempfile
 import time
+from typing import Callable
 from uuid import uuid4
 
 logger = logging.getLogger(__name__)
@@ -33,10 +34,10 @@ from app.services.ingestion import ingest_office_document, to_ocr_blocks
 from app.services.image_processor import ImageProcessor
 from app.services.metrics import MetricsStore
 from app.services.ocr.router import OCREngineRouter
-from app.services.structured_fields import extract_common_fields
 
 
 class InferencePipeline:
+    """파일 타입별 OCR 경로를 실행하고 최종 도메인 결과를 생성한다."""
     _NOISE_LINE_RE = re.compile(r"^[^\w가-힣]{1,8}$")
     _REPEAT_SYMBOL_RE = re.compile(r"([^\w가-힣])\1{3,}")
     _TABLE_RULE_RE = re.compile(r"^\s*:?-{3,}:?\s*$")
@@ -60,6 +61,7 @@ class InferencePipeline:
         vlm_ocr_verify_langs: str = "kor+eng",
         vlm_ocr_verify_timeout_s: float = 1.2,
         vlm_ocr_verify_max_chars: int = 800,
+        category_provider: Callable[[], list[str]] | None = None,
     ) -> None:
         self.router = router
         self.prefer_embedded_pdf_text = prefer_embedded_pdf_text
@@ -70,9 +72,22 @@ class InferencePipeline:
         self.vlm_ocr_verify_langs = str(vlm_ocr_verify_langs or "kor+eng").strip() or "kor+eng"
         self.vlm_ocr_verify_timeout_s = max(0.2, float(vlm_ocr_verify_timeout_s))
         self.vlm_ocr_verify_max_chars = max(64, int(vlm_ocr_verify_max_chars))
+        self.category_provider = category_provider
         self._tesseract_binary: str | None = None
         self._tesseract_checked = False
         self._semaphore = asyncio.Semaphore(max_concurrency)
+
+    def _load_categories(self) -> list[str]:
+        if self.category_provider is None:
+            return ["unknown"]
+        try:
+            rows = self.category_provider() or []
+        except Exception:
+            return ["unknown"]
+        normalized = [str(row).strip() for row in rows if str(row).strip()]
+        if not normalized:
+            return ["unknown"]
+        return list(dict.fromkeys(normalized))
 
     @classmethod
     def _normalize_text(cls, text: str) -> str:
@@ -266,10 +281,6 @@ class InferencePipeline:
         if patched > 0:
             logger.info("[vlm_verify] patched_blocks=%d verify_ms=%d", patched, verify_ms)
         return blocks, verify_ms
-
-    @staticmethod
-    def _guess_content_type(filename: str, content_type: str | None) -> str:
-        return resolve_content_type(filename, content_type)
 
     @staticmethod
     def _resolve_engine_name(engine_hint: str | None, blocks: list[OCRBlock]) -> str:
@@ -494,8 +505,8 @@ class InferencePipeline:
         doc_id: str | None,
         vlm_ocr_verify: bool = False,
     ) -> InferResult:
-        # This sync method is for worker threads and sync callers only.
-        # Async routes must use `await process_async(...)`.
+        # 동기 메서드는 워커 스레드/동기 호출자 전용이다.
+        # 비동기 라우트에서는 반드시 `await process_async(...)`를 사용해야 한다.
         try:
             asyncio.get_running_loop()
         except RuntimeError:
@@ -530,7 +541,7 @@ class InferencePipeline:
             engine_hint=engine_hint,
         )
 
-        # Cache check
+        # 1) 입력 바이트+scope 기준 캐시 조회
         if self.cache:
             cached = self.cache.get(file_bytes, scope=cache_scope)
             if cached:
@@ -562,9 +573,9 @@ class InferencePipeline:
             raise
 
         logger.info(
-            "[infer_done] file=%s engine=%s confidence=%.2f blocks=%d latency_ms=%d doc_type=%s",
+            "[infer_done] file=%s engine=%s confidence=%.2f blocks=%d latency_ms=%d category=%s",
             filename, result.engine_used, result.confidence,
-            len(result.blocks), result.latency_ms, result.domain.doc_type,
+            len(result.blocks), result.latency_ms, result.domain.category,
         )
 
         if self.cache:
@@ -642,16 +653,13 @@ class InferencePipeline:
         postprocess_ms = int((time.perf_counter() - post_started) * 1000)
 
         transform_started = time.perf_counter()
-        domain = build_domain_payload(corrected_text, title_hint=filename)
-        common_fields = extract_common_fields(blocks, corrected_text)
-        if common_fields.get("values"):
-            domain.fields.setdefault("common", {})
-            if isinstance(domain.fields["common"], dict):
-                domain.fields["common"].update(common_fields["values"])
-            else:
-                domain.fields["common"] = common_fields["values"]
-        if common_fields.get("pairs"):
-            domain.fields["kv_pairs"] = common_fields["pairs"]
+        normalized_raw_text = corrected_text or raw_text
+        domain = build_domain_payload(
+            req_id=doc_id,
+            text=normalized_raw_text,
+            title_hint=filename,
+            categories=self._load_categories(),
+        )
         transform_ms = int((time.perf_counter() - transform_started) * 1000)
         latency_ms = int((time.perf_counter() - started) * 1000)
         pages = self._page_summaries(blocks, page_count=page_count)
@@ -667,7 +675,7 @@ class InferencePipeline:
             content_type=content_type,
             engine_used=self._resolve_engine_name(engine_hint, blocks),
             confidence=confidence,
-            raw_text=raw_text,
+            raw_text=normalized_raw_text,
             corrected_text=corrected_text,
             blocks=blocks,
             domain=domain,
@@ -696,7 +704,7 @@ class InferencePipeline:
         embedded_chars = sum(len(block.text_corrected) for block in embedded_blocks)
         full_embedded_coverage = total_pages > 0 and len(missing_pages) == 0
 
-        # Automatic fast path for digital PDFs.
+        # 1) 디지털 PDF(임베디드 텍스트 100% 커버)면 OCR 없이 즉시 반환
         if full_embedded_coverage and embedded_chars > 0:
             return embedded_blocks, {
                 "preprocessing_ms": 0,
@@ -706,7 +714,7 @@ class InferencePipeline:
                 "missing_regions": [],
             }
 
-        # Operator can prefer embedded text whenever available.
+        # 2) 설정상 임베디드 텍스트 우선일 때도 OCR 단계를 생략
         if self.prefer_embedded_pdf_text and embedded_blocks and not missing_pages:
             return embedded_blocks, {
                 "preprocessing_ms": 0,
@@ -716,7 +724,7 @@ class InferencePipeline:
                 "missing_regions": [],
             }
 
-        # VLM OCR path — only missing pages if embedded extraction already covered some pages.
+        # 3) OCR 필요 경로: 임베디드 텍스트가 비어있는 페이지에만 VLM OCR 수행
         doc = fitz.open(stream=file_bytes, filetype="pdf")
         page_images: list[tuple[int, bytes]] = []
         target_dpi = float(getattr(self.preprocessor, "target_dpi", 300))
@@ -793,7 +801,7 @@ class InferencePipeline:
                 extracted_for_page = 0
                 table_bboxes: list[list[float]] = []
 
-                # 1) Table-first extraction for structure preservation.
+                # 1) 표 구조 보존을 위해 표를 우선 추출한다.
                 try:
                     finder = page.find_tables()
                     tables = list(getattr(finder, "tables", []) or [])
@@ -847,7 +855,7 @@ class InferencePipeline:
                             )
                             extracted_for_page += 1
 
-                # 2) Text block extraction with layout classification.
+                # 2) 일반 텍스트 블록을 추출하고 레이아웃 타입을 분류한다.
                 try:
                     page_dict = page.get_text("dict")
                 except Exception:
@@ -892,7 +900,7 @@ class InferencePipeline:
             doc.close()
             return blocks, missing_pages, total_pages
 
-        # fallback parser if fitz dict parsing failed entirely
+        # fitz dict 파싱이 완전히 실패한 경우 pypdf 기반 fallback 파서를 사용한다.
         try:
             reader = PdfReader(io.BytesIO(file_bytes))
         except Exception:
