@@ -1,13 +1,13 @@
 import os
 import uuid
 from datetime import datetime
-
-from fastapi import APIRouter, UploadFile, File, Form, Depends
+from fastapi import APIRouter, UploadFile, status, File, Form, Depends
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
-
+from core.security import jwtAuth
 from core.database import get_db
 from models.document import Document
+from api.apiResponse import ApiResponse
 
 router = APIRouter(prefix="/documents/upload", tags=["upload"])
 
@@ -27,10 +27,11 @@ FILE_TYPE_MAP = {
 }
 
 
-@router.post("")
+@router.post("", status_code = status.HTTP_201_CREATED, response_model=ApiResponse[dict])
 async def upload_file(
     file: UploadFile = File(...),
     autoAnalyze: bool = Form(True),
+    jwtToken: dict = Depends(jwtAuth),
     db: Session = Depends(get_db),
 ):
     if not file.filename or "." not in file.filename:
@@ -84,16 +85,13 @@ async def upload_file(
     db.commit()
     db.refresh(new_document)
 
-    return JSONResponse(
-        status_code=201,
-        content={
-            "success": True,
-            "message": "파일 업로드 성공",
-            "data": {
-                "document_id": new_document.id,
-                "file_url": f"/{file_path}",
-                "file_type": file_type,
-                "status": status,
-            },
-        },
+    return ApiResponse(
+        success=True,
+        message="파일 업로드 성공",
+        data={
+            "document_id": new_document.id,
+            "file_url": f"/{file_path}",
+            "file_type": file_type,
+            "status": status,
+        }
     )
