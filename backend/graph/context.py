@@ -1,7 +1,9 @@
 from fastapi import Depends, Request
 from core.security import verifyToken
+from core.database import get_db
+from sqlalchemy.orm import Session
 
-async def getContext(request: Request):
+async def getContext(request: Request, db: Session = Depends(get_db)):
 
     authHeader = request.headers.get("Authorization")
 
@@ -17,5 +19,6 @@ async def getContext(request: Request):
         
     return {
         "user": user_info,
-        "request": request
+        "request": request,
+        "db": db
     }

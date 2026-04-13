@@ -25,8 +25,8 @@ def createAccessToken(data: dict):
 def verifyToken(token: str):
     payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         
-    username: str = payload.get("sub")
-    if username is None:
+    userName: str = payload.get("sub")
+    if userName is None:
         raise ValueError("잘못된 토큰")
             
     return payload 

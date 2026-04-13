@@ -25,7 +25,7 @@ app.include_router(upload.router)
 app.include_router(analysis.router)
 
 graphql_app = CustomGraphQLRouter(data, context_getter=getContext)
-app.include_router(graphql_app, prefix="/graphql")
+app.include_router(graphql_app, prefix="/graphql", tags=["graphql"])
 @app.get("/")
 def root():
     return {
