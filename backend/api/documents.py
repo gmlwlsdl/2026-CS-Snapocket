@@ -125,9 +125,7 @@ def update_document(update: UpdateDocuments, document_id: str, jwtToken: dict = 
     for key, value in updateDict.items():
         setattr(document, key, value)
 
-    document.updated_at = func.now()
-
-    db.commit
+    db.commit()
     db.refresh(document)
 
     return ApiResponse(
@@ -150,6 +148,10 @@ def delete_document(document_id: str, jwtToken: dict = Depends(jwtAuth), db: Ses
                 "error_code": "DOCUMENT_NOT_FOUND"
             }
         )
+    
+    document.deleted_at = func.now()
+    db.commit()
+    db.refresh(document)
 
     return ApiResponse(
         success=True,

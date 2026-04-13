@@ -37,7 +37,7 @@ def start_analysis(document_id: str, jwtToken: dict = Depends(jwtAuth), db: Sess
         document_id=document.id,
         status="processing", 
         raw_result=mock_result,
-        started_at=datetime.now(),
+        created_at=datetime.now(),
     )
 
     db.add(analysis_job)
