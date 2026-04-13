@@ -1,153 +1,178 @@
 {% extends "base.html" %}
 {% block content %}
 
-<section class="grid two">
-
-  <!-- Engine Health -->
-  <article class="card">
-    <h2>Engine Health</h2>
-    <div class="engine-list">
-      {% for eng in engines %}
-      <div class="engine-row">
-        <div>
-          <span class="engine-name">{{ eng.name }}</span>
-          <span class="engine-model">{{ eng.model }}</span>
-        </div>
-        {% if not eng.enabled %}
-          <span class="badge warn">DISABLED</span>
-        {% elif eng.available %}
-          <span class="badge ok">UP</span>
-        {% else %}
-          <span class="badge err">DOWN</span>
-        {% endif %}
-      </div>
-      {% endfor %}
-    </div>
+<section class="stats-grid">
+  <article class="stat-card">
+    <h3>Queue Total</h3>
+    <p class="stat-value">{{ ops_queue_summary.total }}</p>
   </article>
+  <article class="stat-card">
+    <h3>Running</h3>
+    <p class="stat-value">{{ ops_queue_summary.running }}</p>
+  </article>
+  <article class="stat-card">
+    <h3>Succeeded</h3>
+    <p class="stat-value">{{ ops_queue_summary.succeeded }}</p>
+  </article>
+  <article class="stat-card">
+    <h3>Failed</h3>
+    <p class="stat-value">{{ ops_queue_summary.failed }}</p>
+  </article>
+</section>
 
-  <!-- Metrics -->
-  <article class="card">
-    <h2>Metrics</h2>
-    {% if metrics %}
-      <div class="metric-grid">
-        {% for k, v in metrics.items() %}
-          <div class="metric-item">
-            <div class="metric-label">{{ k }}</div>
-            <div class="metric-value">{{ v }}</div>
+<section class="panel-grid two">
+  <article class="panel">
+    <div class="panel-head">
+      <h2>Engine Health</h2>
+    </div>
+    {% if engines %}
+      <div class="list">
+        {% for eng in engines %}
+          <div class="list-row">
+            <div>
+              <p class="title">{{ eng.name }}</p>
+              <p class="sub mono">{{ eng.model }}</p>
+            </div>
+            {% if not eng.enabled %}
+              <span class="badge warn">disabled</span>
+            {% elif eng.available %}
+              <span class="badge ok">up</span>
+            {% else %}
+              <span class="badge err">down</span>
+            {% endif %}
           </div>
         {% endfor %}
       </div>
     {% else %}
-      <p class="empty">No metrics recorded yet.</p>
+      <p class="empty">Engine data not available.</p>
     {% endif %}
   </article>
 
-</section>
-
-<section class="grid two">
-  <article class="card">
-    <h2>Dispatch Overview</h2>
-    <div class="engine-row">
-      <div>
-        <span class="engine-name">{{ ops_active_backend_label }}</span>
-        <span class="engine-model">server_id={{ ops_active_server_id }} · kind={{ ops_active_server_kind }}</span>
-      </div>
-      {% if ops_dispatch_enabled %}
-        <span class="badge ok">active</span>
-      {% else %}
-        <span class="badge err">unavailable</span>
+  <article class="panel">
+    <div class="panel-head">
+      <h2>Runtime Flags</h2>
+    </div>
+    <div class="kv-lines">
+      <div><span>Dispatch Enabled</span><strong>{{ ops_dispatch_enabled }}</strong></div>
+      <div><span>Paddle Runtime</span><strong>{{ "up" if ops_runtime.get("paddle") else "down" }}</strong></div>
+      {% if ops_runtime.get("glm") is not none %}
+      <div><span>GLM Runtime</span><strong>{{ "up" if ops_runtime.get("glm") else "down" }}</strong></div>
       {% endif %}
-    </div>
-    <div class="engine-list" style="margin-top:10px;">
-      <div class="engine-row">
-        <div>
-          <span class="engine-name">paddle runtime</span>
-          <span class="engine-model">dispatch.active_runtime()</span>
-        </div>
-        {% if ops_runtime.paddle %}
-          <span class="badge ok">UP</span>
-        {% else %}
-          <span class="badge err">DOWN</span>
-        {% endif %}
-      </div>
-    </div>
-  </article>
-
-  <article class="card">
-    <h2>Queue Summary</h2>
-    <div class="metric-grid">
-      <div class="metric-item">
-        <div class="metric-label">Total</div>
-        <div class="metric-value">{{ ops_queue_summary.total }}</div>
-      </div>
-      <div class="metric-item">
-        <div class="metric-label">Queued</div>
-        <div class="metric-value">{{ ops_queue_summary.queued }}</div>
-      </div>
-      <div class="metric-item">
-        <div class="metric-label">Running</div>
-        <div class="metric-value">{{ ops_queue_summary.running }}</div>
-      </div>
-      <div class="metric-item">
-        <div class="metric-label">Succeeded</div>
-        <div class="metric-value">{{ ops_queue_summary.succeeded }}</div>
-      </div>
-      <div class="metric-item">
-        <div class="metric-label">Failed</div>
-        <div class="metric-value">{{ ops_queue_summary.failed }}</div>
-      </div>
-      <div class="metric-item">
-        <div class="metric-label">Cancelled</div>
-        <div class="metric-value">{{ ops_queue_summary.cancelled }}</div>
-      </div>
+      <div><span>Active Server</span><strong class="mono">{{ ops_active_server_id }}</strong></div>
+      <div><span>Server Kind</span><strong>{{ ops_active_server_kind }}</strong></div>
     </div>
   </article>
 </section>
 
-<!-- Active Models -->
-<section class="card">
-  <h2>Active Models</h2>
+<section class="panel">
+  <div class="panel-head">
+    <h2>Registered Models</h2>
+    <a class="text-link" href="/ops/models">Manage</a>
+  </div>
   {% if models %}
-    <table>
-      <thead>
-        <tr>
-          <th>Model</th>
-          <th>Engine</th>
-          <th>Version</th>
-          <th>Active</th>
-          <th>Status</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for m in models %}
-        <tr>
-          <td>{{ m.name }}</td>
-          <td>{{ m.engine }}</td>
-          <td>{{ m.version }}</td>
-          <td>
-            {% if m.active %}
-              <span class="dot-active"></span>Yes
-            {% else %}
-              <span class="dot-inactive"></span>No
-            {% endif %}
-          </td>
-          <td>
-            {% if m.status == 'online' %}
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Model ID</th>
+            <th>Name</th>
+            <th>Engine</th>
+            <th>Version</th>
+            <th>Active</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for m in models %}
+          <tr>
+            <td><a href="/ops/models/{{ m.model_id }}">{{ m.model_id }}</a></td>
+            <td>{{ m.name }}</td>
+            <td>{{ m.engine }}</td>
+            <td>{{ m.version }}</td>
+            <td>
+              {% if m.active %}
+              <span class="badge ok">active</span>
+              {% else %}
+              <span class="badge">inactive</span>
+              {% endif %}
+            </td>
+            <td>
+              {% if m.status == "online" %}
               <span class="badge ok">online</span>
-            {% elif m.status == 'degraded' %}
-              <span class="badge err">degraded</span>
-            {% elif m.status == 'inactive' %}
-              <span class="badge err">inactive</span>
-            {% else %}
+              {% elif m.status in ["degraded", "failed"] %}
+              <span class="badge err">{{ m.status }}</span>
+              {% else %}
               <span class="badge warn">{{ m.status }}</span>
-            {% endif %}
-          </td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
   {% else %}
-    <p class="empty">No active models found.</p>
+    <p class="empty">No models registered.</p>
+  {% endif %}
+</section>
+
+<section class="panel">
+  <div class="panel-head">
+    <h2>Recent Jobs</h2>
+    <a class="text-link" href="/ops/jobs">Open Jobs</a>
+  </div>
+  {% if jobs %}
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Job ID</th>
+            <th>Status</th>
+            <th>Created</th>
+            <th>Updated</th>
+            <th>Error</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for j in jobs[:10] %}
+          <tr>
+            <td class="mono">{{ j.job_id }}</td>
+            <td>
+              {% if j.status == "succeeded" %}
+              <span class="badge ok">{{ j.status }}</span>
+              {% elif j.status in ["failed", "cancelled"] %}
+              <span class="badge err">{{ j.status }}</span>
+              {% else %}
+              <span class="badge warn">{{ j.status }}</span>
+              {% endif %}
+            </td>
+            <td class="mono">{{ j.created_at }}</td>
+            <td class="mono">{{ j.updated_at }}</td>
+            <td>{{ j.error or "-" }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    <p class="empty">No jobs found.</p>
+  {% endif %}
+</section>
+
+<section class="panel">
+  <div class="panel-head">
+    <h2>Raw Metrics</h2>
+  </div>
+  {% if metrics %}
+    <div class="metrics-grid">
+      {% for k, v in metrics.items() %}
+      <div class="metric-item">
+        <span>{{ k }}</span>
+        <strong class="mono">{{ v }}</strong>
+      </div>
+      {% endfor %}
+    </div>
+  {% else %}
+    <p class="empty">No metrics yet.</p>
   {% endif %}
 </section>
 

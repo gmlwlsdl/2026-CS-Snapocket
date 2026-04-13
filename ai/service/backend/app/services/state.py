@@ -63,7 +63,7 @@ def _resolve_qwen_asr_model_ref(settings: Settings) -> str:
     ai_root = Path(__file__).resolve().parents[4]
     model_root = ai_root / "model"
 
-    # 사용자 요청 경로 1.7B 폴더를 차선으로 탐색한다.
+    # 로컬 1.7B 계열 폴더를 우선 탐지한다.
     preferred_dirs = [
         model_root / "Qwen3-ASR-1.7B",
     ]
@@ -82,8 +82,8 @@ def _resolve_qwen_asr_model_ref(settings: Settings) -> str:
                 return str(relative_to_ai)
         return configured
 
-    # 로컬/설정 모두 없으면 HF 모델명을 최후 fallback으로 사용한다.
-    return "Qwen/Qwen3-ASR-0.6B"
+    # 로컬/설정 모두 없으면 1.7B HF 모델명을 최후 fallback으로 사용한다.
+    return "Qwen/Qwen3-ASR-1.7B"
 
 
 def build_app_state() -> AppState:

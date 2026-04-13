@@ -25,12 +25,12 @@ class QwenASREngine:
         self,
         *,
         enabled: bool = True,
-        model_name: str = "Qwen/Qwen3-ASR-0.6B",
+        model_name: str = "Qwen/Qwen3-ASR-1.7B",
         language: str = "Korean",
         max_new_tokens: int = 1024,
     ) -> None:
         self.enabled = bool(enabled)
-        self.model_name = str(model_name or "").strip() or "Qwen/Qwen3-ASR-0.6B"
+        self.model_name = str(model_name or "").strip() or "Qwen/Qwen3-ASR-1.7B"
         self.language = str(language or "").strip() or "Korean"
         self.max_new_tokens = max(32, int(max_new_tokens))
 

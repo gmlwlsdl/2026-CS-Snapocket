@@ -1,32 +1,74 @@
 # AI Workspace
 
-현재 `ai` 폴더는 아래 4개 영역으로 구성됩니다.
+`ai` 폴더는 AI 추론 서비스의 단일 작업 공간입니다.
 
-- `model/` : (선택) 실험/아카이브 모델 파일 보관
-- `service/` : 프론트+백엔드 통합 서비스 코드
-- `data/` : DB 및 테스트 데이터
-- `markdown/` : 설계/작업 문서
+## 현재 구조
 
-현재 서비스 런타임 OCR은 `llama.cpp server` 기반입니다.
+- `model/` : 로컬 모델 파일 저장
+- `service/` : AI API(backend) + Ops UI(frontend)
+- `data/` : DB/테스트 데이터
+- `directory.md` : 디렉터리 안내
 
-세부 의도와 변경 내역은 `markdown/refactor_intent.md`를 참고하세요.
+## 현재 런타임 요약
 
-## 실행 (make 기준)
+- 로컬 OCR: `llama.cpp server` + PaddleOCR-VL 모델
+- 오디오(`.mp3`) 입력: `Qwen ASR` 분기로 자동 처리
+- 엔진 선택:
+  - 이미지/PDF/오피스 문서 -> `paddle`
+  - 오디오(mp3) -> `qwen-asr`
 
-`ai/` 폴더에서 아래 명령을 사용합니다.
+## Qwen ASR 모델 경로 우선순위
+
+앱 시작 시 아래 순서로 ASR 모델을 결정합니다.
+
+1. `ai/model/Qwen3-ASR-1.7B` (로컬 자동 탐지)
+2. `QWEN_ASR_MODEL` 환경변수 경로/모델명
+3. 최종 fallback: `Qwen/Qwen3-ASR-1.7B`
+
+추가 ASR 기본값:
+
+- `QWEN_ASR_ENABLE=true`
+- `QWEN_ASR_LANGUAGE=Korean`
+- `QWEN_ASR_MAX_NEW_TOKENS=96`
+
+## 실행 (Makefile 단일 진입점)
 
 ```bash
 cd ai
 make up-build
 ```
 
-자주 쓰는 명령:
+주요 명령:
 
 ```bash
 make ps
 make logs
+make logs-tail
+make health
+make status
 make down
 ```
 
-- env 선택 우선순위: `.env.<COMPUTERNAME>.local` -> `.env.local` -> `.env`
-- 이 PC 전용 설정 파일 예시: `.env.admin.local`
+기본 접속:
+
+- API: `http://localhost:18080`
+- Ops UI: `http://localhost:18080/ops`
+- Swagger: `http://localhost:18080/docs`
+
+## 환경파일 선택 우선순위
+
+`ai/Makefile` 기준으로 루트 env를 아래 순서로 선택합니다.
+
+1. `../.env.<COMPUTERNAME>.local`
+2. `../.env.local`
+3. `../.env`
+
+필요 시 명시적으로 지정:
+
+```bash
+ROOT_ENV=../.env.admin.local make up-build
+```
+
+## 참고
+
+- 서비스 상세 문서: `ai/service/README.md`

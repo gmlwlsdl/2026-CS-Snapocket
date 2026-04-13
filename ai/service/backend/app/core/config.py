@@ -61,7 +61,7 @@ class Settings:
     llm_max_tokens: int = int(os.getenv("LLM_MAX_TOKENS", os.getenv("OLLAMA_MAX_TOKENS", "96")))
     dispatch_upstream_timeout_s: float = float(os.getenv("DISPATCH_UPSTREAM_TIMEOUT_S", "180"))
     qwen_asr_enable: bool = _as_bool(os.getenv("QWEN_ASR_ENABLE"), True)
-    qwen_asr_model: str = os.getenv("QWEN_ASR_MODEL", "Qwen/Qwen3-ASR-0.6B")
+    qwen_asr_model: str = os.getenv("QWEN_ASR_MODEL", "Qwen/Qwen3-ASR-1.7B")
     qwen_asr_language: str = os.getenv("QWEN_ASR_LANGUAGE", "Korean")
     qwen_asr_max_new_tokens: int = int(os.getenv("QWEN_ASR_MAX_NEW_TOKENS", "96"))
 
@@ -165,7 +165,7 @@ def load_settings() -> Settings:
         llm_max_tokens=int(os.getenv("LLM_MAX_TOKENS", os.getenv("OLLAMA_MAX_TOKENS", "96"))),
         dispatch_upstream_timeout_s=float(os.getenv("DISPATCH_UPSTREAM_TIMEOUT_S", "180")),
         qwen_asr_enable=_as_bool(os.getenv("QWEN_ASR_ENABLE"), True),
-        qwen_asr_model=os.getenv("QWEN_ASR_MODEL", "Qwen/Qwen3-ASR-0.6B"),
+        qwen_asr_model=os.getenv("QWEN_ASR_MODEL", "Qwen/Qwen3-ASR-1.7B"),
         qwen_asr_language=os.getenv("QWEN_ASR_LANGUAGE", "Korean"),
         qwen_asr_max_new_tokens=int(os.getenv("QWEN_ASR_MAX_NEW_TOKENS", "96")),
         local_model_hint_ocr_langs=os.getenv("LOCAL_MODEL_HINT_OCR_LANGS", "kor+eng"),
