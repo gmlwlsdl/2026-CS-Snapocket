@@ -1,4 +1,4 @@
-"""In-memory circular log buffer with Python logging handler integration."""
+"""Python logging 연동용 메모리 순환 로그 버퍼."""
 
 from __future__ import annotations
 
@@ -18,7 +18,7 @@ class LogEntry:
 
 
 class LogBuffer:
-    """Thread-safe circular buffer capturing Python log records."""
+    """로그 레코드를 최근 N개만 보관하는 thread-safe 버퍼."""
 
     def __init__(self, maxlen: int = 500) -> None:
         self._buf: deque[LogEntry] = deque(maxlen=maxlen)
@@ -39,7 +39,7 @@ class LogBuffer:
 
 
 class _BufferHandler(logging.Handler):
-    """Logging handler that writes records into a LogBuffer."""
+    """표준 로그 레코드를 LogBuffer로 전달하는 핸들러."""
 
     def __init__(self, buf: LogBuffer) -> None:
         super().__init__()
@@ -63,7 +63,7 @@ class _BufferHandler(logging.Handler):
 
 
 def attach_to_logger(buf: LogBuffer, logger_name: str = "app", level: int = logging.INFO) -> None:
-    """Attach buffer handler to a named logger (and all its children)."""
+    """지정 logger(및 하위 logger)에 버퍼 핸들러를 연결한다."""
     handler = _BufferHandler(buf)
     handler.setFormatter(logging.Formatter("%(message)s"))
     handler.setLevel(level)

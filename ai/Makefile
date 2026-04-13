@@ -71,8 +71,8 @@ endif
 .PHONY: help
 help:
 	@echo Snapocket AI commands (single entrypoint: ai/Makefile)
-	@echo   make up-build   Build/start AI containers
-	@echo   make up         Start AI containers
+	@echo   make up         Start AI containers (no image rebuild)
+	@echo   make up-build   Build with cache, then start AI containers
 	@echo   make down       Stop and remove container
 	@echo   make restart    Restart aiops-api
 	@echo   make ps         Show container status
@@ -87,7 +87,9 @@ help:
 	@echo   make bench-ab-q8     Run Q8 benchmark scenario
 	@echo   make bench-compare   Compare benchmark reports
 	@echo   make clean-cache     Remove local Python cache files
-	@echo   make clean      Down + remove local docker artifacts
+	@echo   make clean      Down + remove orphans (keep images/cache)
+	@echo   make clean-images  Down + remove local docker images (forces reinstall)
+	@echo   make rebuild    Force rebuild without cache
 	@echo Overrides:
 	@echo   AI_FORCE_GPU=1 make up-build   # include gpu compose file
 	@echo   ROOT_ENV=../.env.admin.local make up-build
@@ -171,7 +173,8 @@ up: preflight-port network-create env
 
 .PHONY: up-build
 up-build: preflight-port network-create env
-	@$(COMPOSE) up -d --build
+	@$(COMPOSE) build $(SERVICE)
+	@$(COMPOSE) up -d
 	@echo "AIOps API: $(HOST)"
 
 .PHONY: down
@@ -265,7 +268,7 @@ else
 		exit 1; \
 	fi
 endif
-	@$(MAKE) up-build \
+	@$(MAKE) up \
 		AI_LLAMA_MODEL_FILE=$(BF16_MODEL) \
 		AI_LLAMA_MMPROJ_FILE=$(MMPROJ_MODEL) \
 		AI_LLAMA_CTX_SIZE=$(TUNE_CTX) \
@@ -292,7 +295,7 @@ else
 		exit 1; \
 	fi
 endif
-	@$(MAKE) up-build \
+	@$(MAKE) up \
 		AI_LLAMA_MODEL_FILE=$(Q8_MODEL) \
 		AI_LLAMA_MMPROJ_FILE=$(MMPROJ_MODEL) \
 		AI_LLAMA_CTX_SIZE=$(TUNE_CTX) \
@@ -334,4 +337,8 @@ clean-cache:
 
 .PHONY: clean
 clean:
+	@$(COMPOSE) down --remove-orphans
+
+.PHONY: clean-images
+clean-images:
 	@$(COMPOSE) down --rmi local --remove-orphans

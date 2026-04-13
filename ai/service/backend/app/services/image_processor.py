@@ -1,4 +1,4 @@
-"""Image preprocessing utilities to improve OCR robustness on scanned docs."""
+"""스캔 문서 OCR 정확도를 높이기 위한 이미지 전처리 유틸."""
 
 from __future__ import annotations
 
@@ -40,6 +40,7 @@ class ImageProcessor:
             if img is None:
                 return img_bytes
 
+            # 전처리 단계는 순차 적용하며, 실패 시 원본 바이트를 그대로 반환한다.
             img = self._normalize_resolution(img)
             img = self._deskew(img)
             img = self._enhance_contrast(img)
@@ -62,7 +63,7 @@ class ImageProcessor:
             return img
 
         max_dim = max(h, w)
-        # Prevent overly large tensors that hurt latency/OOM.
+        # 과도한 업스케일로 인한 지연/OOM을 방지한다.
         if (max_dim * scale) > self.max_side_px:
             scale = self.max_side_px / float(max_dim)
         if scale <= 1.0:

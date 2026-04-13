@@ -15,6 +15,7 @@ from fastapi.templating import Jinja2Templates
 
 from app.api.uploads import validate_upload
 from app.api.deps import get_state, require_ops_basic_auth
+from app.services.file_types import is_audio_content_type, resolve_content_type
 from app.schemas.server import ServerCreateRequest, ServerKind
 from app.services.dispatch_service import DispatchRequestError
 from app.services.server_registry import LOCAL_SERVER_ID
@@ -22,7 +23,6 @@ from app.services.ocr.base import OCREngineBusyError
 from app.services.model_runtime import (
     activate_model_runtime,
     deactivate_model_runtime,
-    is_engine_active,
     resolve_effective_engine,
 )
 from app.services.state import AppState
@@ -54,29 +54,40 @@ def _paddle_model_ref(state: AppState) -> str:
     return f"llm:{model}"
 
 
-def _glm_model_ref(state: AppState) -> str:
-    model = str(getattr(state.router.glm_engine, "model", "") or "").strip()
-    if not model:
-        model = state.settings.llm_model_glm
-    return f"llm:{model}"
+def _qwen_asr_model_ref(state: AppState) -> str:
+    model_ref = str(getattr(state.settings, "qwen_asr_model", "") or "").strip()
+    engine = getattr(state, "qwen_asr_engine", None)
+    if engine is not None:
+        model_ref = str(getattr(engine, "model_name", model_ref) or model_ref).strip()
+    if not model_ref:
+        model_ref = "Qwen/Qwen3-ASR-1.7B"
+    return f"qwen-asr:{model_ref}"
+
+
+def _qwen_asr_available(state: AppState) -> bool:
+    engine = getattr(state, "qwen_asr_engine", None)
+    if engine is None:
+        return False
+    try:
+        return bool(engine.available())
+    except Exception:
+        return False
 
 
 def _model_ref_for_row(state: AppState, model_id: str, engine: str) -> str:
     if model_id in {"llamacpp-paddleocr-vl", "ollama-paddleocr-vl", "llama-paddleocr-vl"}:
         return f"llm:{state.settings.llm_model_paddle}"
-    if model_id in {"llamacpp-glm-ocr", "ollama-glm-ocr", "llama-glm-ocr"}:
-        return f"llm:{state.settings.llm_model_glm}"
     if engine == "paddle":
         return _paddle_model_ref(state)
-    if engine == "glm":
-        return _glm_model_ref(state)
+    if engine == "qwen-asr":
+        return _qwen_asr_model_ref(state)
     return "llm:unknown"
 
 
 def _model_map(state: AppState) -> dict[str, str]:
     return {
         "paddle": _paddle_model_ref(state),
-        "glm": _glm_model_ref(state),
+        "qwen-asr": _qwen_asr_model_ref(state),
     }
 
 
@@ -84,8 +95,6 @@ def _canonical_model_id(model_id: str) -> str:
     token = str(model_id or "").strip()
     if token == "ollama-paddleocr-vl":
         return "llamacpp-paddleocr-vl"
-    if token == "ollama-glm-ocr":
-        return "llamacpp-glm-ocr"
     return token
 
 
@@ -123,18 +132,21 @@ def _ops_common_context(state: AppState) -> dict:
                 "cancelled": 0,
                 "total": 0,
             },
-            "ops_runtime": {"paddle": False, "glm": False},
+            "ops_runtime": {"paddle": False, "qwen_asr": False},
         }
 
     active = state.dispatch.active_server()
     kind_value = str(getattr(active.kind, "value", active.kind))
+    runtime = state.dispatch.active_runtime()
+    runtime.setdefault("paddle", False)
+    runtime.setdefault("qwen_asr", False)
     return {
         "ops_dispatch_enabled": True,
         "ops_active_server_id": active.server_id,
         "ops_active_server_kind": kind_value,
         "ops_active_backend_label": state.dispatch.active_backend_label(),
         "ops_queue_summary": state.dispatch.active_queue_summary(),
-        "ops_runtime": state.dispatch.active_runtime(),
+        "ops_runtime": runtime,
     }
 
 
@@ -142,9 +154,11 @@ def _ops_common_context(state: AppState) -> dict:
 def ops_dashboard(request: Request, state: AppState = Depends(get_state)):
     resolve_effective_engine(state, sync_registry=True)
     paddle_up = state.router.paddle_engine.available()
-    glm_up = state.router.glm_engine.available()
     paddle_model_ref = _paddle_model_ref(state)
-    glm_model_ref = _glm_model_ref(state)
+    qwen_asr_engine = getattr(state, "qwen_asr_engine", None)
+    qwen_asr_enabled = bool(getattr(state.settings, "qwen_asr_enable", False))
+    qwen_asr_up = _qwen_asr_available(state)
+    qwen_asr_model_ref = _qwen_asr_model_ref(state)
 
     engines = [
         {
@@ -154,14 +168,14 @@ def ops_dashboard(request: Request, state: AppState = Depends(get_state)):
             "available": paddle_up,
         },
         {
-            "name": "GLM-OCR",
-            "model": glm_model_ref,
-            "enabled": state.router.glm_engine.enabled,
-            "available": glm_up,
+            "name": "Qwen3-ASR",
+            "model": qwen_asr_model_ref,
+            "enabled": qwen_asr_enabled,
+            "available": qwen_asr_up,
         },
     ]
 
-    engine_avail = {"paddle": paddle_up, "glm": glm_up}
+    engine_avail = {"paddle": paddle_up, "qwen-asr": qwen_asr_up}
     models = state.model_registry.list_models()
     for m in models:
         if m.active:
@@ -197,8 +211,8 @@ def ops_models(request: Request, state: AppState = Depends(get_state)):
     if tab not in {"models", "servers"}:
         tab = "models"
     paddle_up = state.router.paddle_engine.available()
-    glm_up = state.router.glm_engine.available()
-    engine_avail = {"paddle": paddle_up, "glm": glm_up}
+    qwen_asr_up = _qwen_asr_available(state)
+    engine_avail = {"paddle": paddle_up, "qwen-asr": qwen_asr_up}
     flash_message = request.query_params.get("message", "").strip()
     flash_level = request.query_params.get("level", "").strip().lower()
     if flash_level not in {"ok", "warn", "err"}:
@@ -581,12 +595,14 @@ def ops_playground(request: Request, state: AppState = Depends(get_state)):
     )
     runtime_engines = {
         "paddle": state.router.paddle_engine.available(),
-        "glm": state.router.glm_engine.available(),
+        "qwen_asr": _qwen_asr_available(state),
     }
     backend_label = f"llama.cpp @ {state.settings.llm_base_url}"
     if state.dispatch is not None:
         backend_label = state.dispatch.active_backend_label()
         runtime_engines = state.dispatch.active_runtime()
+        runtime_engines.setdefault("paddle", False)
+        runtime_engines.setdefault("qwen_asr", False)
 
     context = {
         "request": request,
@@ -607,10 +623,12 @@ def ops_playground(request: Request, state: AppState = Depends(get_state)):
 def ops_playground_runtime(state: AppState = Depends(get_state)):
     if state.dispatch is not None:
         runtime = state.dispatch.active_runtime()
+        runtime.setdefault("paddle", False)
+        runtime.setdefault("qwen_asr", False)
     else:
         runtime = {
             "paddle": state.router.paddle_engine.available(),
-            "glm": state.router.glm_engine.available(),
+            "qwen_asr": _qwen_asr_available(state),
         }
     return {"ok": True, "runtime": runtime}
 
@@ -640,7 +658,7 @@ async def ops_playground_infer(
             content={
                 "error": {
                     "code": "PLAYGROUND_ENGINE_FIXED",
-                    "message": "Playground engine selection is fixed to auto. Change active model in Models page.",
+                    "message": "Playground engine selection is fixed to auto.",
                 }
             },
         )
@@ -651,44 +669,45 @@ async def ops_playground_infer(
         detail = exc.detail if isinstance(exc.detail, dict) else {"message": str(exc.detail)}
         return _JSONResponse(status_code=exc.status_code, content={"error": detail})
 
+    filename = file.filename or "upload.bin"
+    resolved_content_type = resolve_content_type(filename, file.content_type, payload)
+    is_audio_upload = is_audio_content_type(resolved_content_type)
+
     active_server = state.dispatch.active_server()
     resolved: str | None = None
     if active_server.kind == ServerKind.local:
-        active = resolve_effective_engine(state, sync_registry=True)
-        if active == "paddle":
-            if not is_engine_active(state, "paddle"):
+        if is_audio_upload:
+            qwen_asr_engine = getattr(state, "qwen_asr_engine", None)
+            if qwen_asr_engine is None or not qwen_asr_engine.available():
+                detail = {}
+                if qwen_asr_engine is not None and hasattr(qwen_asr_engine, "availability_detail"):
+                    try:
+                        detail = qwen_asr_engine.availability_detail() or {}
+                    except Exception:
+                        detail = {}
+                message = str(detail.get("last_error") or "Qwen ASR runtime is unavailable.")
                 return _JSONResponse(
                     status_code=409,
-                    content={"error": {"code": "MODEL_NOT_READY", "message": "Paddle model is not active"}},
+                    content={
+                        "error": {
+                            "code": "MODEL_NOT_READY",
+                            "message": message,
+                        }
+                    },
                 )
+            resolved = "qwen-asr"
+        else:
             if not state.router.paddle_engine.available():
                 return _JSONResponse(
                     status_code=409,
-                    content={"error": {"code": "MODEL_NOT_READY", "message": "Active Paddle model is unavailable"}},
+                    content={
+                        "error": {
+                            "code": "MODEL_NOT_READY",
+                            "message": "Paddle OCR model is unavailable.",
+                        }
+                    },
                 )
             resolved = "paddle"
-        elif active == "glm":
-            if not is_engine_active(state, "glm"):
-                return _JSONResponse(
-                    status_code=409,
-                    content={"error": {"code": "MODEL_NOT_READY", "message": "GLM model is not active"}},
-                )
-            if not state.router.glm_engine.available():
-                return _JSONResponse(
-                    status_code=409,
-                    content={"error": {"code": "MODEL_NOT_READY", "message": "Active GLM model is unavailable"}},
-                )
-            resolved = "glm"
-        else:
-            return _JSONResponse(
-                status_code=409,
-                content={
-                    "error": {
-                        "code": "MODEL_NOT_READY",
-                        "message": "No active model. Activate one from Models page first.",
-                    }
-                },
-            )
     else:
         resolved = "auto"
 
@@ -710,9 +729,9 @@ async def ops_playground_infer(
     try:
         response_data = await asyncio.wait_for(
             state.dispatch.infer(
-                filename=file.filename or "upload.bin",
+                filename=filename,
                 file_bytes=payload,
-                content_type=file.content_type or "application/octet-stream",
+                content_type=resolved_content_type,
                 engine_hint=resolved or "auto",
                 doc_id=doc_id,
                 vlm_ocr_verify=bool(vlm_ocr_verify),
@@ -761,6 +780,184 @@ async def ops_playground_infer(
             gate.release(resolved)
 
 
+@router.post("/playground/jobs")
+async def ops_playground_create_job(
+    file: UploadFile = File(...),
+    engine_hint: str | None = Form(default="auto"),
+    vlm_ocr_verify: bool = Form(default=False),
+    doc_id: str | None = Form(default=None),
+    state: AppState = Depends(get_state),
+):
+    from fastapi.responses import JSONResponse as _JSONResponse
+
+    if state.dispatch is None:
+        return _JSONResponse(
+            status_code=500,
+            content={"error": {"code": "DISPATCH_UNAVAILABLE", "message": "Dispatch service is unavailable"}},
+        )
+
+    normalized_hint = (engine_hint or "auto").strip().lower()
+    requested_engine = normalized_hint or "auto"
+    if requested_engine != "auto":
+        return _JSONResponse(
+            status_code=400,
+            content={
+                "error": {
+                    "code": "PLAYGROUND_ENGINE_FIXED",
+                    "message": "Playground engine selection is fixed to auto.",
+                }
+            },
+        )
+
+    payload = await file.read()
+    try:
+        validate_upload(state, file, payload)
+    except HTTPException as exc:
+        detail = exc.detail if isinstance(exc.detail, dict) else {"message": str(exc.detail)}
+        return _JSONResponse(status_code=exc.status_code, content={"error": detail})
+
+    filename = file.filename or "upload.bin"
+    resolved_content_type = resolve_content_type(filename, file.content_type, payload)
+    is_audio_upload = is_audio_content_type(resolved_content_type)
+
+    active_server = state.dispatch.active_server()
+    resolved: str | None = None
+    if active_server.kind == ServerKind.local:
+        if is_audio_upload:
+            qwen_asr_engine = getattr(state, "qwen_asr_engine", None)
+            if qwen_asr_engine is None or not qwen_asr_engine.available():
+                detail = {}
+                if qwen_asr_engine is not None and hasattr(qwen_asr_engine, "availability_detail"):
+                    try:
+                        detail = qwen_asr_engine.availability_detail() or {}
+                    except Exception:
+                        detail = {}
+                message = str(detail.get("last_error") or "Qwen ASR runtime is unavailable.")
+                return _JSONResponse(
+                    status_code=409,
+                    content={
+                        "error": {
+                            "code": "MODEL_NOT_READY",
+                            "message": message,
+                        }
+                    },
+                )
+            resolved = "qwen-asr"
+        else:
+            if not state.router.paddle_engine.available():
+                return _JSONResponse(
+                    status_code=409,
+                    content={
+                        "error": {
+                            "code": "MODEL_NOT_READY",
+                            "message": "Paddle OCR model is unavailable.",
+                        }
+                    },
+                )
+            resolved = "paddle"
+    else:
+        resolved = "auto"
+
+    try:
+        job_id = state.dispatch.create_job(
+            filename=filename,
+            file_bytes=payload,
+            content_type=resolved_content_type,
+            engine_hint=resolved or "auto",
+            doc_id=doc_id,
+        )
+    except DispatchRequestError as exc:
+        return _JSONResponse(
+            status_code=exc.status_code,
+            content={"error": {"code": exc.code, "message": exc.message}},
+        )
+    except Exception as exc:
+        return _JSONResponse(
+            status_code=400,
+            content={"error": str(exc)},
+        )
+
+    return {
+        "ok": True,
+        "job_id": job_id,
+        "requested_engine": requested_engine,
+        "resolved_engine": resolved or requested_engine,
+        "vlm_ocr_verify": bool(vlm_ocr_verify),
+        "runtime": state.dispatch.active_runtime(),
+    }
+
+
+@router.get("/playground/jobs/{job_id}")
+def ops_playground_get_job(job_id: str, state: AppState = Depends(get_state)):
+    from fastapi.responses import JSONResponse as _JSONResponse
+
+    if state.dispatch is None:
+        return _JSONResponse(
+            status_code=500,
+            content={"error": {"code": "DISPATCH_UNAVAILABLE", "message": "Dispatch service is unavailable"}},
+        )
+
+    try:
+        info = state.dispatch.get_job(job_id=job_id)
+    except KeyError:
+        return _JSONResponse(
+            status_code=404,
+            content={"error": {"code": "JOB_NOT_FOUND", "message": "Job not found"}},
+        )
+    except DispatchRequestError as exc:
+        return _JSONResponse(
+            status_code=exc.status_code,
+            content={"error": {"code": exc.code, "message": exc.message}},
+        )
+    except Exception as exc:
+        return _JSONResponse(
+            status_code=400,
+            content={"error": str(exc)},
+        )
+
+    return {"ok": True, "job": info}
+
+
+@router.get("/playground/jobs/{job_id}/result")
+def ops_playground_get_job_result(job_id: str, state: AppState = Depends(get_state)):
+    from fastapi.responses import JSONResponse as _JSONResponse
+
+    if state.dispatch is None:
+        return _JSONResponse(
+            status_code=500,
+            content={"error": {"code": "DISPATCH_UNAVAILABLE", "message": "Dispatch service is unavailable"}},
+        )
+
+    try:
+        payload = state.dispatch.get_job_result(job_id=job_id)
+    except KeyError:
+        return _JSONResponse(
+            status_code=404,
+            content={"error": {"code": "JOB_NOT_FOUND", "message": "Job not found"}},
+        )
+    except DispatchRequestError as exc:
+        return _JSONResponse(
+            status_code=exc.status_code,
+            content={"error": {"code": exc.code, "message": exc.message}},
+        )
+    except Exception as exc:
+        return _JSONResponse(
+            status_code=400,
+            content={"error": str(exc)},
+        )
+
+    body = dict(payload or {})
+    result = body.get("result") if isinstance(body.get("result"), dict) else None
+    if result is not None:
+        engine_used = str(result.get("engine_used") or "")
+        result.setdefault("requested_engine", "auto")
+        result.setdefault("resolved_engine", engine_used or "auto")
+        result.setdefault("vlm_ocr_verify", False)
+        result.setdefault("runtime", state.dispatch.active_runtime())
+        result.setdefault("model_used", _model_map(state).get(engine_used, ""))
+    return {"ok": True, "data": body}
+
+
 @router.get("/settings", response_class=HTMLResponse)
 def ops_settings(request: Request, state: AppState = Depends(get_state)):
     env_items = [
@@ -778,13 +975,18 @@ def ops_settings(request: Request, state: AppState = Depends(get_state)):
         ("DISPATCH_UPSTREAM_TIMEOUT_S", "dispatch_upstream_timeout_s", "180"),
         ("LLM_BASE_URL", "llm_base_url", "http://llama-server:8080"),
         ("LLM_MODEL_PADDLE", "llm_model_paddle", "PaddleOCR-VL-1.5-BF16.gguf"),
-        ("LLM_MODEL_GLM", "llm_model_glm", "PaddleOCR-VL-1.5-BF16.gguf"),
         ("LLM_REQUEST_TIMEOUT_S", "llm_request_timeout_s", "120"),
         ("LLM_KEEP_ALIVE", "llm_keep_alive", "10m"),
         ("LLM_TEMPERATURE", "llm_temperature", "0"),
         ("LLM_IMAGE_MAX_SIDE_PX", "llm_image_max_side_px", "1536"),
         ("LLM_MAX_TOKENS", "llm_max_tokens", "96"),
-        ("LOCAL_MODEL_HINT_OCR_ENABLE", "local_model_hint_ocr_enable", "true"),
+        ("QWEN_ASR_ENABLE", "qwen_asr_enable", "true"),
+        ("QWEN_ASR_MODEL", "qwen_asr_model", "Qwen/Qwen3-ASR-1.7B"),
+        ("QWEN_ASR_LANGUAGE", "qwen_asr_language", "Korean"),
+        ("QWEN_ASR_MAX_NEW_TOKENS", "qwen_asr_max_new_tokens", "1024"),
+        ("QWEN_ASR_DTYPE", "qwen_asr_dtype", "float16"),
+        ("QWEN_ASR_DEVICE_MAP", "qwen_asr_device_map", "cpu"),
+        ("QWEN_ASR_LOW_CPU_MEM_USAGE", "qwen_asr_low_cpu_mem_usage", "true"),
         ("LOCAL_MODEL_HINT_OCR_LANGS", "local_model_hint_ocr_langs", "kor+eng"),
         ("LOCAL_MODEL_HINT_OCR_TIMEOUT_S", "local_model_hint_ocr_timeout_s", "1.2"),
         ("LOCAL_MODEL_HINT_OCR_MAX_CHARS", "local_model_hint_ocr_max_chars", "800"),
@@ -808,30 +1010,36 @@ def ops_settings(request: Request, state: AppState = Depends(get_state)):
     model_checks: list[dict[str, str | bool]] = []
     engines = {
         "paddle": state.router.paddle_engine,
-        "glm": state.router.glm_engine,
+        "qwen_asr": getattr(state, "qwen_asr_engine", None),
     }
     configured = {
         "paddle": state.settings.llm_model_paddle,
-        "glm": state.settings.llm_model_glm,
+        "qwen_asr": state.settings.qwen_asr_model,
     }
-    for name in ("paddle", "glm"):
+    for name in ("paddle", "qwen_asr"):
         engine = engines[name]
         detail = {}
-        if hasattr(engine, "availability_detail"):
+        if engine is not None and hasattr(engine, "availability_detail"):
             try:
                 detail = engine.availability_detail() or {}
             except Exception:
                 detail = {}
         configured_model = str(configured[name])
-        runtime_model = str(detail.get("model") or configured_model)
-        backend = str(detail.get("base_url") or state.settings.llm_base_url)
+        runtime_model = str(detail.get("model") or detail.get("model_name") or configured_model)
+        backend = str(detail.get("base_url") or ("-" if name == "qwen_asr" else state.settings.llm_base_url))
+        available = False
+        if engine is not None and hasattr(engine, "available"):
+            try:
+                available = bool(engine.available())
+            except Exception:
+                available = False
         model_checks.append(
             {
                 "engine": name,
                 "configured_model": configured_model,
                 "runtime_model": runtime_model,
                 "base_url": backend,
-                "available": bool(engine.available()),
+                "available": available,
                 "last_error": str(detail.get("last_error") or ""),
             }
         )

@@ -1,4 +1,4 @@
-"""File type resolution helpers for multimodal ingestion routing."""
+"""멀티모달 입력 라우팅을 위한 파일 타입 판별 유틸."""
 
 from __future__ import annotations
 
@@ -13,6 +13,10 @@ IMAGE_MIME_TYPES: set[str] = {
     "image/tiff",
 }
 PDF_MIME_TYPES: set[str] = {"application/pdf"}
+AUDIO_MIME_TYPES: set[str] = {
+    "audio/mpeg",
+    "audio/mp3",
+}
 OFFICE_MIME_TYPES: set[str] = {
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     "application/vnd.openxmlformats-officedocument.presentationml.presentation",
@@ -33,6 +37,7 @@ EXT_TO_MIME: dict[str, str] = {
     ".webp": "image/webp",
     ".tif": "image/tiff",
     ".tiff": "image/tiff",
+    ".mp3": "audio/mpeg",
     ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     ".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
     ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -57,6 +62,10 @@ def _mime_from_magic(payload: bytes) -> str | None:
         return "image/jpeg"
     if head.startswith(b"II*\x00") or head.startswith(b"MM\x00*"):
         return "image/tiff"
+    if head.startswith(b"ID3"):
+        return "audio/mpeg"
+    if len(payload) >= 2 and payload[0] == 0xFF and (payload[1] & 0xE0) == 0xE0:
+        return "audio/mpeg"
     if payload.startswith(b"RIFF") and payload[8:12] == b"WEBP":
         return "image/webp"
     if payload.startswith(b"PK\x03\x04"):
@@ -75,7 +84,7 @@ def _mime_from_magic(payload: bytes) -> str | None:
 
 
 def resolve_content_type(filename: str, given_type: str | None, payload: bytes | None = None) -> str:
-    """Resolve best-effort MIME using explicit type, extension, and magic bytes."""
+    """명시 타입/확장자/매직바이트를 조합해 MIME을 최대한 정확히 추정한다."""
     normalized = _normalize_content_type(given_type)
     if normalized and normalized not in GENERIC_MIME_TYPES:
         return normalized
@@ -101,10 +110,9 @@ def is_pdf_content_type(content_type: str) -> bool:
     return _normalize_content_type(content_type) in PDF_MIME_TYPES
 
 
+def is_audio_content_type(content_type: str) -> bool:
+    return _normalize_content_type(content_type) in AUDIO_MIME_TYPES
+
+
 def is_office_content_type(content_type: str) -> bool:
     return _normalize_content_type(content_type) in OFFICE_MIME_TYPES
-
-
-def is_supported_content_type(content_type: str) -> bool:
-    token = _normalize_content_type(content_type)
-    return token in IMAGE_MIME_TYPES or token in PDF_MIME_TYPES or token in OFFICE_MIME_TYPES

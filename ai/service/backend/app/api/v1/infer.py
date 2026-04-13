@@ -1,4 +1,4 @@
-"""Inference endpoints: sync OCR and batch OCR APIs."""
+"""OCR 추론 API(동기 단건/동기 배치)."""
 
 from __future__ import annotations
 
@@ -7,15 +7,16 @@ import asyncio
 from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, Request, UploadFile, status
 
 from app.api.deps import get_state, require_api_key
+from app.api.engine_selector import normalize_engine_hint, resolve_local_engine_hint
 from app.api.errors import api_error
 from app.api.idempotency import infer_request_hash
 from app.api.uploads import validate_upload
 from app.api.utils import ok_response
+from app.services.file_types import is_audio_content_type, resolve_content_type
 from app.services.dispatch_service import DispatchRequestError
 from app.services.idempotency import IdempotencyConflictError
-from app.services.ocr.base import OCREngineBusyError
-from app.services.model_runtime import is_engine_active, resolve_effective_engine
 from app.schemas.server import ServerKind
+from app.services.ocr.base import OCREngineBusyError
 from app.services.state import AppState
 
 router = APIRouter(prefix="/v1", tags=["inference"])
@@ -27,26 +28,18 @@ _INFER_RESPONSE_EXAMPLE = {
         "doc_id": "c8f5a8f8-8b3a-4ac2-9f3c-0d8bcf271111",
         "filename": "sample.pdf",
         "content_type": "application/pdf",
-        "engine_used": "glm",
+        "engine_used": "paddle",
         "confidence": 0.93,
         "raw_text": "raw extracted text",
         "corrected_text": "normalized text",
         "blocks": [],
         "domain": {
-            "doc_type": "notice",
-            "title": "sample.pdf",
-            "summary": None,
-            "entities": {
-                "dates": [],
-                "amounts": [],
-                "subjects": [],
-                "keywords": [],
-                "persons": [],
-                "orgs": [],
-                "phones": [],
-                "emails": [],
-            },
-            "fields": {},
+            "req_id": "c8f5a8f8-8b3a-4ac2-9f3c-0d8bcf271111",
+            "title": "sample",
+            "category": "notice",
+            "summary": "문서의 핵심 내용을 요약한 문장",
+            "raw_text": "정규화된 전체 문장",
+            "tag": ["공지", "신청", "마감"],
         },
         "latency_ms": 832,
         "step_timings": {
@@ -65,37 +58,8 @@ _ERROR_EXAMPLE = {
 }
 
 
-def _normalize_engine_hint(engine_hint: str | None) -> str | None:
-    if engine_hint is None:
-        return None
-    value = str(engine_hint).strip().lower()
-    return value or None
-
-
-def _resolve_engine_hint(state: AppState, engine_hint: str | None) -> str | None:
-    normalized = _normalize_engine_hint(engine_hint)
-    if normalized and normalized != "auto":
-        if not is_engine_active(state, normalized):
-            raise RuntimeError(
-                f"Engine `{normalized}` is not active. Activate the model first from /ops/models."
-            )
-        if normalized == "paddle" and not state.router.paddle_engine.available():
-            raise RuntimeError("Active Paddle model is unavailable")
-        if normalized == "glm" and not state.router.glm_engine.available():
-            raise RuntimeError("Active GLM model is unavailable")
-        return normalized
-
-    active_engine = resolve_effective_engine(state, sync_registry=True)
-    if active_engine == "paddle" and state.router.paddle_engine.available():
-        return "paddle"
-    if active_engine == "glm" and state.router.glm_engine.available():
-        return "glm"
-    if active_engine in {"paddle", "glm"}:
-        raise RuntimeError(f"Active model `{active_engine}` is unavailable")
-    raise RuntimeError("No active model. Activate a model from /ops/models first.")
-
-
 def _record_model_metric(state: AppState, engine_used: str, success: bool, latency_ms: int) -> None:
+    # 엔진별 성능 통계를 모델 레지스트리에 누적해 라우팅/운영 지표로 사용한다.
     for model in state.model_registry.list_models():
         if model.engine == engine_used:
             state.model_registry.record(model.model_id, success=success, latency_ms=latency_ms)
@@ -103,6 +67,7 @@ def _record_model_metric(state: AppState, engine_used: str, success: bool, laten
 
 
 def _try_acquire_engine_gate(state: AppState, engine: str) -> bool:
+    # 로컬 엔진 동시 실행 제한(엔진별 1개)용 게이트.
     gate = getattr(state, "engine_gate", None)
     if gate is None:
         return True
@@ -110,6 +75,7 @@ def _try_acquire_engine_gate(state: AppState, engine: str) -> bool:
 
 
 def _release_engine_gate(state: AppState, engine: str) -> None:
+    # 예외 여부와 무관하게 게이트 해제를 보장해야 다음 요청이 진행된다.
     gate = getattr(state, "engine_gate", None)
     if gate is None:
         return
@@ -147,22 +113,29 @@ async def infer(
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
     state: AppState = Depends(get_state),
 ):
+    # dispatch가 초기화되지 않은 경우는 비정상 부팅 상태로 간주한다.
     if state.dispatch is None:
         raise api_error(status.HTTP_500_INTERNAL_SERVER_ERROR, "DISPATCH_UNAVAILABLE", "dispatch service is unavailable")
 
+    # 업로드를 전부 읽은 뒤 파일 정책(크기/타입/스캔)을 검증한다.
     payload = await file.read()
     validate_upload(state, file, payload)
+    filename = file.filename or "upload.bin"
+    resolved_content_type = resolve_content_type(filename, file.content_type, payload)
+    is_audio_upload = is_audio_content_type(resolved_content_type)
 
     active_server = state.dispatch.active_server()
     if active_server.kind == ServerKind.local:
-        try:
-            resolved_engine = _resolve_engine_hint(state, engine_hint)
-        except RuntimeError as exc:
-            raise api_error(status.HTTP_409_CONFLICT, "MODEL_NOT_READY", str(exc)) from exc
+        if is_audio_upload:
+            resolved_engine = "qwen-asr"
+        else:
+            try:
+                resolved_engine = resolve_local_engine_hint(state, engine_hint)
+            except RuntimeError as exc:
+                raise api_error(status.HTTP_409_CONFLICT, "MODEL_NOT_READY", str(exc)) from exc
     else:
-        resolved_engine = _normalize_engine_hint(engine_hint) or "auto"
-
-    filename = file.filename or "upload.bin"
+        # 원격 서버는 서버별 라우팅 정책을 따르므로 힌트만 정규화해서 전달한다.
+        resolved_engine = "qwen-asr" if is_audio_upload else (normalize_engine_hint(engine_hint) or "auto")
     req_hash = infer_request_hash(
         payload=payload,
         filename=filename,
@@ -171,7 +144,7 @@ async def infer(
     )
 
     if idempotency_key:
-        # Replay exact same request safely without re-running OCR.
+        # 같은 키+같은 페이로드는 캐시 응답을 재사용해 OCR 재실행을 방지한다.
         try:
             cached = state.idempotency.get(
                 route="/v1/infer",
@@ -190,6 +163,7 @@ async def infer(
 
     gate_acquired = True
     if active_server.kind == ServerKind.local:
+        # 로컬 엔진은 동시에 여러 추론이 겹치지 않도록 사전 점유를 시도한다.
         gate_acquired = _try_acquire_engine_gate(state, resolved_engine)
         if not gate_acquired:
             raise api_error(
@@ -201,7 +175,7 @@ async def infer(
         response_data = await state.dispatch.infer(
             filename=filename,
             file_bytes=payload,
-            content_type=file.content_type or "application/octet-stream",
+            content_type=resolved_content_type,
             engine_hint=resolved_engine,
             doc_id=doc_id,
         )
@@ -229,7 +203,7 @@ async def infer(
             request_hash=req_hash,
             response_data=response_data,
         )
-    # Sync inference is persisted directly because there is no job wrapper.
+    # 동기 추론은 job wrapper가 없으므로 결과/감사 로그를 즉시 저장한다.
     state.persistence.insert_result(job_id=None, result_data=response_data)
     state.persistence.insert_audit(
         action="infer.sync",
@@ -290,22 +264,18 @@ async def infer_batch(
         raise api_error(status.HTTP_400_BAD_REQUEST, "INVALID_PAYLOAD", "Max 20 files per batch")
 
     active_server = state.dispatch.active_server()
-    if active_server.kind == ServerKind.local:
-        try:
-            resolved_engine = _resolve_engine_hint(state, engine_hint)
-        except RuntimeError as exc:
-            raise api_error(status.HTTP_409_CONFLICT, "MODEL_NOT_READY", str(exc)) from exc
-    else:
-        resolved_engine = _normalize_engine_hint(engine_hint) or "auto"
-
     results: list[dict] = []
     errors: list[dict] = []
-    prepared: list[tuple[int, str, str | None, bytes]] = []
+    prepared: list[tuple[int, str, str, bytes, bool]] = []
 
     for idx, file in enumerate(files, start=1):
+        # 배치에서는 파일별 검증 실패를 누적해서 부분 성공 응답을 만든다.
         payload = await file.read()
         try:
             validate_upload(state, file, payload)
+            filename = file.filename or f"upload-{idx}.bin"
+            resolved_content_type = resolve_content_type(filename, file.content_type, payload)
+            is_audio_upload = is_audio_content_type(resolved_content_type)
         except HTTPException as exc:
             state.metrics.inc("infer_failure_total")
             detail = exc.detail if isinstance(exc.detail, dict) else {"code": "INFER_FAILED", "message": str(exc.detail)}
@@ -329,10 +299,24 @@ async def infer_batch(
                 }
             )
             continue
-        prepared.append((idx, file.filename or f"upload-{idx}.bin", file.content_type, payload))
+        prepared.append((idx, filename, resolved_content_type, payload, is_audio_upload))
+
+    if active_server.kind == ServerKind.local:
+        requires_ocr_engine = any(not is_audio for _idx, _name, _ctype, _payload, is_audio in prepared)
+        local_ocr_engine = "auto"
+        if requires_ocr_engine:
+            try:
+                local_ocr_engine = resolve_local_engine_hint(state, engine_hint)
+            except RuntimeError as exc:
+                raise api_error(status.HTTP_409_CONFLICT, "MODEL_NOT_READY", str(exc)) from exc
+    else:
+        # 원격 서버는 서버별 라우팅 정책을 따르므로 힌트만 정규화해서 전달한다.
+        contains_audio = any(is_audio for _idx, _name, _ctype, _payload, is_audio in prepared)
+        resolved_engine = "qwen-asr" if contains_audio else (normalize_engine_hint(engine_hint) or "auto")
 
     if active_server.kind != ServerKind.local:
-        remote_files = [(filename, content_type, payload) for _idx, filename, content_type, payload in prepared]
+        # 원격 서버 모드에서는 배치 전체를 upstream /v1/infer/batch로 위임한다.
+        remote_files = [(filename, content_type, payload) for _idx, filename, content_type, payload, _is_audio in prepared]
         try:
             data = await state.dispatch.infer_batch(files=remote_files, engine_hint=resolved_engine)
         except DispatchRequestError as exc:
@@ -340,21 +324,24 @@ async def infer_batch(
         return ok_response(request, data)
 
     concurrency = max(1, int(getattr(state.settings, "ocr_concurrency", 1)))
+    # 로컬 배치는 세마포어로 동시 처리량을 제한해 과부하를 방지한다.
     sem = asyncio.Semaphore(concurrency)
 
     async def _run_one(
         idx: int,
         filename: str,
-        content_type: str | None,
+        content_type: str,
         payload: bytes,
+        is_audio_upload: bool,
     ):
         async with sem:
+            engine_for_file = "qwen-asr" if is_audio_upload else local_ocr_engine
             try:
                 result = await state.pipeline.process_async(
                     filename=filename,
                     file_bytes=payload,
                     content_type=content_type,
-                    engine_hint=resolved_engine,
+                    engine_hint=engine_for_file,
                     doc_id=None,
                 )
             except OCREngineBusyError as exc:
@@ -363,13 +350,19 @@ async def infer_batch(
 
     outcomes = await asyncio.gather(
         *[
-            _run_one(idx=idx, filename=filename, content_type=content_type, payload=payload)
-            for idx, filename, content_type, payload in prepared
+            _run_one(
+                idx=idx,
+                filename=filename,
+                content_type=content_type,
+                payload=payload,
+                is_audio_upload=is_audio,
+            )
+            for idx, filename, content_type, payload, is_audio in prepared
         ],
         return_exceptions=True,
     )
 
-    for (idx, filename, _content_type, _payload), outcome in zip(prepared, outcomes):
+    for (idx, filename, _content_type, _payload, _is_audio), outcome in zip(prepared, outcomes):
         if isinstance(outcome, Exception):
             state.metrics.inc("infer_failure_total")
             errors.append(

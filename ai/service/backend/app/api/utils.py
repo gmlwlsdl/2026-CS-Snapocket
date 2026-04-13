@@ -1,19 +1,11 @@
-"""Common response envelope builders for API routes."""
+"""API 공통 응답 포맷 헬퍼."""
 
 from __future__ import annotations
 
 from fastapi import Request
 
-from app.schemas.common import ApiResponse, ErrorPayload, ResponseMeta
+from app.schemas.common import ApiResponse, ResponseMeta
 
 
 def ok_response(request: Request, data) -> ApiResponse:
     return ApiResponse(ok=True, meta=ResponseMeta(request_id=request.state.request_id), data=data)
-
-
-def error_response(request: Request, code: str, message: str) -> ApiResponse:
-    return ApiResponse(
-        ok=False,
-        meta=ResponseMeta(request_id=request.state.request_id),
-        error=ErrorPayload(code=code, message=message),
-    )

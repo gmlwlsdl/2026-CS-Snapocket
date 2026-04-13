@@ -1,4 +1,4 @@
-"""In-memory model registry with activation history and metrics."""
+"""모델 활성 상태/이력/성능 지표를 관리하는 메모리 레지스트리."""
 
 from __future__ import annotations
 
@@ -24,28 +24,20 @@ class ModelRegistry:
         self._bootstrap_defaults()
 
     def _bootstrap_defaults(self) -> None:
+        """기본 OCR 엔진 모델 항목을 레지스트리에 등록한다."""
         self.register_model(
             ModelInfo(
                 model_id="llamacpp-paddleocr-vl",
                 name="PaddleOCR-VL",
                 engine="paddle",
                 version="llama.cpp",
-                active=False,
-                status="inactive",
-            )
-        )
-        self.register_model(
-            ModelInfo(
-                model_id="llamacpp-glm-ocr",
-                name="GLM-OCR",
-                engine="glm",
-                version="llama.cpp",
-                active=False,
-                status="inactive",
+                active=True,
+                status="ready",
             )
         )
 
     def register_model(self, model: ModelInfo) -> None:
+        """모델 메타데이터를 등록/갱신한다."""
         with self._lock:
             if model.active:
                 for state in self._models.values():
@@ -63,6 +55,7 @@ class ModelRegistry:
             return [state.info.model_copy(deep=True) for state in self._models.values()]
 
     def activate(self, model_id: str) -> ModelInfo:
+        """대상 모델을 활성화하고 나머지 모델은 비활성화한다."""
         with self._lock:
             if model_id not in self._models:
                 raise KeyError(model_id)
@@ -84,6 +77,7 @@ class ModelRegistry:
         return activated
 
     def rollback(self, model_id: str | None = None) -> ModelInfo:
+        """활성화 이력을 기준으로 직전 모델(또는 지정 모델)로 롤백한다."""
         with self._lock:
             if model_id:
                 if model_id not in self._models:
@@ -115,6 +109,7 @@ class ModelRegistry:
         return rolled
 
     def deactivate(self, model_id: str) -> ModelInfo:
+        """대상 모델을 비활성화한다."""
         with self._lock:
             if model_id not in self._models:
                 raise KeyError(model_id)
@@ -125,37 +120,6 @@ class ModelRegistry:
         self._sync_persistence(models_snapshot)
         self._audit("model.deactivate", model_id, {})
         return deactivated
-
-    def sync_active_engine(self, engine: str, *, reason: str = "runtime.sync") -> ModelInfo | None:
-        target_engine = str(engine or "").strip().lower()
-        if target_engine not in {"paddle", "glm"}:
-            return None
-
-        with self._lock:
-            target_id: str | None = None
-            current_active_id: str | None = None
-            for mid, state in self._models.items():
-                if state.info.active:
-                    current_active_id = mid
-                if target_id is None and state.info.engine == target_engine:
-                    target_id = mid
-
-            if target_id is None:
-                return None
-            if current_active_id == target_id:
-                return self._models[target_id].info.model_copy(deep=True)
-
-            for state in self._models.values():
-                state.info.active = False
-            self._models[target_id].info.active = True
-            if self._models[target_id].info.status == "inactive":
-                self._models[target_id].info.status = "ready"
-            synced = self._models[target_id].info.model_copy(deep=True)
-            models_snapshot = [state.info.model_copy(deep=True) for state in self._models.values()]
-
-        self._sync_persistence(models_snapshot)
-        self._audit("model.sync_active", target_id, {"engine": target_engine, "reason": reason})
-        return synced
 
     def active_engine(self) -> str:
         with self._lock:
@@ -171,6 +135,7 @@ class ModelRegistry:
             return self._models[model_id].metrics.model_copy(deep=True)
 
     def record(self, model_id: str, success: bool, latency_ms: int) -> None:
+        """모델별 성공/실패 및 평균 지연시간 통계를 누적한다."""
         with self._lock:
             state = self._models.get(model_id)
             if not state:
@@ -187,6 +152,7 @@ class ModelRegistry:
                 m.avg_latency_ms = ((m.avg_latency_ms * (total - 1)) + latency_ms) / total
 
     def engine_runtime_stats(self) -> dict[str, dict[str, float]]:
+        """엔진 라우팅에서 사용할 엔진별 성공률/평균지연 요약을 반환한다."""
         with self._lock:
             states = [state for state in self._models.values()]
         by_engine: dict[str, dict[str, float]] = {}

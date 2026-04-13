@@ -1,4 +1,4 @@
-"""Dispatch local or remote execution based on active server selection."""
+"""활성 서버(local/remote)에 따라 OCR 실행 경로를 디스패치한다."""
 
 from __future__ import annotations
 
@@ -21,6 +21,7 @@ def _utcnow() -> datetime:
 
 @dataclass
 class DispatchRequestError(RuntimeError):
+    """원격 호출 실패를 API 계층으로 전달하기 위한 표준 예외."""
     status_code: int
     code: str
     message: str
@@ -35,6 +36,7 @@ class DispatchService:
         job_manager,
         settings,
         router,
+        qwen_asr_engine=None,
         request_timeout_s: float = 120.0,
     ) -> None:
         self.server_registry = server_registry
@@ -42,9 +44,11 @@ class DispatchService:
         self.job_manager = job_manager
         self.settings = settings
         self.router = router
+        self.qwen_asr_engine = qwen_asr_engine
         self.request_timeout_s = max(5.0, float(request_timeout_s))
 
     def active_server(self) -> ServerRecord:
+        """현재 활성 처리 서버 레코드를 반환한다."""
         return self.server_registry.get_active_server()
 
     def active_backend_label(self) -> str:
@@ -54,10 +58,15 @@ class DispatchService:
         return f"remote aiops-api @ {active.base_url or active.name}"
 
     def local_runtime(self) -> dict[str, bool]:
-        return {
-            "paddle": bool(self.router.paddle_engine.available()),
-            "glm": bool(self.router.glm_engine.available()),
-        }
+        runtime = {"paddle": bool(self.router.paddle_engine.available())}
+        qwen_up = False
+        if self.qwen_asr_engine is not None:
+            try:
+                qwen_up = bool(self.qwen_asr_engine.available())
+            except Exception:
+                qwen_up = False
+        runtime["qwen_asr"] = qwen_up
+        return runtime
 
     async def infer(
         self,
@@ -69,8 +78,10 @@ class DispatchService:
         doc_id: str | None,
         vlm_ocr_verify: bool = False,
     ) -> dict:
+        """단건 OCR 요청을 local 처리 또는 remote 위임으로 실행한다."""
         active = self.active_server()
         if active.kind == ServerKind.local:
+            # 로컬 모드: 내부 파이프라인 호출.
             result = await self.pipeline.process_async(
                 filename=filename,
                 file_bytes=file_bytes,
@@ -81,6 +92,7 @@ class DispatchService:
             )
             return result.model_dump() if hasattr(result, "model_dump") else dict(result)
 
+        # 원격 모드: 동기 HTTP 업로드 호출을 thread로 오프로드.
         return await asyncio.to_thread(
             self._infer_remote_sync,
             server_id=active.server_id,
@@ -97,6 +109,7 @@ class DispatchService:
         files: list[tuple[str, str | None, bytes]],
         engine_hint: str,
     ) -> dict:
+        """배치 OCR을 원격 서버로 위임한다(로컬 배치는 API 레이어에서 직접 처리)."""
         active = self.active_server()
         if active.kind == ServerKind.local:
             raise DispatchRequestError(
@@ -120,6 +133,7 @@ class DispatchService:
         engine_hint: str,
         doc_id: str | None,
     ) -> str:
+        """비동기 Job을 생성한다. local이면 내부 큐, remote면 upstream /v1/jobs 사용."""
         active = self.active_server()
         if active.kind == ServerKind.local:
             return self.job_manager.submit(
@@ -187,7 +201,7 @@ class DispatchService:
         server = self.server_registry.get_server(server_id)
         if server.kind == ServerKind.local:
             runtime = self.local_runtime()
-            ok = bool(runtime.get("paddle") or runtime.get("glm"))
+            ok = any(bool(value) for value in runtime.values())
             message = "" if ok else "no runtime is currently available"
             self.server_registry.mark_health(server_id=server_id, ok=ok, error_message=message)
             return {"ok": ok, "runtime": runtime, "checked_at": _utcnow().isoformat(), "message": message}
@@ -234,13 +248,14 @@ class DispatchService:
             )
             runtime = payload.get("runtime", {}) if isinstance(payload, dict) else {}
             self.server_registry.mark_health(server_id=active.server_id, ok=bool(payload.get("ok", False)))
-            return {
+            result = {
                 "paddle": bool(runtime.get("paddle")),
-                "glm": bool(runtime.get("glm")),
+                "qwen_asr": bool(runtime.get("qwen_asr", runtime.get("qwen-asr", False))),
             }
+            return result
         except DispatchRequestError as exc:
             self.server_registry.mark_health(server_id=active.server_id, ok=False, error_message=exc.message)
-            return {"paddle": False, "glm": False}
+            return {"paddle": False, "qwen_asr": False}
 
     def _infer_remote_sync(
         self,
@@ -405,6 +420,7 @@ class DispatchService:
         body: bytes | None = None,
         timeout_s: float,
     ) -> dict:
+        """HTTP 요청을 실행하고 표준 JSON payload로 파싱/검증한다."""
         req = urlrequest.Request(
             url=url,
             method=method.upper(),
@@ -435,6 +451,7 @@ class DispatchService:
 
     @staticmethod
     def _unwrap_api_envelope(payload: dict, *, fallback_code: str) -> dict | list | None:
+        """`{ok,data,error}` 형태의 공통 API envelope를 해석한다."""
         if not isinstance(payload, dict):
             raise DispatchRequestError(status_code=502, code="UPSTREAM_INVALID_RESPONSE", message="invalid payload")
         ok = bool(payload.get("ok"))

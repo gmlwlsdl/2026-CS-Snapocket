@@ -591,11 +591,11 @@
 
       <!-- Drop Zone -->
       <div class="drop-zone" id="dropZone">
-        <input type="file" id="fileInput" accept=".pdf,.jpg,.jpeg,.png">
+        <input type="file" id="fileInput" accept=".pdf,.jpg,.jpeg,.png,.mp3">
         <div id="dropIdle">
           <span class="drop-zone-icon">📂</span>
           <div class="drop-zone-title">파일을 드래그하거나 클릭하세요</div>
-          <div class="drop-zone-sub">PDF · JPG · PNG · JPEG — max {{ max_upload_mb }}MB</div>
+          <div class="drop-zone-sub">PDF · JPG · PNG · JPEG · MP3 — max {{ max_upload_mb }}MB</div>
         </div>
         <div class="file-preview" id="filePreview">
           <div class="file-thumb" id="fileThumb">📄</div>
@@ -613,7 +613,7 @@
           <div class="ctrl-group">
             <span class="ctrl-label">Engine (Fixed)</span>
             <select id="engineSelect" disabled>
-              <option value="auto">auto (Models page active model)</option>
+              <option value="auto">auto (image/pdf→paddle, mp3→qwen-asr)</option>
             </select>
           </div>
           <div class="ctrl-group">
@@ -772,7 +772,7 @@
             <tr><td style="color:var(--muted);width:130px">Doc ID</td><td id="rs-docid" style="font-family:monospace;font-size:12px">—</td></tr>
             <tr><td style="color:var(--muted)">Filename</td><td id="rs-filename">—</td></tr>
             <tr><td style="color:var(--muted)">Content Type</td><td id="rs-ctype">—</td></tr>
-            <tr><td style="color:var(--muted)">Doc Type</td><td id="rs-doctype">—</td></tr>
+            <tr><td style="color:var(--muted)">Category</td><td id="rs-category">—</td></tr>
             <tr><td style="color:var(--muted)">Title</td><td id="rs-title">—</td></tr>
             <tr><td style="color:var(--muted)">VLM→OCR Verify</td><td id="rs-verify">—</td></tr>
           </tbody>
@@ -850,15 +850,8 @@
   var isRunning = false;
   var inferResult = null;
   var serverTimeoutMs = {{ playground_timeout_ms }};
-  var activeEngine = '{{ active_engine }}';
-  var modelMap = {
-    paddle: {{ model_map.paddle|tojson }},
-    glm: {{ model_map.glm|tojson }}
-  };
-  var defaultRuntime = {
-    paddle: {{ 'true' if runtime_engines.paddle else 'false' }},
-    glm: {{ 'true' if runtime_engines.glm else 'false' }}
-  };
+  var modelMap = {{ model_map|tojson }};
+  var defaultRuntime = {{ runtime_engines|tojson }};
 
   /* ── Elements ── */
   var dropZone    = document.getElementById('dropZone');
@@ -915,6 +908,7 @@
     filePreview.classList.add('show');
     dropZone.classList.add('has-file');
     runBtn.disabled = false;
+    syncModeByFile(f);
 
     /* image preview */
     if (f.type.startsWith('image/')) {
@@ -923,8 +917,12 @@
         fileThumb.innerHTML = '<img src="' + ev.target.result + '" alt="preview">';
       };
       reader.readAsDataURL(f);
+    } else if (isAudioFile(f)) {
+      fileThumb.textContent = '🎵';
+      fileThumb.innerHTML = '🎵';
     } else {
       fileThumb.textContent = '📄';
+      fileThumb.innerHTML = '📄';
     }
   }
 
@@ -945,6 +943,7 @@
     resetPipeline();
     hideResults();
     hideError();
+    syncModeByFile(null);
   }
 
   function formatBytes(b) {
@@ -952,6 +951,29 @@
     if (b < 1024*1024) return (b/1024).toFixed(1) + ' KB';
     return (b/1024/1024).toFixed(2) + ' MB';
   }
+
+  function isAudioFile(file) {
+    if (!file) return false;
+    var type = String(file.type || '').toLowerCase();
+    if (type.indexOf('audio/') === 0) return true;
+    var name = String(file.name || '').toLowerCase();
+    return name.endsWith('.mp3');
+  }
+
+  function syncModeByFile(file) {
+    var isAudio = isAudioFile(file);
+    var ocrNodeLabel = document.querySelector('[data-step=\"ocr\"] .node-label');
+    if (ocrNodeLabel) ocrNodeLabel.textContent = isAudio ? 'ASR' : 'OCR';
+    if (vlmVerifyCheck) {
+      if (isAudio) {
+        vlmVerifyCheck.checked = false;
+        vlmVerifyCheck.disabled = true;
+      } else {
+        vlmVerifyCheck.disabled = false;
+      }
+    }
+  }
+  syncModeByFile(null);
 
   /* ── Pipeline ── */
   var steps = ['upload','validate','route','ocr','transform','done'];
@@ -1018,7 +1040,7 @@
       if (!body || !body.runtime) return defaultRuntime;
       return {
         paddle: !!body.runtime.paddle,
-        glm: !!body.runtime.glm
+        qwen_asr: !!body.runtime.qwen_asr
       };
     } catch (_err) {
       return defaultRuntime;
@@ -1045,12 +1067,22 @@
     return JSON.stringify(payload);
   }
 
-  function resolvePlannedRoute(requestedEngine, runtime) {
+  async function parseResponsePayload(resp) {
+    var bodyText = await resp.text();
+    if (!bodyText) return {};
+    try {
+      return JSON.parse(bodyText);
+    } catch (_parseErr) {
+      return { error: bodyText || ('HTTP ' + resp.status) };
+    }
+  }
+
+  function resolvePlannedRoute(requestedEngine, runtime, isAudio) {
     var chosen = requestedEngine;
-    if (requestedEngine === 'auto') {
-      if (activeEngine === 'paddle' && runtime.paddle) chosen = 'paddle';
-      else if (activeEngine === 'glm' && runtime.glm) chosen = 'glm';
-      else chosen = 'auto';
+    if (isAudio) {
+      chosen = 'qwen-asr';
+    } else if (requestedEngine === 'auto') {
+      chosen = runtime.paddle ? 'paddle' : 'auto';
     }
     return {
       engine: chosen,
@@ -1110,28 +1142,34 @@
     /* ── Step 3: Route ── */
     var runtime = await getRuntimeStatus();
     var requestedEngine = document.getElementById('engineSelect').value;
+    var isAudioUpload = isAudioFile(selectedFile);
     var unavailable = false;
-    if (requestedEngine === 'auto') {
-      if (activeEngine !== 'paddle' && activeEngine !== 'glm') unavailable = true;
-      if (activeEngine === 'paddle' && !runtime.paddle) unavailable = true;
-      if (activeEngine === 'glm' && !runtime.glm) unavailable = true;
+    if (isAudioUpload) {
+      if (!runtime.qwen_asr) unavailable = true;
+    } else if (requestedEngine === 'auto') {
+      if (!runtime.paddle) unavailable = true;
     }
 
-    var planned = resolvePlannedRoute(requestedEngine, runtime);
-    var verifyEnabled = !!(vlmVerifyCheck && vlmVerifyCheck.checked);
+    var planned = resolvePlannedRoute(requestedEngine, runtime, isAudioUpload);
+    var verifyEnabled = !isAudioUpload && !!(vlmVerifyCheck && vlmVerifyCheck.checked);
     setNodeState('route', 'running');
     showStepDetail('route', [
       ['engine_hint', requestedEngine],
       ['default_engine', '{{ default_engine }}'],
+      ['input_mode', isAudioUpload ? 'audio/asr' : 'document/ocr'],
       ['verify_branch', verifyEnabled ? 'enabled' : 'disabled'],
-      ['runtime', 'paddle=' + runtime.paddle + ', glm=' + runtime.glm],
+      ['runtime', 'paddle=' + runtime.paddle + ', qwen_asr=' + runtime.qwen_asr],
       ['resolved_engine', planned.engine],
       ['model', planned.model]
     ]);
     await sleep(200);
     if (unavailable) {
       setNodeState('route', 'error');
-      showError('활성 모델이 없거나(active model), 활성 모델 런타임이 준비되지 않았습니다. Models 페이지에서 먼저 활성화하세요.');
+      if (isAudioUpload) {
+        showError('qwen-asr 런타임이 준비되지 않았습니다. ASR 모델/패키지 상태를 확인하세요.');
+      } else {
+        showError('paddle 런타임이 준비되지 않았습니다. 서버 모델 상태를 확인하세요.');
+      }
       finishRun();
       return;
     }
@@ -1153,13 +1191,15 @@
     /* ── Step 4: OCR (awaiting response) ── */
     setNodeState('ocr', 'running');
     var waitStarted = Date.now();
+    var pollInfo = { jobId: '-', status: 'waiting' };
     var waitTicker = setInterval(function() {
       var elapsed = Date.now() - waitStarted;
       showStepDetail('ocr', [
         ['engine', planned.engine],
         ['model', planned.model],
         ['verify_branch', verifyEnabled ? 'enabled' : 'disabled'],
-        ['request', planned.endpoint],
+        ['request', isAudioUpload ? '/ops/playground/jobs + polling' : planned.endpoint],
+        ['job', isAudioUpload ? (pollInfo.jobId + ' / ' + pollInfo.status) : 'n/a'],
         ['backend', '{{ playground_backend_label }}'],
         ['status', 'waiting… ' + elapsed + 'ms']
       ]);
@@ -1167,18 +1207,68 @@
 
     var resp, data, timerId, controller;
     try {
-      controller = new AbortController();
-      timerId = setTimeout(function() { controller.abort(); }, serverTimeoutMs);
-      resp = await fetch('/ops/playground/infer', {
-        method: 'POST',
-        body: fd,
-        signal: controller.signal
-      });
-      var bodyText = await resp.text();
-      try {
-        data = bodyText ? JSON.parse(bodyText) : {};
-      } catch (_parseErr) {
-        data = { error: bodyText || ('HTTP ' + resp.status) };
+      if (isAudioUpload) {
+        pollInfo.status = 'submitting';
+        resp = await fetch('/ops/playground/jobs', {
+          method: 'POST',
+          body: fd
+        });
+        data = await parseResponsePayload(resp);
+        if (data && data.ok === true) {
+          pollInfo.jobId = String(data.job_id || '-');
+          pollInfo.status = 'queued';
+        }
+        if (!resp.ok) {
+          throw new Error(extractErrorMessage(data, 'ASR job submit 실패 (HTTP ' + resp.status + ')'));
+        }
+        if (!data || !data.job_id) {
+          throw new Error('ASR job_id가 반환되지 않았습니다.');
+        }
+
+        var jobId = String(data.job_id);
+        var maxPollMs = Math.max(serverTimeoutMs * 3, 1800000);
+        while (true) {
+          var elapsedMs = Date.now() - waitStarted;
+          if (elapsedMs > maxPollMs) {
+            throw new Error('ASR job polling timeout (' + maxPollMs + 'ms)');
+          }
+
+          resp = await fetch('/ops/playground/jobs/' + encodeURIComponent(jobId), { cache: 'no-store' });
+          data = await parseResponsePayload(resp);
+          if (!resp.ok) {
+            throw new Error(extractErrorMessage(data, 'ASR job 조회 실패 (HTTP ' + resp.status + ')'));
+          }
+          var info = (data && data.ok === true && data.job) ? data.job : data;
+          var jobStatus = String((info && info.status) || '').toLowerCase();
+          pollInfo.status = jobStatus || 'unknown';
+
+          if (jobStatus === 'succeeded') {
+            resp = await fetch('/ops/playground/jobs/' + encodeURIComponent(jobId) + '/result', { cache: 'no-store' });
+            data = await parseResponsePayload(resp);
+            if (!resp.ok) {
+              throw new Error(extractErrorMessage(data, 'ASR job 결과 조회 실패 (HTTP ' + resp.status + ')'));
+            }
+            if (data && data.ok === true && data.data) {
+              data = data.data;
+            }
+            data = (data && data.result) ? data.result : data;
+            break;
+          }
+          if (jobStatus === 'failed' || jobStatus === 'cancelled') {
+            var jobErr = info && info.error ? String(info.error) : ('job status=' + jobStatus);
+            throw new Error('ASR job 실패: ' + jobErr);
+          }
+          await sleep(1000);
+        }
+      } else {
+        controller = new AbortController();
+        timerId = setTimeout(function() { controller.abort(); }, serverTimeoutMs);
+        resp = await fetch('/ops/playground/infer', {
+          method: 'POST',
+          body: fd,
+          signal: controller.signal
+        });
+        data = await parseResponsePayload(resp);
       }
       if (data && data.ok === true && data.data) {
         data = data.data;
@@ -1187,10 +1277,18 @@
       clearInterval(waitTicker);
       if (timerId) clearTimeout(timerId);
       setNodeState('ocr', 'error');
-      if (err && err.name === 'AbortError') {
-        showError('OCR 응답 시간 초과(' + serverTimeoutMs + 'ms). 엔진 백엔드 상태/모델 로딩 여부를 확인하세요.');
+      if (!isAudioUpload && err && err.name === 'AbortError') {
+        showError(
+          (isAudioUpload ? 'ASR' : 'OCR') +
+          ' 응답 시간 초과(' + serverTimeoutMs + 'ms). ' +
+          '요청은 계속 처리 중일 수 있습니다. /ops/logs에서 진행 상태를 확인하세요.'
+        );
       } else {
-        showError('네트워크 오류: ' + err.message);
+        var msg = (err && err.message) ? err.message : 'unknown';
+        showError(
+          '연결이 중간에 끊겼습니다: ' + msg + '. ' +
+          '백엔드 재시작(OOM/프로세스 종료) 가능성이 있으니 /ops/logs를 확인하세요.'
+        );
       }
       finishRun();
       return;
@@ -1202,9 +1300,9 @@
     if (!resp.ok) {
       setNodeState('ocr', 'error');
       if (resp.status === 504) {
-        showError('서버 OCR 타임아웃(504): 엔진에서 제한 시간 내 처리가 끝나지 않았습니다.');
+        showError('서버 ' + (isAudioUpload ? 'ASR' : 'OCR') + ' 타임아웃(504): 엔진에서 제한 시간 내 처리가 끝나지 않았습니다.');
       } else {
-        showError(extractErrorMessage(data, 'OCR 처리 실패 (HTTP ' + resp.status + ')'));
+        showError(extractErrorMessage(data, (isAudioUpload ? 'ASR' : 'OCR') + ' 처리 실패 (HTTP ' + resp.status + ')'));
       }
       finishRun();
       return;
@@ -1216,8 +1314,8 @@
     showStepDetail('ocr', [
       ['engine_used', data.engine_used || '—'],
       ['model_used', data.model_used || modelMap[data.engine_used] || planned.model],
-      ['verify_branch', data.vlm_ocr_verify ? 'enabled' : 'disabled'],
-      ['verify_ms', (data.step_timings && data.step_timings.ocr_verify_ms != null) ? (data.step_timings.ocr_verify_ms + 'ms') : '0ms'],
+      ['verify_branch', isAudioUpload ? 'n/a' : (data.vlm_ocr_verify ? 'enabled' : 'disabled')],
+      ['verify_ms', isAudioUpload ? 'n/a' : ((data.step_timings && data.step_timings.ocr_verify_ms != null) ? (data.step_timings.ocr_verify_ms + 'ms') : '0ms')],
       ['backend_latency', (data.latency_ms || '—') + 'ms'],
       ['blocks_found', (data.blocks ? data.blocks.length : 0) + ' blocks']
     ]);
@@ -1228,8 +1326,8 @@
     /* ── Step 5: Transform ── */
     setNodeState('transform', 'running');
     showStepDetail('transform', [
-      ['doc_type', (data.domain && data.domain.doc_type) || 'unknown'],
-      ['entities', data.domain ? JSON.stringify(Object.keys(data.domain.entities || {})) : '[]'],
+      ['category', (data.domain && data.domain.category) || 'unknown'],
+      ['tags', data.domain ? String((data.domain.tag || []).length) : '0'],
       ['corrected_chars', data.corrected_text ? data.corrected_text.length : 0]
     ]);
     await sleep(180);
@@ -1324,7 +1422,7 @@
     document.getElementById('rs-docid').textContent      = d.doc_id || '—';
     document.getElementById('rs-filename').textContent   = d.filename || '—';
     document.getElementById('rs-ctype').textContent      = d.content_type || '—';
-    document.getElementById('rs-doctype').textContent    = (d.domain && d.domain.doc_type) || '—';
+    document.getElementById('rs-category').textContent   = (d.domain && d.domain.category) || '—';
     document.getElementById('rs-title').textContent      = (d.domain && d.domain.title) || '—';
     document.getElementById('rs-verify').textContent     = d.vlm_ocr_verify ? 'enabled' : 'disabled';
 
@@ -1340,24 +1438,25 @@
     /* Domain */
     var domainEl = document.getElementById('rs-domain-content');
     if (d.domain) {
-      var ents = d.domain.entities || {};
-      var groups = Object.entries(ents);
+      var tags = d.domain.tag || [];
       var html = '';
+      html += '<table style="margin-bottom:12px"><tbody>';
+      html += '<tr><td style="color:var(--muted);width:130px">req_id</td><td style="font-family:monospace">' + esc(d.domain.req_id || '—') + '</td></tr>';
+      html += '<tr><td style="color:var(--muted)">title</td><td>' + esc(d.domain.title || '—') + '</td></tr>';
+      html += '<tr><td style="color:var(--muted)">category</td><td>' + esc(d.domain.category || '—') + '</td></tr>';
+      html += '</tbody></table>';
       if (d.domain.summary) {
         html += '<div class="result-text-box" style="margin-bottom:14px;font-size:13px;font-family:inherit">' + esc(d.domain.summary) + '</div>';
       }
-      html += '<div class="entity-groups">';
-      groups.forEach(function(pair) {
-        var key = pair[0], vals = pair[1];
-        if (!vals || vals.length === 0) return;
-        html += '<div class="entity-group">';
-        html += '<div class="entity-group-title">' + esc(key) + '</div>';
-        vals.forEach(function(v) {
-          html += '<span class="entity-tag">' + esc(v) + '</span>';
-        });
+      if (tags.length > 0) {
+        html += '<div class="entity-group" style="margin-bottom:12px">';
+        html += '<div class="entity-group-title">tag</div>';
+        tags.forEach(function(v) { html += '<span class="entity-tag">' + esc(v) + '</span>'; });
         html += '</div>';
-      });
-      html += '</div>';
+      }
+      if (d.domain.raw_text) {
+        html += '<div class="result-text-box" style="max-height:220px">' + esc(d.domain.raw_text) + '</div>';
+      }
       domainEl.innerHTML = html;
     } else {
       domainEl.innerHTML = '<p class="empty">No domain data.</p>';

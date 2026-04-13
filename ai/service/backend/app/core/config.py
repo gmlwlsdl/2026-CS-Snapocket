@@ -1,4 +1,4 @@
-"""Environment-driven runtime settings for the API service."""
+"""환경변수 기반 런타임 설정 로더."""
 
 from __future__ import annotations
 
@@ -13,12 +13,12 @@ def _as_bool(value: str | None, default: bool = False) -> bool:
 
 
 _DEFAULT_ALLOWED_UPLOAD_TYPES = (
-    "application/pdf,image/png,image/jpeg,image/webp,image/tiff,"
+    "application/pdf,image/png,image/jpeg,image/webp,image/tiff,audio/mpeg,audio/mp3,"
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document,"
     "application/vnd.openxmlformats-officedocument.presentationml.presentation,"
     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 )
-_DEFAULT_ALLOWED_UPLOAD_EXTS = ".pdf,.png,.jpg,.jpeg,.webp,.tif,.tiff,.docx,.pptx,.xlsx"
+_DEFAULT_ALLOWED_UPLOAD_EXTS = ".pdf,.png,.jpg,.jpeg,.webp,.tif,.tiff,.mp3,.docx,.pptx,.xlsx"
 
 
 @dataclass(frozen=True)
@@ -43,16 +43,12 @@ class Settings:
     allow_hostname_server_endpoints: bool = _as_bool(os.getenv("ALLOW_HOSTNAME_SERVER_ENDPOINTS"), False)
     allow_zrok_server_endpoints: bool = _as_bool(os.getenv("ALLOW_ZROK_SERVER_ENDPOINTS"), True)
 
-    default_engine: str = os.getenv("DEFAULT_ENGINE", "auto")
+    default_engine: str = os.getenv("DEFAULT_ENGINE", "paddle")
     paddle_enable: bool = _as_bool(os.getenv("PADDLE_ENABLE"), True)
-    glm_enable: bool = _as_bool(os.getenv("GLM_ENABLE"), True)
 
     llm_base_url: str = os.getenv("LLM_BASE_URL", os.getenv("OLLAMA_BASE_URL", "http://llama-server:8080"))
     llm_model_paddle: str = os.getenv(
         "LLM_MODEL_PADDLE", os.getenv("OLLAMA_MODEL_PADDLE", "PaddleOCR-VL-1.5-BF16.gguf")
-    )
-    llm_model_glm: str = os.getenv(
-        "LLM_MODEL_GLM", os.getenv("OLLAMA_MODEL_GLM", "PaddleOCR-VL-1.5-BF16.gguf")
     )
     llm_request_timeout_s: float = float(
         os.getenv("LLM_REQUEST_TIMEOUT_S", os.getenv("OLLAMA_REQUEST_TIMEOUT_S", "120"))
@@ -64,9 +60,15 @@ class Settings:
     )
     llm_max_tokens: int = int(os.getenv("LLM_MAX_TOKENS", os.getenv("OLLAMA_MAX_TOKENS", "96")))
     dispatch_upstream_timeout_s: float = float(os.getenv("DISPATCH_UPSTREAM_TIMEOUT_S", "180"))
+    qwen_asr_enable: bool = _as_bool(os.getenv("QWEN_ASR_ENABLE"), True)
+    qwen_asr_model: str = os.getenv("QWEN_ASR_MODEL", "Qwen/Qwen3-ASR-1.7B")
+    qwen_asr_language: str = os.getenv("QWEN_ASR_LANGUAGE", "Korean")
+    qwen_asr_max_new_tokens: int = int(os.getenv("QWEN_ASR_MAX_NEW_TOKENS", "1024"))
+    qwen_asr_dtype: str = os.getenv("QWEN_ASR_DTYPE", "float16")
+    qwen_asr_device_map: str = os.getenv("QWEN_ASR_DEVICE_MAP", "cpu")
+    qwen_asr_low_cpu_mem_usage: bool = _as_bool(os.getenv("QWEN_ASR_LOW_CPU_MEM_USAGE"), True)
 
-    # VLM OCR result verification with Tesseract
-    local_model_hint_ocr_enable: bool = _as_bool(os.getenv("LOCAL_MODEL_HINT_OCR_ENABLE"), True)
+    # VLM OCR 결과 검증(Tesseract) 설정
     local_model_hint_ocr_langs: str = os.getenv("LOCAL_MODEL_HINT_OCR_LANGS", "kor+eng")
     local_model_hint_ocr_timeout_s: float = float(
         os.getenv("LOCAL_MODEL_HINT_OCR_TIMEOUT_S", "1.2")
@@ -91,9 +93,6 @@ class Settings:
     image_assumed_input_dpi: int = int(os.getenv("IMAGE_ASSUMED_INPUT_DPI", "144"))
     image_apply_otsu: bool = _as_bool(os.getenv("IMAGE_APPLY_OTSU"), True)
     image_max_side_px: int = int(os.getenv("IMAGE_MAX_SIDE_PX", "4200"))
-    ocr_fallback_confidence_threshold: float = float(
-        os.getenv("OCR_FALLBACK_CONFIDENCE_THRESHOLD", "0.4")
-    )
 
     database_enable: bool = _as_bool(os.getenv("DATABASE_ENABLE"), True)
     database_url: str = os.getenv("DATABASE_URL", "sqlite:///./data/aiops.db")
@@ -152,15 +151,11 @@ def load_settings() -> Settings:
         allow_public_server_endpoints=_as_bool(os.getenv("ALLOW_PUBLIC_SERVER_ENDPOINTS"), False),
         allow_hostname_server_endpoints=_as_bool(os.getenv("ALLOW_HOSTNAME_SERVER_ENDPOINTS"), False),
         allow_zrok_server_endpoints=_as_bool(os.getenv("ALLOW_ZROK_SERVER_ENDPOINTS"), True),
-        default_engine=os.getenv("DEFAULT_ENGINE", "auto"),
+        default_engine=os.getenv("DEFAULT_ENGINE", "paddle"),
         paddle_enable=_as_bool(os.getenv("PADDLE_ENABLE"), True),
-        glm_enable=_as_bool(os.getenv("GLM_ENABLE"), True),
         llm_base_url=os.getenv("LLM_BASE_URL", os.getenv("OLLAMA_BASE_URL", "http://llama-server:8080")),
         llm_model_paddle=os.getenv(
             "LLM_MODEL_PADDLE", os.getenv("OLLAMA_MODEL_PADDLE", "PaddleOCR-VL-1.5-BF16.gguf")
-        ),
-        llm_model_glm=os.getenv(
-            "LLM_MODEL_GLM", os.getenv("OLLAMA_MODEL_GLM", "PaddleOCR-VL-1.5-BF16.gguf")
         ),
         llm_request_timeout_s=float(
             os.getenv("LLM_REQUEST_TIMEOUT_S", os.getenv("OLLAMA_REQUEST_TIMEOUT_S", "120"))
@@ -172,7 +167,13 @@ def load_settings() -> Settings:
         ),
         llm_max_tokens=int(os.getenv("LLM_MAX_TOKENS", os.getenv("OLLAMA_MAX_TOKENS", "96"))),
         dispatch_upstream_timeout_s=float(os.getenv("DISPATCH_UPSTREAM_TIMEOUT_S", "180")),
-        local_model_hint_ocr_enable=_as_bool(os.getenv("LOCAL_MODEL_HINT_OCR_ENABLE"), True),
+        qwen_asr_enable=_as_bool(os.getenv("QWEN_ASR_ENABLE"), True),
+        qwen_asr_model=os.getenv("QWEN_ASR_MODEL", "Qwen/Qwen3-ASR-1.7B"),
+        qwen_asr_language=os.getenv("QWEN_ASR_LANGUAGE", "Korean"),
+        qwen_asr_max_new_tokens=int(os.getenv("QWEN_ASR_MAX_NEW_TOKENS", "1024")),
+        qwen_asr_dtype=os.getenv("QWEN_ASR_DTYPE", "float16"),
+        qwen_asr_device_map=os.getenv("QWEN_ASR_DEVICE_MAP", "cpu"),
+        qwen_asr_low_cpu_mem_usage=_as_bool(os.getenv("QWEN_ASR_LOW_CPU_MEM_USAGE"), True),
         local_model_hint_ocr_langs=os.getenv("LOCAL_MODEL_HINT_OCR_LANGS", "kor+eng"),
         local_model_hint_ocr_timeout_s=float(
             os.getenv("LOCAL_MODEL_HINT_OCR_TIMEOUT_S", "1.2")
@@ -194,9 +195,6 @@ def load_settings() -> Settings:
         image_assumed_input_dpi=int(os.getenv("IMAGE_ASSUMED_INPUT_DPI", "144")),
         image_apply_otsu=_as_bool(os.getenv("IMAGE_APPLY_OTSU"), True),
         image_max_side_px=int(os.getenv("IMAGE_MAX_SIDE_PX", "4200")),
-        ocr_fallback_confidence_threshold=float(
-            os.getenv("OCR_FALLBACK_CONFIDENCE_THRESHOLD", "0.4")
-        ),
         database_enable=_as_bool(os.getenv("DATABASE_ENABLE"), True),
         database_url=os.getenv("DATABASE_URL", "sqlite:///./data/aiops.db"),
         redis_enable=_as_bool(os.getenv("REDIS_ENABLE"), False),

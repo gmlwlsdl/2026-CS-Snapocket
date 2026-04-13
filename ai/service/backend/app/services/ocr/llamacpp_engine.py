@@ -1,4 +1,4 @@
-"""HTTP multimodal OCR engine adapter for llama.cpp OpenAI-compatible API."""
+"""llama.cpp(OpenAI 호환 API) 기반 멀티모달 OCR 엔진 어댑터."""
 
 from __future__ import annotations
 
@@ -28,18 +28,12 @@ _PROFILE_PROMPTS: dict[str, str] = {
         "Extract all visible text exactly as written. "
         "Preserve line breaks. Return plain text only without explanation."
     ),
-    "glm": (
-        "You are an OCR engine for document images. "
-        "Extract all visible text exactly as written. "
-        "Preserve line breaks and keep Korean/English tokens unchanged. "
-        "Return plain text only without explanation."
-    ),
 }
 _STOP_TOKENS = ["</s>", "<|end_of_sentence|>"]
 
 
 class LlamaCppVisionEngine(OCREngine):
-    """OCR engine backed by llama.cpp server (/v1 OpenAI-compatible endpoints)."""
+    """llama.cpp 서버를 사용해 이미지 OCR을 수행하는 엔진 구현."""
 
     def __init__(
         self,
@@ -164,6 +158,7 @@ class LlamaCppVisionEngine(OCREngine):
         return False
 
     def _probe_openai(self) -> tuple[bool, str | None]:
+        # /v1/models 목록과 설정 모델명을 대조해 실제 사용 가능한 모델을 확정한다.
         payload = self._request_json("GET", "/v1/models")
         rows = payload.get("data")
         if not isinstance(rows, list):
@@ -232,8 +227,7 @@ class LlamaCppVisionEngine(OCREngine):
             if self._generation_warm:
                 return True
 
-        # Trigger one tiny multimodal generation during activation so the first
-        # Playground request is not forced to pay model cold-start cost.
+        # 활성화 시 아주 작은 이미지로 1회 생성 호출을 수행해 cold-start 지연을 줄인다.
         probe = Image.new("RGB", (96, 96), color=(255, 255, 255))
         out = io.BytesIO()
         probe.save(out, format="JPEG", quality=60)
@@ -256,8 +250,8 @@ class LlamaCppVisionEngine(OCREngine):
         return True
 
     def unload(self) -> bool:
-        # llama.cpp server does not expose explicit unload API.
-        # If a request is still running, keep engine pinned busy.
+        # llama.cpp 서버는 명시적 unload API를 제공하지 않는다.
+        # 요청이 진행 중이면 busy 상태를 유지한다.
         with self._lock:
             if self._active_inference is not None and not self._active_inference.done():
                 return False
@@ -265,6 +259,7 @@ class LlamaCppVisionEngine(OCREngine):
         return True
 
     def _prepare_image_b64(self, image_bytes: bytes) -> str:
+        # 요청 크기를 제한하기 위해 max_side_px를 넘는 이미지는 다운스케일한다.
         image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
         width, height = image.size
         max_side = max(width, height)
@@ -346,6 +341,7 @@ class LlamaCppVisionEngine(OCREngine):
         return ""
 
     def _infer_with_openai(self, image_b64: str, *, max_tokens_override: int | None = None) -> str:
+        # OpenAI 호환 chat/completions 포맷으로 OCR 프롬프트+이미지를 전달한다.
         max_tokens = self.max_tokens if max_tokens_override is None else max(1, int(max_tokens_override))
         payload = {
             "model": self._resolved_model or self.model,
@@ -369,6 +365,7 @@ class LlamaCppVisionEngine(OCREngine):
         return self._extract_openai_message_content(response)
 
     def infer_image(self, image_bytes: bytes, page_no: int = 1) -> list[OCREngineResult]:
+        """단일 이미지 OCR 결과를 공통 OCREngineResult 목록으로 변환한다."""
         if not self.available():
             raise RuntimeError(self._last_error or f"{self.name} model unavailable")
         if not image_bytes:
@@ -419,8 +416,7 @@ class LlamaCppVisionEngine(OCREngine):
         image_bytes: bytes,
         page_no: int = 1,
     ) -> list[OCREngineResult]:
-        # Ensure one in-flight request per engine. If timeout cancels the caller,
-        # the backend task may still be running; keep busy state until it truly ends.
+        # 엔진당 동시에 1개만 실행한다. 타임아웃 취소 후에도 실제 작업 종료까지 busy를 유지한다.
         with self._lock:
             if self._active_inference is not None and not self._active_inference.done():
                 raise OCREngineBusyError(

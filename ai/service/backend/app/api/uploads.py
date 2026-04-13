@@ -1,4 +1,4 @@
-"""Upload validation helpers (size/type checks for file endpoints)."""
+"""업로드 파일 검증 헬퍼."""
 
 from __future__ import annotations
 
@@ -42,7 +42,3 @@ def validate_upload(state: AppState, file: UploadFile, payload: bytes) -> None:
             else status.HTTP_503_SERVICE_UNAVAILABLE
         )
         raise api_error(status_code, code, message)
-
-
-def guess_content_type(filename: str, given_type: str | None) -> str:
-    return resolve_content_type(filename, given_type, payload=None)

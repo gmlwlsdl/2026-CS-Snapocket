@@ -5,6 +5,11 @@
 ## 실행
 ```bash
 cd ai
+make up
+```
+
+이미지 빌드가 필요한 경우에만:
+```bash
 make up-build
 ```
 
@@ -25,6 +30,12 @@ make down
   - `LLM_MAX_TOKENS=96`
   - `LLM_IMAGE_MAX_SIDE_PX=1024`
   - `PLAYGROUND_TIMEOUT_S=120`
+- 오디오(`.mp3`)는 Qwen3-ASR 분기로 처리됩니다.
+- 기본 모델: `ai/model/Qwen3-ASR-1.7B`를 자동 탐지
+  - 수동 지정: `QWEN_ASR_MODEL=/absolute/or/relative/model_dir`
+  - 기본 언어 고정: `QWEN_ASR_LANGUAGE=Korean`
+  - 기본 토큰 제한: `QWEN_ASR_MAX_NEW_TOKENS=1024`
+  - 비활성화: `QWEN_ASR_ENABLE=0`
 
 ## 구성
 - backend: `service/backend/app`

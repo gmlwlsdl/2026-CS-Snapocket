@@ -1,4 +1,4 @@
-"""Abstract OCR engine contract and normalized engine output schema."""
+"""OCR 엔진 추상 계약과 공통 결과 스키마."""
 
 from __future__ import annotations
 
@@ -24,7 +24,7 @@ class OCREngineResult:
 
 
 class OCREngineBusyError(RuntimeError):
-    """Raised when an OCR engine is already processing another request."""
+    """OCR 엔진이 이미 다른 요청을 처리 중일 때 발생."""
 
 
 class OCREngine(ABC):
@@ -41,14 +41,14 @@ class OCREngine(ABC):
     async def infer_image_async(
         self, image_bytes: bytes, page_no: int = 1
     ) -> list[OCREngineResult]:
-        """기본 구현: 동기 메서드를 executor에서 실행. 서브클래스에서 오버라이드 가능."""
+        """기본 구현: 동기 infer를 executor로 감싸 비동기 인터페이스를 제공한다."""
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(None, self.infer_image, image_bytes, page_no)
 
     def warmup(self) -> bool:
-        """Optional runtime warm-up hook. Engines may override."""
+        """선택적 런타임 warm-up 훅. 엔진 구현체에서 오버라이드 가능."""
         return True
 
     def unload(self) -> bool:
-        """Optional runtime unload hook. Engines may override."""
+        """선택적 런타임 unload 훅. 엔진 구현체에서 오버라이드 가능."""
         return True

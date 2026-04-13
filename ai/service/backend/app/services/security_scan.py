@@ -1,4 +1,4 @@
-"""Upload malware scanning hook (signature + optional external scanner)."""
+"""업로드 파일 악성코드 점검 훅(시그니처 + 외부 스캐너 명령)."""
 
 from __future__ import annotations
 
@@ -35,9 +35,11 @@ class MalwareScanner:
         self.timeout_s = max(1.0, float(timeout_s))
 
     def scan(self, *, filename: str, payload: bytes) -> ScanResult:
+        """업로드 payload를 검사하고 안전 여부를 반환한다."""
         if not self.enabled:
             return ScanResult(safe=True)
 
+        # CI/로컬 검증용 EICAR 시그니처 기본 체크.
         if _EICAR_SIGNATURE in payload:
             return ScanResult(
                 safe=False,
@@ -46,13 +48,13 @@ class MalwareScanner:
             )
 
         if not self.command:
-            # Hook enabled but no external scanner configured.
-            # Keep signature-only mode to avoid blocking uploads by default.
+            # 외부 스캐너 명령이 없으면 시그니처 기반 점검만 수행한다.
             return ScanResult(safe=True)
 
         return self._scan_with_external_command(filename=filename, payload=payload)
 
     def _scan_with_external_command(self, *, filename: str, payload: bytes) -> ScanResult:
+        """외부 스캐너 명령을 실행해 정밀 검사를 수행한다."""
         suffix = Path(filename).suffix or ".bin"
         with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
             tmp.write(payload)

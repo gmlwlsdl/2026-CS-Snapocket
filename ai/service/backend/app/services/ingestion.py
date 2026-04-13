@@ -1,4 +1,4 @@
-"""Typed ingestors and internal representation for multimodal documents."""
+"""오피스/문서 입력을 공통 IR로 변환하는 인제스터 모듈."""
 
 from __future__ import annotations
 
@@ -48,7 +48,7 @@ def _read_xml_from_zip(payload: bytes, name: str) -> ET.Element | None:
 
 
 def _cell_ref_to_col_idx(cell_ref: str) -> int:
-    # Excel A1 -> 1, B2 -> 2, AA1 -> 27
+    # Excel 셀 주소 변환: A1 -> 1, B2 -> 2, AA1 -> 27
     letters = "".join(ch for ch in str(cell_ref or "") if ch.isalpha()).upper()
     if not letters:
         return 0
@@ -146,26 +146,8 @@ class IngestedDocument:
     metadata: dict[str, str] = field(default_factory=dict)
 
 
-def ingest_document_stub(filename: str, content_type: str, payload: bytes) -> IngestedDocument:
-    """Return IR metadata for input routing (pdf/image handled by OCR pipeline)."""
-    ext = Path(filename or "").suffix.lower().lstrip(".")
-    kind = "unknown"
-    if content_type.startswith("image/"):
-        kind = "image"
-    elif content_type == "application/pdf":
-        kind = "pdf"
-    elif content_type.startswith("application/vnd.openxmlformats-officedocument"):
-        kind = "office"
-    return IngestedDocument(
-        input_kind=kind,
-        input_format=ext or "unknown",
-        content_type=content_type,
-        page_units=[PageUnit(page_no=1, source_type=kind)],
-        assets=[AssetRef(asset_id="origin", kind="binary", metadata={"bytes": str(len(payload or b""))})],
-    )
-
-
 def ingest_office_document(filename: str, content_type: str | None, payload: bytes) -> IngestedDocument:
+    """오피스 문서 타입별 인제스터를 선택해 공통 IR로 변환한다."""
     resolved_type = resolve_content_type(filename, content_type, payload)
     ext = Path(filename or "").suffix.lower()
     if resolved_type.endswith("wordprocessingml.document") or ext == ".docx":
@@ -178,6 +160,7 @@ def ingest_office_document(filename: str, content_type: str | None, payload: byt
 
 
 def _ingest_docx(filename: str, content_type: str, payload: bytes) -> IngestedDocument:
+    """DOCX XML을 순회해 문단/표 셀을 RegionBlock으로 변환한다."""
     root = _read_xml_from_zip(payload, "word/document.xml")
     if root is None:
         raise ValueError("Invalid DOCX payload")
@@ -265,6 +248,7 @@ def _slide_num(name: str) -> int:
 
 
 def _ingest_pptx(filename: str, content_type: str, payload: bytes) -> IngestedDocument:
+    """PPTX 슬라이드별 텍스트를 페이지 단위 블록으로 추출한다."""
     names = _zip_root_names(payload)
     slides = sorted(
         [name for name in names if name.startswith("ppt/slides/slide") and name.endswith(".xml")],
@@ -327,6 +311,7 @@ def _worksheet_num(name: str) -> int:
 
 
 def _ingest_xlsx(filename: str, content_type: str, payload: bytes) -> IngestedDocument:
+    """XLSX 셀 값을 표 블록으로 변환하고 시트별 텍스트 레이어를 만든다."""
     names = _zip_root_names(payload)
     worksheets = sorted(
         [name for name in names if name.startswith("xl/worksheets/") and name.endswith(".xml")],
@@ -407,6 +392,7 @@ def _ingest_xlsx(filename: str, content_type: str, payload: bytes) -> IngestedDo
 
 
 def to_ocr_blocks(region_blocks: list[RegionBlock]) -> list[OCRBlock]:
+    """내부 RegionBlock을 파이프라인 공통 OCRBlock으로 변환한다."""
     out: list[OCRBlock] = []
     for block in region_blocks:
         text = str(block.text or "").strip()

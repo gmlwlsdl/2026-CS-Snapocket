@@ -1,4 +1,4 @@
-"""SQL persistence adapter for models/jobs/results/audit/idempotency records."""
+"""모델/작업/결과/감사로그/idempotency를 저장하는 SQL 영속화 어댑터."""
 
 from __future__ import annotations
 
@@ -44,9 +44,9 @@ class IdempotencyRecord:
 
 
 class PersistenceStore:
-    """Lightweight SQL persistence for control-plane entities.
+    """컨트롤 플레인 엔티티를 위한 경량 SQL 영속화 계층.
 
-    Designed for Postgres in production (`DATABASE_URL`) and sqlite fallback in local/dev.
+    운영 환경은 Postgres(`DATABASE_URL`), 로컬/개발은 sqlite fallback을 지원한다.
     """
 
     def __init__(self, database_url: str, enabled: bool = True) -> None:
@@ -135,6 +135,15 @@ class PersistenceStore:
             Column("created_at", DateTime(timezone=True), nullable=False, default=_utcnow),
             Column("updated_at", DateTime(timezone=True), nullable=False, default=_utcnow),
         )
+        self.categories_table = Table(
+            "categories",
+            self.metadata,
+            Column("id", Integer, primary_key=True, autoincrement=True),
+            Column("name", String(80), nullable=False, unique=True),
+            Column("enabled", Boolean, nullable=False, default=True),
+            Column("created_at", DateTime(timezone=True), nullable=False, default=_utcnow),
+            Column("updated_at", DateTime(timezone=True), nullable=False, default=_utcnow),
+        )
 
     def start(self) -> None:
         if not self.enabled:
@@ -142,7 +151,7 @@ class PersistenceStore:
 
         connect_args: dict[str, Any] = {}
         if self.database_url.startswith("sqlite:///"):
-            # sqlite file path bootstrap for local execution.
+            # 로컬 실행 시 sqlite 파일 경로를 선행 생성한다.
             db_path = self.database_url.replace("sqlite:///", "", 1)
             if db_path and db_path != ":memory:":
                 Path(db_path).parent.mkdir(parents=True, exist_ok=True)
@@ -158,8 +167,7 @@ class PersistenceStore:
             self.metadata.create_all(self._engine)
             self._last_error = None
         except Exception as exc:  # pragma: no cover - env-dependent
-            # Best-effort startup: keep API booting even if DB is down.
-            # Readiness endpoint will expose this failure.
+            # DB가 죽어 있어도 API는 기동을 유지하고 readiness에서 실패를 노출한다.
             self._last_error = str(exc)
             self._engine = None
 
@@ -186,7 +194,7 @@ class PersistenceStore:
         if self._engine is None:
             return
 
-        # Keep an always-fresh mirror of in-memory registry state.
+        # 메모리 레지스트리 상태를 DB에 미러링한다.
         now = _utcnow()
         values = {
             "model_id": model.model_id,
@@ -220,11 +228,47 @@ class PersistenceStore:
     def sync_models(self, models: list[ModelInfo]) -> None:
         if self._engine is None:
             return
-        for model in models:
-            self.upsert_model(model)
+        target_ids = {str(model.model_id) for model in models}
+        try:
+            with self._engine.begin() as conn:
+                existing_rows = conn.execute(select(self.models_table.c.model_id)).all()
+                existing_ids = {str(row.model_id) for row in existing_rows}
+
+                for model in models:
+                    values = {
+                        "model_id": model.model_id,
+                        "name": model.name,
+                        "engine": model.engine,
+                        "version": model.version,
+                        "active": model.active,
+                        "status": model.status,
+                        "updated_at": _utcnow(),
+                    }
+                    row = conn.execute(
+                        select(self.models_table.c.model_id).where(
+                            self.models_table.c.model_id == model.model_id
+                        )
+                    ).first()
+                    if row:
+                        conn.execute(
+                            update(self.models_table)
+                            .where(self.models_table.c.model_id == model.model_id)
+                            .values(**values)
+                        )
+                    else:
+                        conn.execute(insert(self.models_table).values(**values))
+
+                stale_ids = existing_ids - target_ids
+                if stale_ids:
+                    conn.execute(
+                        delete(self.models_table).where(self.models_table.c.model_id.in_(sorted(stale_ids)))
+                    )
+            self._last_error = None
+        except Exception as exc:  # pragma: no cover - env-dependent
+            self._last_error = str(exc)
 
     def list_models(self) -> list[dict[str, Any]]:
-        """Return model rows persisted in DB (best effort)."""
+        """DB에 저장된 모델 행을 조회한다(best effort)."""
         if self._engine is None:
             return []
         try:
@@ -268,7 +312,7 @@ class PersistenceStore:
         if self._engine is None:
             return
 
-        # `jobs` table keeps lifecycle metadata; large OCR payloads are stored separately.
+        # jobs 테이블에는 수명주기 메타를 저장하고, 큰 결과 payload는 results에 분리 저장한다.
         values = {
             "job_id": info.job_id,
             "status": str(info.status),
@@ -303,7 +347,7 @@ class PersistenceStore:
         if self._engine is None:
             return
 
-        # Persist the full transformed document payload for re-query/replay.
+        # 변환 완료된 문서 payload 전체를 저장해 재조회/재생을 가능하게 한다.
         try:
             with self._engine.begin() as conn:
                 conn.execute(
@@ -326,7 +370,7 @@ class PersistenceStore:
     def insert_audit(self, *, action: str, target_type: str, target_id: str, detail: dict | None = None) -> None:
         if self._engine is None:
             return
-        # Audit is append-only by design.
+        # 감사 로그는 append-only 정책으로 누적한다.
         try:
             with self._engine.begin() as conn:
                 conn.execute(
@@ -352,7 +396,7 @@ class PersistenceStore:
         if self._engine is None:
             return None
 
-        # Route is part of key namespace so same client key can be reused across endpoints.
+        # route를 namespace로 사용해 같은 키를 다른 엔드포인트에서 재사용 가능하게 한다.
         storage_key = self._idempotency_storage_key(route, idempotency_key)
         try:
             with self._engine.begin() as conn:
@@ -373,7 +417,7 @@ class PersistenceStore:
                 if isinstance(created_at, datetime):
                     if created_at.tzinfo is None:
                         created_at = created_at.replace(tzinfo=timezone.utc)
-                    # Hard TTL eviction to avoid unbounded idempotency storage.
+                    # idempotency 저장소 무한 증가를 막기 위해 TTL 만료 시 즉시 정리한다.
                     if created_at < (_utcnow() - timedelta(seconds=ttl_s)):
                         conn.execute(
                             delete(self.idempotency_table).where(
@@ -462,6 +506,53 @@ class PersistenceStore:
         except Exception as exc:  # pragma: no cover - env-dependent
             self._last_error = str(exc)
             return []
+
+    def list_categories(self, *, enabled_only: bool = True) -> list[str]:
+        """활성 카테고리 이름 목록을 조회한다."""
+        if self._engine is None:
+            return []
+        try:
+            with self._engine.connect() as conn:
+                stmt = select(self.categories_table.c.name)
+                if enabled_only:
+                    stmt = stmt.where(self.categories_table.c.enabled.is_(True))
+                rows = conn.execute(stmt.order_by(self.categories_table.c.name.asc())).all()
+            names = [str(row.name).strip() for row in rows if str(row.name).strip()]
+            if names:
+                return names
+            if enabled_only:
+                return self.list_categories(enabled_only=False)
+            return []
+        except Exception as exc:  # pragma: no cover - env-dependent
+            self._last_error = str(exc)
+            return []
+
+    def ensure_default_categories(self, names: list[str] | tuple[str, ...] | None = None) -> None:
+        """카테고리 테이블이 비어 있으면 기본 카테고리를 시드한다."""
+        if self._engine is None:
+            return
+        defaults = [str(name).strip() for name in (names or ["unknown"]) if str(name).strip()]
+        if not defaults:
+            defaults = ["unknown"]
+        unique_defaults = list(dict.fromkeys(defaults))
+        try:
+            with self._engine.begin() as conn:
+                row = conn.execute(select(self.categories_table.c.id).limit(1)).first()
+                if row:
+                    return
+                now = _utcnow()
+                for name in unique_defaults:
+                    conn.execute(
+                        insert(self.categories_table).values(
+                            name=name,
+                            enabled=True,
+                            created_at=now,
+                            updated_at=now,
+                        )
+                    )
+            self._last_error = None
+        except Exception as exc:  # pragma: no cover - env-dependent
+            self._last_error = str(exc)
 
     def get_server(self, server_id: str) -> dict[str, Any] | None:
         if self._engine is None:

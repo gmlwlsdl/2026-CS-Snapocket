@@ -1,4 +1,4 @@
-"""Schema definitions for OCR inference inputs/outputs."""
+"""OCR 추론 입출력 스키마."""
 
 from __future__ import annotations
 
@@ -9,7 +9,6 @@ from pydantic import BaseModel, Field
 class EngineHint(str, Enum):
     auto = "auto"
     paddle = "paddle"
-    glm = "glm"
 
 
 class BlockType(str, Enum):
@@ -40,23 +39,13 @@ class OCRBlock(BaseModel):
     colspan: int | None = None
 
 
-class DomainEntities(BaseModel):
-    dates: list[str] = Field(default_factory=list)
-    amounts: list[str] = Field(default_factory=list)
-    subjects: list[str] = Field(default_factory=list)
-    keywords: list[str] = Field(default_factory=list)
-    persons: list[str] = Field(default_factory=list)
-    orgs: list[str] = Field(default_factory=list)
-    phones: list[str] = Field(default_factory=list)
-    emails: list[str] = Field(default_factory=list)
-
-
 class DomainPayload(BaseModel):
-    doc_type: str
-    title: str | None = None
-    summary: str | None = None
-    entities: DomainEntities
-    fields: dict = Field(default_factory=dict)
+    req_id: str
+    title: str
+    category: str
+    summary: str
+    raw_text: str
+    tag: list[str] = Field(default_factory=list)
 
 
 class InferPage(BaseModel):
