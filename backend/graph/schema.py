@@ -67,7 +67,7 @@ class Query:
             return nodes
             
         except Exception as e:
-            print()
+            print(e)
             raise InternalServerError()
     
     """ @strawberry.field

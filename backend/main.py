@@ -1,10 +1,9 @@
-from fastapi import FastAPI, Request
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from api import auth, analysis, documents, tags, upload
+from api import auth, analysis, documents, upload
 from graph.schema import data, router
 from graph.context import getContext
 from graph.qlRouter import CustomGraphQLRouter
-import models  # noqa: F401
 
 app = FastAPI(title="Snapocket API", version="0.1.0")
 
