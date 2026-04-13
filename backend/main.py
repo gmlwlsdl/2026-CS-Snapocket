@@ -1,5 +1,9 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from api import auth, analysis, documents, upload
+from graph.schema import data, router
+from graph.context import getContext
+from graph.qlRouter import CustomGraphQLRouter
 
 app = FastAPI(title="Snapocket API", version="0.1.0")
 
@@ -11,12 +15,29 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(auth.router)
+app.include_router(router)
 
+app.include_router(documents.router)
+# app.include_router(tags.router)
+app.include_router(upload.router)
+app.include_router(analysis.router)
+
+graphql_app = CustomGraphQLRouter(data, context_getter=getContext)
+app.include_router(graphql_app, prefix="/graphql", tags=["graphql"])
 @app.get("/")
 def root():
-    return {"status": "ok", "message": "Snapocket API is running"}
+    return {
+        "success": True, 
+        "message": "Snapocket API is running", 
+        "data": {}
+    }
 
 
 @app.get("/health")
 def health():
-    return {"status": "healthy"}
+    return {
+        "success": True, 
+        "message": "Server is healthy", 
+        "data": {"status": "healthy"}
+    }
