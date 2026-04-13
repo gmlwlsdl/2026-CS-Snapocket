@@ -1,0 +1,142 @@
+"""레지스트리 모델 상태와 실제 런타임 엔진 상태를 연결하는 헬퍼."""
+
+from __future__ import annotations
+
+import logging
+
+from app.schemas.model import ModelInfo
+from app.services.state import AppState
+
+logger = logging.getLogger(__name__)
+
+
+def resolve_effective_engine(state: AppState, *, sync_registry: bool = True) -> str:
+    # NOTE:
+    # 자동 동기화로 active 상태를 바꿔버리면 운영자의 명시적 ON/OFF 제어가 어려워져
+    # 현재는 sync_registry 인자를 의도적으로 사용하지 않는다.
+    del sync_registry
+    active = state.model_registry.active_engine()
+    return active if active == "paddle" else "paddle"
+
+
+def _find_model(state: AppState, model_id: str) -> ModelInfo:
+    for model in state.model_registry.list_models():
+        if model.model_id == model_id:
+            return model
+    raise KeyError(model_id)
+
+
+def _engine_adapter(state: AppState, engine: str):
+    """엔진 이름을 실제 런타임 어댑터 객체로 매핑한다."""
+    if engine == "paddle":
+        return state.router.paddle_engine
+    raise RuntimeError(f"unsupported engine: {engine}")
+
+
+def _active_model(state: AppState) -> ModelInfo | None:
+    for model in state.model_registry.list_models():
+        if model.active:
+            return model
+    return None
+
+
+def _resolve_model_ref(state: AppState, model: ModelInfo) -> str:
+    if model.engine == "paddle":
+        return state.settings.llm_model_paddle
+    raise RuntimeError(f"unsupported engine: {model.engine}")
+
+
+def _rebind_engine_model_ref(engine: object, model_ref: str) -> None:
+    ref = str(model_ref or "").strip()
+    if not ref:
+        raise RuntimeError("model reference is empty")
+
+    if hasattr(engine, "reconfigure_model"):
+        engine.reconfigure_model(ref)
+        return
+    if hasattr(engine, "reconfigure_model_path"):
+        engine.reconfigure_model_path(ref)
+        return
+
+    setattr(engine, "model", ref)
+    setattr(engine, "_availability_cache", None)
+    setattr(engine, "_availability_checked_at", 0.0)
+    setattr(engine, "_last_error", None)
+
+
+def activate_model_runtime(state: AppState, model_id: str) -> tuple[ModelInfo, dict[str, str | bool]]:
+    """모델 활성화 + 엔진 리바인딩 + warmup까지 원자적으로 수행한다."""
+    model = _find_model(state, model_id)
+    engine = _engine_adapter(state, model.engine)
+    currently_active = _active_model(state)
+    prev_engine = None
+    if currently_active is not None and currently_active.model_id != model_id:
+        prev_engine = _engine_adapter(state, currently_active.engine)
+
+    # 대형 VLM 중복 적재를 피하기 위해 기존 활성 엔진을 먼저 내린다.
+    if prev_engine is not None:
+        if hasattr(prev_engine, "set_pinned"):
+            try:
+                prev_engine.set_pinned(False)
+            except Exception:
+                pass
+        try:
+            prev_engine.unload()
+        except Exception as exc:
+            logger.warning("previous engine unload failed before activate(%s): %s", model.engine, exc)
+
+    target_ref = _resolve_model_ref(state, model)
+    _rebind_engine_model_ref(engine, target_ref)
+
+    # 일부 엔진은 set_pinned(True)로 활성 상태 유지 시 메모리를 고정할 수 있다.
+    if hasattr(engine, "set_pinned"):
+        try:
+            engine.set_pinned(True)
+        except Exception:
+            pass
+
+    warmup_ok = False
+    warmup_message = ""
+    try:
+        warmup_ok = bool(engine.warmup())
+        if not warmup_ok:
+            warmup_message = "engine warmup returned false"
+            raise RuntimeError(warmup_message)
+    except Exception as exc:
+        warmup_message = warmup_message or (str(exc) or repr(exc))
+        if hasattr(engine, "set_pinned"):
+            try:
+                engine.set_pinned(False)
+            except Exception:
+                pass
+        raise RuntimeError(warmup_message) from exc
+
+    activated = state.model_registry.activate(model_id)
+    return activated, {"runtime_prepared": warmup_ok, "runtime_message": warmup_message}
+
+
+def deactivate_model_runtime(state: AppState, model_id: str) -> tuple[ModelInfo, dict[str, str | bool]]:
+    """모델 비활성화 + 엔진 unload를 수행한다."""
+    model = _find_model(state, model_id)
+    engine = _engine_adapter(state, model.engine)
+    deactivated = state.model_registry.deactivate(model_id)
+    if not model.active:
+        return deactivated, {"runtime_unloaded": False, "runtime_message": "model was not active"}
+
+    if hasattr(engine, "set_pinned"):
+        try:
+            engine.set_pinned(False)
+        except Exception:
+            pass
+
+    unload_ok = False
+    unload_message = ""
+    try:
+        unload_ok = bool(engine.unload())
+        if not unload_ok:
+            unload_message = "engine unload returned false"
+    except Exception as exc:
+        unload_message = str(exc) or repr(exc)
+        logger.warning("engine unload failed for %s: %s", model.engine, unload_message)
+
+    return deactivated, {"runtime_unloaded": unload_ok, "runtime_message": unload_message}

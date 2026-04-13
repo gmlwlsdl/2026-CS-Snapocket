@@ -19,6 +19,14 @@ dist/
 build/
 uploads/
 
+# ── AI ─────────────────────────────────────────────────────────────────────────
+ai/model/*
+!ai/model/how_to_download_model.md
+ai/data/*
+!ai/data/testdata/
+!ai/data/testdata/test.png
+ai/service/backend/data/*
+
 # ── Environment ────────────────────────────────────────────────────────────────
 .env
 .env.local
@@ -31,3 +39,9 @@ backend/.env
 # ── OS ─────────────────────────────────────────────────────────────────────────
 .DS_Store
 Thumbs.db
+/ai/data
+/ai/markdown
+
+# ── Aigent ─────────────────────────────────────────────────────────────────────────
+.mcp.json
+CLAUDE.md
