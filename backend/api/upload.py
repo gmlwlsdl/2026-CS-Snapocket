@@ -6,6 +6,7 @@ from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 from core.security import jwtAuth
 from core.database import get_db
+from models.user import User
 from models.document import Document
 from api.apiResponse import ApiResponse
 
@@ -55,6 +56,9 @@ async def upload_file(
                 "error_code": "UNSUPPORTED_FILE_TYPE",
             },
         )
+    
+    userName = jwtToken.get("sub")
+    userInfo = db.query(User).filter(User.email == userName).first()
 
     file_type = FILE_TYPE_MAP.get(file_ext, "document")
 
@@ -70,7 +74,7 @@ async def upload_file(
     # auth 붙기 전까지는 임시 user_id 사용
     # 나중에 토큰 기반으로 교체
     new_document = Document(
-        user_id=1,
+        user_id=userInfo.id,
         original_filename=file.filename,
         stored_filename=unique_name,
         file_path=file_path,
