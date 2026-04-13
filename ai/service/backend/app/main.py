@@ -10,6 +10,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
+from app.api import backend_integration
 from app.api.v1 import infer, jobs, models, servers, system
 from app.core.logging import configure_logging
 from app.ops.routes import router as ops_router
@@ -106,4 +107,5 @@ app.include_router(infer.router)
 app.include_router(jobs.router)
 app.include_router(models.router)
 app.include_router(servers.router)
+app.include_router(backend_integration.router)
 app.include_router(ops_router)
