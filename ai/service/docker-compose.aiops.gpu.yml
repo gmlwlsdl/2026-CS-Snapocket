@@ -1,4 +1,10 @@
 services:
+  aiops-api:
+    gpus: all
+    environment:
+      QWEN_ASR_DEVICE_MAP: ${QWEN_ASR_DEVICE_MAP:-cuda:0}
+      QWEN_ASR_DTYPE: ${QWEN_ASR_DTYPE:-float16}
+
   llama-server:
     gpus: all
     command:

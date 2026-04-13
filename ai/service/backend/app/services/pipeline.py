@@ -449,8 +449,22 @@ class InferencePipeline:
         *,
         content_type: str,
         engine_hint: str | None,
-        ) -> str:
-        return f"{content_type}|{engine_hint or 'auto'}|embedded={self.prefer_embedded_pdf_text}"
+        vlm_ocr_verify: bool,
+    ) -> str:
+        scope = (
+            f"{content_type}|{engine_hint or 'auto'}|"
+            f"embedded={self.prefer_embedded_pdf_text}|vlm_verify={bool(vlm_ocr_verify)}"
+        )
+        if is_audio_content_type(content_type):
+            engine = self.qwen_asr_engine
+            if engine is None:
+                return f"{scope}|asr=none"
+            return (
+                f"{scope}|asr_model={engine.model_name}|asr_lang={engine.language}|"
+                f"asr_max_new={engine.max_new_tokens}|asr_dtype={engine.dtype}|"
+                f"asr_device={engine.device_map}|asr_enabled={engine.enabled}"
+            )
+        return scope
 
     @staticmethod
     def _page_summaries(blocks: list[OCRBlock], page_count: int) -> list[InferPage]:
@@ -535,6 +549,7 @@ class InferencePipeline:
         cache_scope = self._cache_scope(
             content_type=resolved_content_type,
             engine_hint=engine_hint,
+            vlm_ocr_verify=bool(vlm_ocr_verify),
         )
 
         # 1) 입력 바이트+scope 기준 캐시 조회

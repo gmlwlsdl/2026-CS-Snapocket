@@ -1,36 +1,34 @@
 {% extends "base.html" %}
 {% block content %}
 
-<section class="panel">
-  <div class="panel-head">
-    <h2>Job Queue</h2>
-    <span class="muted">Backend: {{ ops_active_backend_label }}</span>
+<section class="card">
+  <h2>Job Queue</h2>
+  <p class="ops-flash">
+    <span class="badge ok">active</span>
+    {{ ops_active_backend_label }}
+  </p>
+  <div class="queue-kpis" style="margin-bottom:12px;">
+    <span class="badge warn">total {{ ops_queue_summary.total }}</span>
+    <span class="badge warn">queued {{ ops_queue_summary.queued }}</span>
+    <span class="badge warn">running {{ ops_queue_summary.running }}</span>
+    <span class="badge ok">done {{ ops_queue_summary.succeeded }}</span>
+    <span class="badge err">failed {{ ops_queue_summary.failed }}</span>
+    <span class="badge err">cancelled {{ ops_queue_summary.cancelled }}</span>
   </div>
 
-  <div class="chip-row">
-    <span class="chip"><strong>total</strong> {{ ops_queue_summary.total }}</span>
-    <span class="chip"><strong>queued</strong> {{ ops_queue_summary.queued }}</span>
-    <span class="chip"><strong>running</strong> {{ ops_queue_summary.running }}</span>
-    <span class="chip"><strong>succeeded</strong> {{ ops_queue_summary.succeeded }}</span>
-    <span class="chip"><strong>failed</strong> {{ ops_queue_summary.failed }}</span>
-    <span class="chip"><strong>cancelled</strong> {{ ops_queue_summary.cancelled }}</span>
-  </div>
-
-  <form method="get" action="/ops/jobs" class="inline-form">
-    <label for="status_filter">Status</label>
-    <select id="status_filter" name="status_filter">
+  <form method="get" action="/ops/jobs" style="display:flex; gap:8px; margin-bottom:12px;">
+    <select name="status_filter">
       <option value="" {% if not status_filter %}selected{% endif %}>All</option>
-      <option value="queued" {% if status_filter == "queued" %}selected{% endif %}>Queued</option>
-      <option value="running" {% if status_filter == "running" %}selected{% endif %}>Running</option>
-      <option value="succeeded" {% if status_filter == "succeeded" %}selected{% endif %}>Succeeded</option>
-      <option value="failed" {% if status_filter == "failed" %}selected{% endif %}>Failed</option>
-      <option value="cancelled" {% if status_filter == "cancelled" %}selected{% endif %}>Cancelled</option>
+      <option value="queued" {% if status_filter == 'queued' %}selected{% endif %}>Queued</option>
+      <option value="running" {% if status_filter == 'running' %}selected{% endif %}>Running</option>
+      <option value="succeeded" {% if status_filter == 'succeeded' %}selected{% endif %}>Succeeded</option>
+      <option value="failed" {% if status_filter == 'failed' %}selected{% endif %}>Failed</option>
+      <option value="cancelled" {% if status_filter == 'cancelled' %}selected{% endif %}>Cancelled</option>
     </select>
-    <button type="submit">Apply</button>
+    <button type="submit">Filter</button>
   </form>
 
   {% if jobs %}
-  <div class="table-wrap">
     <table>
       <thead>
         <tr>
@@ -48,29 +46,28 @@
       <tbody>
         {% for j in jobs %}
         <tr>
-          <td class="mono">{{ j.job_id }}</td>
+          <td>{{ j.job_id }}</td>
           <td>
-            {% if j.status == "succeeded" %}
-            <span class="badge ok">{{ j.status }}</span>
-            {% elif j.status in ["failed", "cancelled"] %}
-            <span class="badge err">{{ j.status }}</span>
-            {% else %}
-            <span class="badge warn">{{ j.status }}</span>
-            {% endif %}
+            <span class="badge
+              {{ 'ok'   if j.status == 'succeeded' else
+                 'warn' if j.status in ['queued', 'running'] else
+                 'err' }}">
+              {{ j.status }}
+            </span>
           </td>
-          <td class="mono">{{ j.created_at }}</td>
-          <td class="mono">{{ j.updated_at }}</td>
-          <td>{{ j.attempt if j.attempt is defined else "-" }}</td>
-          <td>{{ j.max_retries if j.max_retries is defined else "-" }}</td>
-          <td>{{ j.timeout_s if j.timeout_s is defined else "-" }}</td>
-          <td>{{ j.error or "-" }}</td>
+          <td>{{ j.created_at }}</td>
+          <td>{{ j.updated_at }}</td>
+          <td>{{ j.attempt if j.attempt is defined else '-' }}</td>
+          <td>{{ j.max_retries if j.max_retries is defined else '-' }}</td>
+          <td>{{ j.timeout_s if j.timeout_s is defined else '-' }}</td>
+          <td>{{ j.error or '—' }}</td>
           <td>
-            <div class="row-actions">
-              <form method="post" action="/ops/jobs/{{ j.job_id }}/cancel">
-                <button type="submit" class="ghost" {% if j.status not in ["queued", "running"] %}disabled{% endif %}>Cancel</button>
+            <div style="display:flex; gap:6px;">
+              <form method="post" action="/ops/jobs/{{ j.job_id }}/cancel" style="margin:0">
+                <button type="submit" {% if j.status not in ['queued','running'] %}disabled{% endif %}>Cancel</button>
               </form>
-              <form method="post" action="/ops/jobs/{{ j.job_id }}/retry">
-                <button type="submit" {% if j.status not in ["failed", "cancelled"] %}disabled{% endif %}>Retry</button>
+              <form method="post" action="/ops/jobs/{{ j.job_id }}/retry" style="margin:0">
+                <button type="submit" {% if j.status not in ['failed','cancelled'] %}disabled{% endif %}>Retry</button>
               </form>
             </div>
           </td>
@@ -78,9 +75,8 @@
         {% endfor %}
       </tbody>
     </table>
-  </div>
   {% else %}
-  <p class="empty">No jobs found.</p>
+    <p class="empty">No jobs in queue.</p>
   {% endif %}
 </section>
 

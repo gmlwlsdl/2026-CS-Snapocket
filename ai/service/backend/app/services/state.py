@@ -42,6 +42,7 @@ class AppState:
     scanner: MalwareScanner
     router: OCREngineRouter
     pipeline: InferencePipeline
+    qwen_asr_engine: QwenASREngine | None = None
     log_buffer: LogBuffer = None  # type: ignore[assignment]
     model_prober: ModelAvailabilityProber | None = None
     engine_gate: EngineRequestGate | None = None
@@ -60,7 +61,23 @@ def _is_valid_qwen_asr_dir(path: Path) -> bool:
 
 def _resolve_qwen_asr_model_ref(settings: Settings) -> str:
     """로컬 ASR 모델 디렉터리를 우선 탐지하고, 없으면 설정값을 사용한다."""
-    ai_root = Path(__file__).resolve().parents[4]
+    resolved_file = Path(__file__).resolve()
+
+    # 실행 환경(로컬/컨테이너)마다 경로 깊이가 달라질 수 있어 고정 인덱스를 쓰지 않는다.
+    ai_root: Path | None = None
+    for parent in resolved_file.parents:
+        if (parent / "model").is_dir():
+            ai_root = parent
+            break
+    if ai_root is None:
+        cwd = Path.cwd().resolve()
+        if (cwd / "model").is_dir():
+            ai_root = cwd
+        elif len(resolved_file.parents) > 2:
+            ai_root = resolved_file.parents[2]
+        else:
+            ai_root = resolved_file.parent
+
     model_root = ai_root / "model"
 
     # 로컬 1.7B 계열 폴더를 우선 탐지한다.
@@ -133,6 +150,9 @@ def build_app_state() -> AppState:
         model_name=qwen_asr_model_ref,
         language=settings.qwen_asr_language,
         max_new_tokens=settings.qwen_asr_max_new_tokens,
+        dtype=settings.qwen_asr_dtype,
+        device_map=settings.qwen_asr_device_map,
+        low_cpu_mem_usage=settings.qwen_asr_low_cpu_mem_usage,
     )
     preprocessor = ImageProcessor(
         enabled=settings.image_preprocess,
@@ -208,6 +228,7 @@ def build_app_state() -> AppState:
         job_manager=job_manager,
         settings=settings,
         router=router,
+        qwen_asr_engine=qwen_asr_engine,
         request_timeout_s=settings.dispatch_upstream_timeout_s,
     )
     model_prober = None
@@ -228,6 +249,7 @@ def build_app_state() -> AppState:
         scanner=scanner,
         router=router,
         pipeline=pipeline,
+        qwen_asr_engine=qwen_asr_engine,
         log_buffer=log_buffer,
         model_prober=model_prober,
         engine_gate=EngineRequestGate(),

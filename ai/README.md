@@ -13,9 +13,16 @@
 
 - 로컬 OCR: `llama.cpp server` + PaddleOCR-VL 모델
 - 오디오(`.mp3`) 입력: `Qwen ASR` 분기로 자동 처리
+- ASR 모델: `Qwen3-ASR-1.7B` 단일 사용 (`0.6B` 미사용)
 - 엔진 선택:
   - 이미지/PDF/오피스 문서 -> `paddle`
   - 오디오(mp3) -> `qwen-asr`
+
+## Ops Playground 오디오 처리 방식
+
+- `/ops/playground`에서 mp3는 동기 `/ops/playground/infer` 직결이 아니라
+  `job submit -> status polling -> result fetch` 흐름으로 처리됩니다.
+- 긴 ASR 요청에서도 브라우저 단일 연결 끊김(`failed to fetch`) 영향을 줄이기 위한 변경입니다.
 
 ## Qwen ASR 모델 경로 우선순위
 
@@ -29,12 +36,20 @@
 
 - `QWEN_ASR_ENABLE=true`
 - `QWEN_ASR_LANGUAGE=Korean`
-- `QWEN_ASR_MAX_NEW_TOKENS=96`
+- `QWEN_ASR_MAX_NEW_TOKENS=1024`
+- 기본(일반 compose): `QWEN_ASR_DEVICE_MAP=cpu`
+- GPU compose(`docker-compose.aiops.gpu.yml`): `QWEN_ASR_DEVICE_MAP=cuda:0`
 
 ## 실행 (Makefile 단일 진입점)
 
 ```bash
 cd ai
+make up
+```
+
+이미지 빌드가 필요한 경우에만:
+
+```bash
 make up-build
 ```
 
@@ -66,7 +81,7 @@ make down
 필요 시 명시적으로 지정:
 
 ```bash
-ROOT_ENV=../.env.admin.local make up-build
+ROOT_ENV=../.env.admin.local make up
 ```
 
 ## 참고

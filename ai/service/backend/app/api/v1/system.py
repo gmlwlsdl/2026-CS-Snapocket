@@ -14,6 +14,29 @@ from app.services.state import AppState
 router = APIRouter(tags=["system"])
 
 
+def _safe_engine_available(engine: object | None) -> bool:
+    if engine is None or not hasattr(engine, "available"):
+        return False
+    try:
+        return bool(engine.available())
+    except Exception:
+        return False
+
+
+def _safe_engine_cache(engine: object | None) -> dict:
+    if engine is None or not hasattr(engine, "availability_detail"):
+        return {}
+    try:
+        detail = engine.availability_detail()
+        return detail if isinstance(detail, dict) else {}
+    except Exception:
+        return {}
+
+
+def _safe_qwen_asr_model(settings: object) -> str:
+    return str(getattr(settings, "qwen_asr_model", "") or "").strip()
+
+
 @router.get("/health/live")
 def live():
     # 프로세스 생존 여부만 빠르게 확인하는 경량 엔드포인트.
@@ -24,13 +47,14 @@ def live():
 def ready(state: AppState = Depends(get_state)):
     # readiness는 엔진 설정/런타임 + 핵심 인프라(DB/Redis) 상태를 종합 판단한다.
     resolve_effective_engine(state, sync_registry=True)
+    qwen_asr_engine = getattr(state, "qwen_asr_engine", None)
     configured = {
         "paddle": state.settings.paddle_enable and bool(state.settings.llm_model_paddle),
-        "glm": state.settings.glm_enable and bool(state.settings.llm_model_glm),
+        "qwen_asr": bool(state.settings.qwen_asr_enable) and bool(_safe_qwen_asr_model(state.settings)),
     }
     runtime = {
-        "paddle": state.router.paddle_engine.available(),
-        "glm": state.router.glm_engine.available(),
+        "paddle": _safe_engine_available(state.router.paddle_engine),
+        "qwen_asr": _safe_engine_available(qwen_asr_engine),
     }
     db = state.persistence.health(timeout_s=state.settings.readiness_timeout_s)
     redis = ping_redis(
@@ -71,34 +95,34 @@ def system_status(request: Request, state: AppState = Depends(get_state)):
         state.settings.redis_url if state.settings.redis_enable else None,
         timeout_s=state.settings.readiness_timeout_s,
     )
+    qwen_asr_engine = getattr(state, "qwen_asr_engine", None)
+    qwen_asr_model = _safe_qwen_asr_model(state.settings)
     llm_backend = {
         "base_url": state.settings.llm_base_url,
         "paddle_model": state.settings.llm_model_paddle,
-        "glm_model": state.settings.llm_model_glm,
         "request_timeout_s": state.settings.llm_request_timeout_s,
         "keep_alive": state.settings.llm_keep_alive,
         "temperature": state.settings.llm_temperature,
         "image_max_side_px": state.settings.llm_image_max_side_px,
         "max_tokens": state.settings.llm_max_tokens,
     }
+    asr_backend = {
+        "enabled": bool(state.settings.qwen_asr_enable),
+        "model": qwen_asr_model,
+        "language": str(state.settings.qwen_asr_language),
+        "max_new_tokens": int(state.settings.qwen_asr_max_new_tokens),
+    }
     data = {
         "queue": {
             "backend": state.settings.job_queue_backend,
         },
         "llm_backend": llm_backend,
+        "asr_backend": asr_backend,
         "engines": {
-            "paddle_available": state.router.paddle_engine.available(),
-            "glm_available": state.router.glm_engine.available(),
-            "paddle_cache": (
-                state.router.paddle_engine.availability_detail()
-                if hasattr(state.router.paddle_engine, "availability_detail")
-                else {}
-            ),
-            "glm_cache": (
-                state.router.glm_engine.availability_detail()
-                if hasattr(state.router.glm_engine, "availability_detail")
-                else {}
-            ),
+            "paddle_available": _safe_engine_available(state.router.paddle_engine),
+            "qwen_asr_available": _safe_engine_available(qwen_asr_engine),
+            "paddle_cache": _safe_engine_cache(state.router.paddle_engine),
+            "qwen_asr_cache": _safe_engine_cache(qwen_asr_engine),
         },
         "dependencies": {
             "database": db,

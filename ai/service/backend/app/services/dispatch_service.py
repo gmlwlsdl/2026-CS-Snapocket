@@ -36,6 +36,7 @@ class DispatchService:
         job_manager,
         settings,
         router,
+        qwen_asr_engine=None,
         request_timeout_s: float = 120.0,
     ) -> None:
         self.server_registry = server_registry
@@ -43,6 +44,7 @@ class DispatchService:
         self.job_manager = job_manager
         self.settings = settings
         self.router = router
+        self.qwen_asr_engine = qwen_asr_engine
         self.request_timeout_s = max(5.0, float(request_timeout_s))
 
     def active_server(self) -> ServerRecord:
@@ -56,10 +58,15 @@ class DispatchService:
         return f"remote aiops-api @ {active.base_url or active.name}"
 
     def local_runtime(self) -> dict[str, bool]:
-        return {
-            "paddle": bool(self.router.paddle_engine.available()),
-            "glm": bool(self.router.glm_engine.available()),
-        }
+        runtime = {"paddle": bool(self.router.paddle_engine.available())}
+        qwen_up = False
+        if self.qwen_asr_engine is not None:
+            try:
+                qwen_up = bool(self.qwen_asr_engine.available())
+            except Exception:
+                qwen_up = False
+        runtime["qwen_asr"] = qwen_up
+        return runtime
 
     async def infer(
         self,
@@ -194,7 +201,7 @@ class DispatchService:
         server = self.server_registry.get_server(server_id)
         if server.kind == ServerKind.local:
             runtime = self.local_runtime()
-            ok = bool(runtime.get("paddle") or runtime.get("glm"))
+            ok = any(bool(value) for value in runtime.values())
             message = "" if ok else "no runtime is currently available"
             self.server_registry.mark_health(server_id=server_id, ok=ok, error_message=message)
             return {"ok": ok, "runtime": runtime, "checked_at": _utcnow().isoformat(), "message": message}
@@ -241,13 +248,14 @@ class DispatchService:
             )
             runtime = payload.get("runtime", {}) if isinstance(payload, dict) else {}
             self.server_registry.mark_health(server_id=active.server_id, ok=bool(payload.get("ok", False)))
-            return {
+            result = {
                 "paddle": bool(runtime.get("paddle")),
-                "glm": bool(runtime.get("glm")),
+                "qwen_asr": bool(runtime.get("qwen_asr", runtime.get("qwen-asr", False))),
             }
+            return result
         except DispatchRequestError as exc:
             self.server_registry.mark_health(server_id=active.server_id, ok=False, error_message=exc.message)
-            return {"paddle": False, "glm": False}
+            return {"paddle": False, "qwen_asr": False}
 
     def _infer_remote_sync(
         self,

@@ -28,11 +28,17 @@ class QwenASREngine:
         model_name: str = "Qwen/Qwen3-ASR-1.7B",
         language: str = "Korean",
         max_new_tokens: int = 1024,
+        dtype: str = "float16",
+        device_map: str = "cpu",
+        low_cpu_mem_usage: bool = True,
     ) -> None:
         self.enabled = bool(enabled)
         self.model_name = str(model_name or "").strip() or "Qwen/Qwen3-ASR-1.7B"
         self.language = str(language or "").strip() or "Korean"
         self.max_new_tokens = max(32, int(max_new_tokens))
+        self.dtype = str(dtype or "float16").strip().lower()
+        self.device_map = str(device_map or "cpu").strip()
+        self.low_cpu_mem_usage = bool(low_cpu_mem_usage)
 
         self._lock = Lock()
         self._model = None
@@ -45,6 +51,9 @@ class QwenASREngine:
             "model_name": self.model_name,
             "language": self.language,
             "max_new_tokens": str(self.max_new_tokens),
+            "dtype": self.dtype,
+            "device_map": self.device_map,
+            "low_cpu_mem_usage": self.low_cpu_mem_usage,
             "last_error": self._last_error or "",
             "runtime": "qwen-asr",
         }
@@ -59,6 +68,20 @@ class QwenASREngine:
         self._last_error = None
         return True
 
+    def _resolve_dtype(self):
+        try:
+            import torch
+        except Exception:
+            return None
+        token = self.dtype
+        if token in {"float16", "fp16", "half"}:
+            return torch.float16
+        if token in {"bfloat16", "bf16"}:
+            return torch.bfloat16
+        if token in {"float32", "fp32"}:
+            return torch.float32
+        return None
+
     def _load_model(self):
         if self._model is not None:
             return self._model
@@ -71,10 +94,25 @@ class QwenASREngine:
                 self._last_error = f"qwen_asr import failed: {exc}"
                 raise RuntimeError(self._last_error) from exc
             try:
-                self._model = Qwen3ASRModel.from_pretrained(
-                    self.model_name,
-                    max_new_tokens=self.max_new_tokens,
-                )
+                kwargs = {"max_new_tokens": self.max_new_tokens}
+                dtype_obj = self._resolve_dtype()
+                if dtype_obj is not None:
+                    kwargs["dtype"] = dtype_obj
+                if self.device_map:
+                    kwargs["device_map"] = self.device_map
+                kwargs["low_cpu_mem_usage"] = self.low_cpu_mem_usage
+                try:
+                    self._model = Qwen3ASRModel.from_pretrained(self.model_name, **kwargs)
+                except TypeError:
+                    # 일부 버전은 인자 호환성이 달라서 최소 인자 세트로 재시도한다.
+                    fallback = {
+                        "max_new_tokens": self.max_new_tokens,
+                    }
+                    if dtype_obj is not None:
+                        fallback["dtype"] = dtype_obj
+                    if self.device_map:
+                        fallback["device_map"] = self.device_map
+                    self._model = Qwen3ASRModel.from_pretrained(self.model_name, **fallback)
             except Exception as exc:
                 self._last_error = f"Qwen ASR model load failed: {exc}"
                 raise RuntimeError(self._last_error) from exc

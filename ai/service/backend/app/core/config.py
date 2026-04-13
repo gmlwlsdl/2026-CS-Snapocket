@@ -63,7 +63,10 @@ class Settings:
     qwen_asr_enable: bool = _as_bool(os.getenv("QWEN_ASR_ENABLE"), True)
     qwen_asr_model: str = os.getenv("QWEN_ASR_MODEL", "Qwen/Qwen3-ASR-1.7B")
     qwen_asr_language: str = os.getenv("QWEN_ASR_LANGUAGE", "Korean")
-    qwen_asr_max_new_tokens: int = int(os.getenv("QWEN_ASR_MAX_NEW_TOKENS", "96"))
+    qwen_asr_max_new_tokens: int = int(os.getenv("QWEN_ASR_MAX_NEW_TOKENS", "1024"))
+    qwen_asr_dtype: str = os.getenv("QWEN_ASR_DTYPE", "float16")
+    qwen_asr_device_map: str = os.getenv("QWEN_ASR_DEVICE_MAP", "cpu")
+    qwen_asr_low_cpu_mem_usage: bool = _as_bool(os.getenv("QWEN_ASR_LOW_CPU_MEM_USAGE"), True)
 
     # VLM OCR 결과 검증(Tesseract) 설정
     local_model_hint_ocr_langs: str = os.getenv("LOCAL_MODEL_HINT_OCR_LANGS", "kor+eng")
@@ -167,7 +170,10 @@ def load_settings() -> Settings:
         qwen_asr_enable=_as_bool(os.getenv("QWEN_ASR_ENABLE"), True),
         qwen_asr_model=os.getenv("QWEN_ASR_MODEL", "Qwen/Qwen3-ASR-1.7B"),
         qwen_asr_language=os.getenv("QWEN_ASR_LANGUAGE", "Korean"),
-        qwen_asr_max_new_tokens=int(os.getenv("QWEN_ASR_MAX_NEW_TOKENS", "96")),
+        qwen_asr_max_new_tokens=int(os.getenv("QWEN_ASR_MAX_NEW_TOKENS", "1024")),
+        qwen_asr_dtype=os.getenv("QWEN_ASR_DTYPE", "float16"),
+        qwen_asr_device_map=os.getenv("QWEN_ASR_DEVICE_MAP", "cpu"),
+        qwen_asr_low_cpu_mem_usage=_as_bool(os.getenv("QWEN_ASR_LOW_CPU_MEM_USAGE"), True),
         local_model_hint_ocr_langs=os.getenv("LOCAL_MODEL_HINT_OCR_LANGS", "kor+eng"),
         local_model_hint_ocr_timeout_s=float(
             os.getenv("LOCAL_MODEL_HINT_OCR_TIMEOUT_S", "1.2")

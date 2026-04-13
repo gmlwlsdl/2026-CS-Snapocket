@@ -61,12 +61,20 @@ services:
       LLM_IMAGE_MAX_SIDE_PX: ${AI_LLAMACPP_IMAGE_MAX_SIDE_PX:-1024}
       LLM_MAX_TOKENS: ${AI_LLAMACPP_MAX_TOKENS:-96}
       PLAYGROUND_TIMEOUT_S: ${AI_PLAYGROUND_TIMEOUT_S:-120}
+      QWEN_ASR_ENABLE: ${QWEN_ASR_ENABLE:-1}
+      QWEN_ASR_MODEL: ${QWEN_ASR_MODEL:-/app/model/Qwen3-ASR-1.7B}
+      QWEN_ASR_LANGUAGE: ${QWEN_ASR_LANGUAGE:-Korean}
+      QWEN_ASR_MAX_NEW_TOKENS: ${QWEN_ASR_MAX_NEW_TOKENS:-1024}
+      QWEN_ASR_DTYPE: ${QWEN_ASR_DTYPE:-float16}
+      QWEN_ASR_DEVICE_MAP: ${QWEN_ASR_DEVICE_MAP:-cpu}
+      QWEN_ASR_LOW_CPU_MEM_USAGE: ${QWEN_ASR_LOW_CPU_MEM_USAGE:-1}
     ports:
       - "${AI_AIOPS_BIND_IP:-0.0.0.0}:${AI_AIOPS_PORT:-18080}:8080"
     depends_on:
       - llama-server
     volumes:
       - ../data:/app/data
+      - ../model:/app/model:ro
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/health/live', timeout=3)"]
       interval: 30s
