@@ -112,7 +112,7 @@ class Query:
             return nodes
             
         except Exception as e:
-            print()
+            print(e)
             raise InternalServerError()
     
 data = strawberry.Schema(query=Query)
