@@ -76,7 +76,7 @@ def sighup(user : UserCreate, db: Session = Depends(get_db)):
 def login(login : UserCreate, db: Session = Depends(get_db)):
 
     # db와 로그인 정보 비교
-    userInfo = db.query(User).filter(User.email == login.email).all()
+    userInfo = db.query(User).filter(User.email == login.email).first()
     
     if not userInfo:
         raise HTTPException(
@@ -90,11 +90,10 @@ def login(login : UserCreate, db: Session = Depends(get_db)):
     
     pwd = False
 
-    for user in userInfo:
-        if user.password_hash == login.password:
-            pwd = True
+    if userInfo.password_hash == login.password:
+        pwd = True
 
-    if pwd:
+    if not pwd:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail={
