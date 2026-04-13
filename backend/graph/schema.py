@@ -1,6 +1,5 @@
 import strawberry
 from strawberry.types import Info
-from pydantic import BaseModel
 from typing import List, Optional
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
