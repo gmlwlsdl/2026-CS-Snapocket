@@ -2,15 +2,16 @@ from datetime import datetime
 from fastapi import APIRouter, Depends
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
-
+from core.security import jwtAuth
 from core.database import get_db
 from models.document import Document
 from models.analysis_job import AnalysisJob
+from api.apiResponse import ApiResponse
 
 router = APIRouter(prefix="/analysis", tags=["analysis"])
 
-@router.post("/{document_id}/start")
-def start_analysis(document_id: str, db: Session = Depends(get_db)):
+@router.post("/{document_id}/start", response_model=ApiResponse[dict])
+def start_analysis(document_id: str, jwtToken: dict = Depends(jwtAuth), db: Session = Depends(get_db)):
     document = db.query(Document).filter(Document.id == document_id).first()
 
     if not document:
@@ -43,11 +44,47 @@ def start_analysis(document_id: str, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(analysis_job)
 
-    return {
-        "success": True,
-        "message": "AI 분석 시작",
-        "data": {
+    return ApiResponse(
+        success=True,
+        message="AI 분석 시작",
+        data={
             "job_id": str(analysis_job.id),
             "status": "processing"
         }
-    }
+    )
+
+@router.get("/{document_id}/status", response_model=ApiResponse[dict])
+def status_analysis(jwtToken: dict = Depends(jwtAuth), db: Session = Depends(get_db)):
+
+    return ApiResponse(
+        success=True,
+        message="",
+        data={}
+    )
+
+@router.get("/{document_id}/result", response_model=ApiResponse[dict])
+def result_analysis(jwtToken: dict = Depends(jwtAuth), db: Session = Depends(get_db)):
+
+    return ApiResponse(
+        success=True,
+        message="",
+        data={}
+    )
+
+@router.post("/{document_id}/confirm", response_model=ApiResponse[dict])
+def save_analysis(jwtToken: dict = Depends(jwtAuth), db: Session = Depends(get_db)):
+
+    return ApiResponse(
+        success=True,
+        message="",
+        data={}
+    )
+
+@router.post("/{document_id}/retry", response_model=ApiResponse[dict])
+def retry_analysis(jwtToken: dict = Depends(jwtAuth), db: Session = Depends(get_db)):
+
+    return ApiResponse(
+        success=True,
+        message="",
+        data={}
+    )
