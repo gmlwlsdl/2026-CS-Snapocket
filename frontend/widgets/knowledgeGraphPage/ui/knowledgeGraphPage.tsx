@@ -33,6 +33,7 @@ const INITIAL_TOASTS: ToastItem[] = [
 export function KnowledgeGraphPage() {
   const router = useRouter();
   const [activeFilter, setActiveFilter] = useState<CategoryFilter>("all");
+  const [searchTerm, setSearchTerm] = useState("");
   const [nodes, setNodes] = useState<GraphNode[]>(GRAPH_NODES);
   const [edges] = useState<GraphEdge[]>(GRAPH_EDGES);
   const [modalOpen, setModalOpen] = useState(false);
@@ -120,11 +121,16 @@ export function KnowledgeGraphPage() {
         <TopHeader activeFilter={activeFilter} onFilterChange={setActiveFilter} />
 
         <div className="absolute inset-0">
-          <KnowledgeGraphCanvas activeFilter={activeFilter} nodes={nodes} edges={edges} />
+          <KnowledgeGraphCanvas
+            activeFilter={activeFilter}
+            searchTerm={searchTerm}
+            nodes={nodes}
+            edges={edges}
+          />
         </div>
 
         <GraphControls />
-        <AiInputBar />
+        <AiInputBar onSearch={setSearchTerm} />
         <ToastStatus items={toastItems} onItemClick={handleToastClick} />
       </main>
 

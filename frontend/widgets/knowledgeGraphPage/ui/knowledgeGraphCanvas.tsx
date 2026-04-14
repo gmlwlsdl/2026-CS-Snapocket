@@ -21,14 +21,26 @@ function isNodeVisible(node: GraphNode, filter: CategoryFilter): boolean {
 
 interface KnowledgeGraphCanvasProps {
   activeFilter: CategoryFilter;
+  searchTerm?: string;
   nodes: GraphNode[];
   edges: GraphEdge[];
 }
 
-export function KnowledgeGraphCanvas({ activeFilter, nodes, edges }: KnowledgeGraphCanvasProps) {
+export function KnowledgeGraphCanvas({
+  activeFilter,
+  searchTerm,
+  nodes,
+  edges,
+}: KnowledgeGraphCanvasProps) {
   const visibleNodes = nodes.filter((n) => isNodeVisible(n, activeFilter));
   const visibleIds = new Set(visibleNodes.map((n) => n.id));
   const nodeMap = new Map(nodes.map((n) => [n.id, n]));
+
+  // 검색어 필터링 유틸
+  const isMatched = (label: string) => {
+    if (!searchTerm) return true;
+    return label.toLowerCase().includes(searchTerm.toLowerCase());
+  };
 
   return (
     <div
@@ -54,6 +66,10 @@ export function KnowledgeGraphCanvas({ activeFilter, nodes, edges }: KnowledgeGr
           const from = nodeMap.get(edge.from);
           const to = nodeMap.get(edge.to);
           if (!from || !to) return null;
+
+          // 두 노드 중 하나라도 검색어와 매칭되지 않으면 간선을 투명하게 처리 (맥락 유지 위해 0.05)
+          const edgeOpacity = isMatched(from.label) && isMatched(to.label) ? 1 : 0.05;
+
           return (
             <line
               key={`${edge.from}-${edge.to}`}
@@ -63,6 +79,8 @@ export function KnowledgeGraphCanvas({ activeFilter, nodes, edges }: KnowledgeGr
               y2={to.y}
               stroke="rgba(129,236,255,0.12)"
               strokeWidth="1"
+              opacity={edgeOpacity}
+              style={{ transition: "opacity 0.3s" }}
             />
           );
         })}
@@ -70,7 +88,11 @@ export function KnowledgeGraphCanvas({ activeFilter, nodes, edges }: KnowledgeGr
         {visibleNodes.map((node) => {
           const color = NODE_COLOR[node.category] ?? "#aaabaf";
           const dotSize = NODE_DOT_SIZE[node.size] ?? 8;
-          const opacity = NODE_DOT_OPACITY[node.size] ?? 0.6;
+          const baseOpacity = NODE_DOT_OPACITY[node.size] ?? 0.6;
+
+          // 검색어 매칭 여부에 따른 투명도 조절
+          const matched = isMatched(node.label);
+          const finalOpacity = matched ? baseOpacity : 0.05;
 
           return (
             <circle
@@ -79,7 +101,8 @@ export function KnowledgeGraphCanvas({ activeFilter, nodes, edges }: KnowledgeGr
               cy={node.y}
               r={dotSize / 2}
               fill={color}
-              opacity={opacity}
+              opacity={finalOpacity}
+              style={{ transition: "opacity 0.3s" }}
             />
           );
         })}
@@ -91,6 +114,9 @@ export function KnowledgeGraphCanvas({ activeFilter, nodes, edges }: KnowledgeGr
           const yPct = (node.y / CANVAS_HEIGHT) * 100;
           const dotSize = NODE_DOT_SIZE[node.size] ?? 8;
 
+          const matched = isMatched(node.label);
+          const labelOpacity = matched ? 1 : 0.05;
+
           return (
             <div
               key={node.id}
@@ -99,6 +125,8 @@ export function KnowledgeGraphCanvas({ activeFilter, nodes, edges }: KnowledgeGr
                 left: `${xPct}%`,
                 top: `${yPct}%`,
                 transform: "translate(0, -50%)",
+                opacity: labelOpacity,
+                transition: "opacity 0.3s",
               }}
             >
               <div style={{ width: dotSize, height: dotSize, flexShrink: 0 }} />
