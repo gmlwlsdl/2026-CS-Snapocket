@@ -52,7 +52,7 @@ class GetDocuments(BaseModel):
 
 @router.get("", response_model=ApiResponse[GetDocuments])
 def read_documents(jwtToken: dict = Depends(jwtAuth), db: Session = Depends(get_db)):
-    documents = db.query(Document).all()
+    documents = db.query(Document).filter(Document.deleted_at == None).all()
 
     data = GetDocuments(
         items=documents,
@@ -69,25 +69,10 @@ def read_documents(jwtToken: dict = Depends(jwtAuth), db: Session = Depends(get_
         message="문서 목록 조회 성공",
         data=data
     )
-    
-    """ # 공통 Response 맞춰서 반환
-    return {
-        "success": True,
-        "message": "문서 목록 조회 성공",
-        "data": {
-            "items": documents,
-            "pagination": {
-                "page": 1,
-                "size": len(documents),
-                "total": len(documents),
-                "has_next": False
-            }
-        }
-    } """
 
 @router.get("/{document_id}", response_model=ApiResponse[DetailedInfo])
 def get_document(document_id: str, jwtToken: dict = Depends(jwtAuth), db: Session = Depends(get_db)):
-    document = db.query(Document).filter(Document.id == document_id).first()
+    document = db.query(Document).filter(Document.id == document_id, Document.deleted_at == None).first()
 
     if not document:
         return JSONResponse(
@@ -108,7 +93,7 @@ def get_document(document_id: str, jwtToken: dict = Depends(jwtAuth), db: Sessio
 @router.patch("/{document_id}", response_model=ApiResponse[dict])
 def update_document(update: UpdateDocuments, document_id: str, jwtToken: dict = Depends(jwtAuth), db: Session = Depends(get_db)):
 
-    document = db.query(Document).filter(Document.id == document_id).first()
+    document = db.query(Document).filter(Document.id == document_id, Document.deleted_at == None).first()
 
     if not document:
         return JSONResponse(
@@ -137,7 +122,7 @@ def update_document(update: UpdateDocuments, document_id: str, jwtToken: dict = 
 @router.delete("/{document_id}", response_model=ApiResponse[dict])
 def delete_document(document_id: str, jwtToken: dict = Depends(jwtAuth), db: Session = Depends(get_db)):
     
-    document = db.query(Document).filter(Document.id == document_id).first()
+    document = db.query(Document).filter(Document.id == document_id, Document.deleted_at == None).first()
 
     if not document:
         return JSONResponse(
