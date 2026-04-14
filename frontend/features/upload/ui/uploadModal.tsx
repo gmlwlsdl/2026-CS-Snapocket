@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useRef, useCallback } from 'react'
+import { t as translate} from '@/shared/lib/i18n'
 
 interface UploadModalProps {
   open: boolean
@@ -73,10 +74,10 @@ export function UploadModal({ open, onClose, onUpload }: UploadModalProps) {
               className="font-manrope font-extrabold text-2xl"
               style={{ color: '#f9f9fd', letterSpacing: '-0.6px' }}
             >
-              Upload Sources
+              {translate('uploadSources', 'ko')}
             </h2>
             <p className="font-inter text-sm mt-1" style={{ color: '#aaabaf' }}>
-              Feed your knowledge vault with new data assets.
+              {translate('feedYourKnowledgeVault', 'ko')}
             </p>
           </div>
           <button
@@ -131,13 +132,13 @@ export function UploadModal({ open, onClose, onUpload }: UploadModalProps) {
               >
                 {selectedFile
                   ? selectedFile.name
-                  : 'Drop files here or click to browse'}
+                  : translate('dropFilesHereOrClickToBrowse', 'ko')}
               </p>
               <p
                 className="font-inter text-xs tracking-widest"
                 style={{ color: '#aaabaf' }}
               >
-                Support for PDF, JPG, PNG, or MP4
+                {translate('supportForPdfJpgPngOrMp4', 'ko')}
               </p>
             </div>
 
@@ -153,7 +154,7 @@ export function UploadModal({ open, onClose, onUpload }: UploadModalProps) {
                 fileInputRef.current?.click()
               }}
             >
-              Select Files
+              {translate('selectFiles', 'ko')}
             </button>
           </div>
         </div>
@@ -168,7 +169,7 @@ export function UploadModal({ open, onClose, onUpload }: UploadModalProps) {
             className="font-inter font-semibold text-base px-6 py-2.5 rounded-full transition-colors cursor-pointer"
             style={{ color: '#aaabaf' }}
           >
-            Cancel
+            {translate('cancel', 'ko')}
           </button>
           <button
             onClick={handleStartAnalysis}
@@ -178,7 +179,7 @@ export function UploadModal({ open, onClose, onUpload }: UploadModalProps) {
               color: '#003840',
             }}
           >
-            Start Analysis
+            {translate('startAnalysis', 'ko')}
           </button>
         </div>
       </div>
