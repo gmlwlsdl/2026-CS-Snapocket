@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, ForeignKey
+from sqlalchemy import Column, Integer, ForeignKey, CHAR
 from core.database import Base
 
 class DocumentTag(Base):
@@ -6,4 +6,4 @@ class DocumentTag(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     document_id = Column(Integer, ForeignKey("documents.id"))
-    tag_id = Column(Integer, ForeignKey("tags.id"))
+    tag_id = Column(CHAR(36), ForeignKey("tags.id"))
