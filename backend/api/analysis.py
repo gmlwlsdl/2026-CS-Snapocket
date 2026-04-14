@@ -1,4 +1,5 @@
 from datetime import datetime
+import uuid
 from fastapi import APIRouter, Depends
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
@@ -24,13 +25,22 @@ def start_analysis(document_id: str, jwtToken: dict = Depends(jwtAuth), db: Sess
             }
         )
 
+    request_doc_id = document.doc_id or uuid.uuid4().hex
+    raw_text = (
+        "AI가 분석한 전체 문장입니다. 실제 연동 시에는 OCR/ASR이 추출한 전문 텍스트가 저장됩니다."
+    )
+
     mock_result = {
+        "doc_id": request_doc_id,
         "title": document.title or "분석된 문서",
         "category": "lecture",
         "summary": "AI가 분석한 요약 결과입니다.",
+        "raw_text": raw_text,
         "tags": ["강의", "필기", "학습자료"]
     }
 
+    document.doc_id = request_doc_id
+    document.raw_text = raw_text
     document.status = "processing"
 
     analysis_job = AnalysisJob(

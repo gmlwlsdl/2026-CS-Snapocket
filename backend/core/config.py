@@ -14,6 +14,11 @@ ALGORITHM = os.getenv("ALGORITHM", "HS256")
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES"))
 # REFRESH_TOKEN_EXPIRE_DAYS = int(os.getenv("REFRESH_TOKEN_EXPIRE_DAYS"))
 
+# AI Server
+AI_SERVER_URL = os.getenv("AI_SERVER_URL", "").strip()
+AI_SERVER_API_KEY = os.getenv("AI_SERVER_API_KEY", "").strip()
+AI_SERVER_TIMEOUT_S = float(os.getenv("AI_SERVER_TIMEOUT_S", "60"))
+
 # 키 누락 방지
 if not SECRET_KEY:
     raise ValueError("환경 변수에 SECRET_KEY가 설정되지 않았습니다!")

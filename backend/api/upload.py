@@ -79,9 +79,11 @@ async def upload_file(
         stored_filename=unique_name,
         file_path=file_path,
         file_type=file_type,
+        doc_id=None,
         title=file.filename,
         category="memo",
         summary="업로드된 문서",
+        raw_text=None,
         status=status,
     )
 
