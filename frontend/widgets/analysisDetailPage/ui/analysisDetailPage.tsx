@@ -12,6 +12,7 @@ import {
 } from '@/entities/analysis'
 import { MOCK_DOCUMENTS } from '@/entities/document'
 import { MOCK_RESULTS } from '@/entities/analysis'
+import { t as translate } from '@/shared/lib/i18n'
 import type { DocumentStatus } from '@/entities/document'
 import { ApiError } from '@/shared/api'
 
@@ -31,6 +32,7 @@ interface FormState {
   captureDate: string // MM/DD/YYYY (표시용)
   summary: string
   tags: TagItem[]
+  rawText: string // TODO: [API] raw_text 필드 추가 및 편집 기능 구현 예정
 }
 
 const CATEGORY_OPTIONS = [
@@ -78,6 +80,7 @@ export function AnalysisDetailPage() {
     captureDate: '',
     summary: '',
     tags: [],
+    rawText: '',
   })
 
   const [categoryOpen, setCategoryOpen] = useState(false)
@@ -108,6 +111,7 @@ export function AnalysisDetailPage() {
           label: t.startsWith('#') ? t : `#${t}`,
           color: tagColor(t),
         })),
+        rawText: result.raw_text || '',
       })
       setDocumentStatus('analyzed')
       setPageStatus('ready')
@@ -371,7 +375,7 @@ export function AnalysisDetailPage() {
 
           <div className="flex flex-col">
             <span className="font-manrope font-extrabold text-[20px] leading-[28px] tracking-[-0.5px] text-snap-white">
-              Analysis Detail
+              {translate('analysisDetail', 'ko')}
             </span>
             <div className="flex items-center gap-2">
               <span
@@ -381,12 +385,12 @@ export function AnalysisDetailPage() {
               />
               <span className="text-[12px] font-normal tracking-[1.2px] text-snap-muted leading-[16px]">
                 {isProcessing
-                  ? 'Analyzing...'
+                  ? translate('analyzing', 'ko')
                   : pageStatus === 'failed'
-                    ? 'Analysis Failed'
+                    ? translate('analysisFailed', 'ko')
                     : isSaving
-                      ? 'Saving...'
-                      : 'Editing Extracted Data'}
+                      ? translate('saving', 'ko')
+                      : translate('editingExtractedData', 'ko')}
               </span>
             </div>
           </div>
@@ -399,7 +403,7 @@ export function AnalysisDetailPage() {
           className="flex items-center justify-center rounded-full transition-opacity disabled:cursor-not-allowed disabled:opacity-40 hover:opacity-90 w-[184px] h-[44px] bg-gradient-to-br from-snap-cyan to-snap-cyan-3"
         >
           <span className="text-[14px] font-bold text-snap-btn-text">
-            {isSaving ? 'Saving…' : 'Confirm and Save'}
+            {isSaving ? translate('saving', 'ko') : translate('confirmSave', 'ko')}
           </span>
         </button>
       </header>
@@ -489,7 +493,7 @@ export function AnalysisDetailPage() {
               className="flex flex-1 items-center justify-center rounded-lg transition-colors hover:bg-white/5 disabled:opacity-40 h-12 bg-[#171a1d]"
             >
               <span className="text-[12px] font-normal tracking-[1.2px] text-snap-muted">
-                Recalibrate AI Lens
+                {translate('recalibrateAiLens', 'ko')}
               </span>
             </button>
             <button
@@ -516,7 +520,7 @@ export function AnalysisDetailPage() {
           {/* Document Title */}
           <div className="flex flex-col gap-1.5">
             <label className="text-[10px] font-normal tracking-[2px] text-snap-muted leading-[15px]">
-              DOCUMENT TITLE
+              {translate('documentTitle', 'ko')}
             </label>
             <div className="rounded-lg px-3 py-3.5 border border-gray-500">
               <input
@@ -534,7 +538,7 @@ export function AnalysisDetailPage() {
             {/* Category */}
             <div className="relative flex flex-1 flex-col gap-1.5">
               <label className="text-[10px] font-normal tracking-[2px] text-snap-muted leading-[15px]">
-                CATEGORY
+                {translate('category', 'ko')}
               </label>
               <button
                 onClick={() => isInteractive && setCategoryOpen((v) => !v)}
@@ -578,7 +582,7 @@ export function AnalysisDetailPage() {
             {/* Capture Date */}
             <div className="flex flex-1 flex-col gap-1.5">
               <label className="text-[10px] font-normal tracking-[2px] text-snap-muted leading-[15px]">
-                CAPTURE DATE
+                {translate('captureDate', 'ko')}  
               </label>
               <div
                 className="flex items-center justify-between rounded-lg px-4 h-[44px] bg-snap-input"
@@ -603,7 +607,7 @@ export function AnalysisDetailPage() {
           <div className="flex flex-col gap-2">
             <div className="flex items-center justify-between">
               <span className="text-[10px] font-normal tracking-[2px] text-snap-muted leading-[15px]">
-                CONTENT SUMMARY
+                {translate('contentSummary', 'ko')}
               </span>
               <div className="flex items-center gap-1.5">
                 <svg width="11" height="11" viewBox="0 0 11 11" fill="none">
@@ -611,7 +615,7 @@ export function AnalysisDetailPage() {
                   <path d="M5.5 3.5V5.5M5.5 7.5V7.6" stroke="#81ecff" strokeWidth="1" strokeLinecap="round" />
                 </svg>
                 <span className="text-[10px] font-bold text-snap-cyan leading-[15px]">
-                  AI GENERATED
+                  {translate('aiGenerated', 'ko')}
                 </span>
               </div>
             </div>
@@ -620,14 +624,30 @@ export function AnalysisDetailPage() {
               onChange={(e) => setForm((f) => ({ ...f, summary: e.target.value }))}
               disabled={!isInteractive}
               className="w-full resize-none rounded-xl px-6 py-6 outline-none disabled:opacity-60 h-[300px] bg-snap-input text-[16px] font-normal leading-[26px] text-snap-muted"
-              placeholder={isProcessing ? 'Analyzing content…' : ''}
+              placeholder={isProcessing ? translate('analyzing', 'ko') : ''}
             />
           </div>
+
+          {/* TODO: [UI] RAW TEXT 섹션 추가 예정
+            - 사용자가 직접 수정 가능하도록 textarea로 구현
+            - 스크롤 가능하도록 높이 고정
+            - 원문 내용을 수정하고 다시 분석을 요청하는 시나리오 고려
+          */}
+          {/* <div className="flex flex-col gap-2">
+            <span className="text-[10px] font-normal tracking-[2px] text-snap-muted leading-[15px]">
+              {translate('rawText', 'ko')} (TODO)
+            </span>
+            <textarea
+              value={form.rawText}
+              onChange={(e) => setForm((f) => ({ ...f, rawText: e.target.value }))}
+              className="w-full h-[200px] bg-snap-input ..."
+            />
+          </div> */}
 
           {/* Knowledge Tags */}
           <div className="flex flex-col gap-2">
             <span className="text-[10px] font-normal tracking-[2px] text-snap-muted leading-[15px]">
-              TAGS
+              {translate('tags', 'ko')}
             </span>
             <div className="flex flex-wrap items-center gap-2">
               {form.tags.map((tag) => (
@@ -669,7 +689,7 @@ export function AnalysisDetailPage() {
                     onClick={() => setAddingTag(true)}
                     className="flex items-center justify-center rounded-md px-3 transition-colors hover:bg-white/5 h-[26px] bg-[#1d2024] text-[12px] font-normal text-snap-muted"
                   >
-                    + Add Tag
+                    {translate('addTag', 'ko')}
                   </button>
                 )
               )}
@@ -689,7 +709,7 @@ export function AnalysisDetailPage() {
                 <path d="M2 4H14M5 4V2.5C5 2 5.5 1.5 6 1.5H10C10.5 1.5 11 2 11 2.5V4M6.5 7V12M9.5 7V12M3.5 4L4.5 13.5C4.5 14 5 14.5 5.5 14.5H10.5C11 14.5 11.5 14 11.5 13.5L12.5 4" stroke="#d7383b" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
               <span className="text-[14px] font-semibold text-red-600 leading-[20px]">
-                {isDiscarding ? 'Discarding…' : 'Discard Extraction'}
+                {isDiscarding ? translate('discarding', 'ko') : translate('discardExtraction', 'ko')}
               </span>
             </button>
           </div>
