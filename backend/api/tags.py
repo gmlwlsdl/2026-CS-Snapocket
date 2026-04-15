@@ -29,9 +29,9 @@ def getTags(keyword: str | None = None, jwtToken: dict = Depends(jwtAuth), db: S
 
     if keyword:
         searchKeyword = f"%{keyword}%"
-        tags = db.query(Tag.id, Tag.name, func.count(Document.id).label("count")).outerjoin(DocumentTag, Tag.id == DocumentTag.tag_id).outerjoin(Document, and_(DocumentTag.document_id == Document.id, Document.user_id == userInfo.id, Document.deleted_at == None)).filter(Tag.name.ilike(searchKeyword)).group_by(Tag.id).all()
+        tags = db.query(Tag.id, Tag.name, func.count(Document.id).label("count")).outerjoin(DocumentTag, Tag.id == DocumentTag.tag_id).outerjoin(Document, and_(DocumentTag.document_id == Document.id, Document.user_id == userInfo.id, Document.deleted_at.is_(None))).filter(Tag.name.ilike(searchKeyword)).group_by(Tag.id).all()
     else:
-        tags = db.query(Tag.id, Tag.name, func.count(Document.id).label("count")).outerjoin(DocumentTag, Tag.id == DocumentTag.tag_id).outerjoin(Document, and_(DocumentTag.document_id == Document.id, Document.user_id == userInfo.id, Document.deleted_at == None)).group_by(Tag.id).all()
+        tags = db.query(Tag.id, Tag.name, func.count(Document.id).label("count")).outerjoin(DocumentTag, Tag.id == DocumentTag.tag_id).outerjoin(Document, and_(DocumentTag.document_id == Document.id, Document.user_id == userInfo.id, Document.deleted_at.is_(None))).group_by(Tag.id).all()
 
 
 

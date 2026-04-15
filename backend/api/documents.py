@@ -63,7 +63,7 @@ def read_documents(jwtToken: dict = Depends(jwtAuth), db: Session = Depends(get_
     userName = jwtToken.get("sub")
     userInfo = db.query(User).filter(User.email == userName).first()
 
-    documents = db.query(Document).filter(Document.user_id == userInfo.id, Document.deleted_at == None).all()
+    documents = db.query(Document).filter(Document.user_id == userInfo.id, Document.deleted_at.is_(None)).all()
     doc_ids = [doc.id for doc in documents]
     
     tags_data = (
@@ -117,7 +117,7 @@ def get_document(document_id: str, jwtToken: dict = Depends(jwtAuth), db: Sessio
     document = db.query(Document).filter(
         Document.user_id == userInfo.id,
         Document.id == document_id,
-        Document.deleted_at == None
+        Document.deleted_at.is_(None)
     ).first()
 
     if not document:
@@ -147,7 +147,6 @@ def get_document(document_id: str, jwtToken: dict = Depends(jwtAuth), db: Sessio
         "status": document.status,
         "file_url": document.file_path,
         "file_type": document.file_type,
-        "file_type": document.file_type,
         "capture_date": document.capture_date,
         "summary": document.summary,
         "raw_text": document.raw_text,
@@ -170,7 +169,7 @@ def update_document(update: UpdateDocuments, document_id: str, jwtToken: dict = 
     document = db.query(Document).filter(
         Document.user_id == userInfo.id,
         Document.id == document_id,
-        Document.deleted_at == None
+        Document.deleted_at.is_(None)
     ).first()
 
     if not document:
@@ -206,7 +205,7 @@ def delete_document(document_id: str, jwtToken: dict = Depends(jwtAuth), db: Ses
     document = db.query(Document).filter(
         Document.user_id == userInfo.id,
         Document.id == document_id,
-        Document.deleted_at == None
+        Document.deleted_at.is_(None)
     ).first()
 
     if not document:
