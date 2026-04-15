@@ -1,9 +1,10 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from api import auth, analysis, documents, upload
+from api import auth, analysis, documents, upload, tags
 from graph.schema import data, router
 from graph.context import getContext
 from graph.qlRouter import CustomGraphQLRouter
+from fastapi.staticfiles import StaticFiles
 
 app = FastAPI(title="Snapocket API", version="0.1.0")
 
@@ -19,12 +20,15 @@ app.include_router(auth.router)
 app.include_router(router)
 
 app.include_router(documents.router)
-# app.include_router(tags.router)
+app.include_router(tags.router)
 app.include_router(upload.router)
 app.include_router(analysis.router)
 
 graphql_app = CustomGraphQLRouter(data, context_getter=getContext)
 app.include_router(graphql_app, prefix="/graphql", tags=["graphql"])
+
+app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
+
 @app.get("/")
 def root():
     return {
