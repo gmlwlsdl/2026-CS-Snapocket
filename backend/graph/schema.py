@@ -59,7 +59,7 @@ class Query:
 
                 return nodes
             
-            nodes = db.query(Document).all()
+            nodes = db.query(Document).filter(Document.deleted_at == None).all()
 
             if not nodes:
                 raise NotFoundError()
@@ -106,7 +106,19 @@ class Query:
         try:
 
             # db 조회 후 결과생성
-            nodes = db.query(Document, DocumentTag, Tag).outerjoin(DocumentTag, Document.id == DocumentTag.document_id).outerjoin(Tag, DocumentTag.tag_id == Tag.id).filter(or_(Document.title.ilike(searchQuery), Document.summary.ilike(searchQuery), Tag.name.ilike(searchQuery)), Document.deleted_at == None).all()
+            nodes = db.query(Document, DocumentTag, Tag).outerjoin(
+                DocumentTag,
+                Document.id == DocumentTag.document_id
+            ).outerjoin(
+                Tag,
+                DocumentTag.tag_id == Tag.id
+            ).filter(
+                or_(Document.title.ilike(searchQuery),
+                    Document.summary.ilike(searchQuery),
+                    Tag.name.ilike(searchQuery)
+                ),
+                Document.deleted_at == None
+            ).all()
 
             if not nodes:
                 raise NotFoundError()
