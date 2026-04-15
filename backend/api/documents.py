@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from datetime import datetime
 from core.security import jwtAuth
 from core.database import get_db
+from models.user import User
 from models.document import Document
 from models.document_tag import DocumentTag
 from models.tag import Tag
@@ -58,7 +59,11 @@ class GetDocuments(BaseModel):
 
 @router.get("", response_model=ApiResponse[GetDocuments])
 def read_documents(jwtToken: dict = Depends(jwtAuth), db: Session = Depends(get_db)):
-    documents = db.query(Document).filter(Document.deleted_at == None).all()
+
+    userName = jwtToken.get("sub")
+    userInfo = db.query(User).filter(User.email == userName).first()
+
+    documents = db.query(Document).filter(Document.user_id == userInfo.id, Document.deleted_at == None).all()
     doc_ids = [doc.id for doc in documents]
     
     tags_data = (
@@ -105,7 +110,12 @@ def read_documents(jwtToken: dict = Depends(jwtAuth), db: Session = Depends(get_
 
 @router.get("/{document_id}", response_model=ApiResponse[DetailedInfo])
 def get_document(document_id: str, jwtToken: dict = Depends(jwtAuth), db: Session = Depends(get_db)):
+    
+    userName = jwtToken.get("sub")
+    userInfo = db.query(User).filter(User.email == userName).first()
+    
     document = db.query(Document).filter(
+        Document.user_id == userInfo.id,
         Document.id == document_id,
         Document.deleted_at == None
     ).first()
@@ -127,7 +137,7 @@ def get_document(document_id: str, jwtToken: dict = Depends(jwtAuth), db: Sessio
         .all()
     )
 
-    tags = [row[0] for row in tagRows] # 결과: ['태그1', '태그2']
+    tags = [row[0] for row in tagRows]
 
     resultData = {
         "id": document.id,
@@ -154,7 +164,11 @@ def get_document(document_id: str, jwtToken: dict = Depends(jwtAuth), db: Sessio
 @router.patch("/{document_id}", response_model=ApiResponse[dict])
 def update_document(update: UpdateDocuments, document_id: str, jwtToken: dict = Depends(jwtAuth), db: Session = Depends(get_db)):
 
+    userName = jwtToken.get("sub")
+    userInfo = db.query(User).filter(User.email == userName).first()
+
     document = db.query(Document).filter(
+        Document.user_id == userInfo.id,
         Document.id == document_id,
         Document.deleted_at == None
     ).first()
@@ -186,7 +200,11 @@ def update_document(update: UpdateDocuments, document_id: str, jwtToken: dict = 
 @router.delete("/{document_id}", response_model=ApiResponse[dict])
 def delete_document(document_id: str, jwtToken: dict = Depends(jwtAuth), db: Session = Depends(get_db)):
     
+    userName = jwtToken.get("sub")
+    userInfo = db.query(User).filter(User.email == userName).first()
+
     document = db.query(Document).filter(
+        Document.user_id == userInfo.id,
         Document.id == document_id,
         Document.deleted_at == None
     ).first()
