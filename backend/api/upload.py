@@ -57,6 +57,8 @@ async def upload_file(
             },
         )
     
+    documentId = uuid.uuid4()
+    
     userName = jwtToken.get("sub")
     userInfo = db.query(User).filter(User.email == userName).first()
 
@@ -74,6 +76,7 @@ async def upload_file(
     # auth 붙기 전까지는 임시 user_id 사용
     # 나중에 토큰 기반으로 교체
     new_document = Document(
+        id=documentId,
         user_id=userInfo.id,
         original_filename=file.filename,
         stored_filename=unique_name,

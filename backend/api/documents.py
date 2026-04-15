@@ -1,12 +1,14 @@
-from fastapi import APIRouter, Depends
-from fastapi.responses import JSONResponse
+from fastapi import APIRouter, HTTPException, status, Depends
 from pydantic import BaseModel, ConfigDict
+from collections import defaultdict
 from sqlalchemy.sql import func
 from sqlalchemy.orm import Session
 from datetime import datetime
 from core.security import jwtAuth
 from core.database import get_db
 from models.document import Document
+from models.document_tag import DocumentTag
+from models.tag import Tag
 import uuid
 from api.apiResponse import ApiResponse
 
@@ -26,9 +28,9 @@ class DocumentInfo(BaseModel):
     category: str
     status: str
     file_type: str
-    tags: list[str]
     capture_date: datetime | None = None
     created_at: datetime
+    tags: list[str] = []
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -42,10 +44,10 @@ class DetailedInfo(BaseModel):
     status: str
     file_url: str
     file_type: str
-    tags: list[str]
     capture_date: datetime | None = None
     deadline: datetime | None = None
     created_at: datetime
+    tags: list[str] = []
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -57,9 +59,36 @@ class GetDocuments(BaseModel):
 @router.get("", response_model=ApiResponse[GetDocuments])
 def read_documents(jwtToken: dict = Depends(jwtAuth), db: Session = Depends(get_db)):
     documents = db.query(Document).filter(Document.deleted_at == None).all()
+    doc_ids = [doc.id for doc in documents]
+    
+    tags_data = (
+        db.query(DocumentTag.document_id, Tag.name)
+        .join(Tag, DocumentTag.tag_id == Tag.id)
+        .filter(DocumentTag.document_id.in_(doc_ids))
+        .all()
+    )
+    
+    tags_by_doc = defaultdict(list)
+    for doc_id, tag_name in tags_data:
+        tags_by_doc[doc_id].append(tag_name)
+        
+    items = []
+    for doc in documents:
+        doc_dict = {
+            "id": doc.id,
+            "doc_id": doc.doc_id,
+            "title": doc.title,
+            "category": doc.category,
+            "status": doc.status,
+            "file_type": doc.file_type,
+            "capture_date": doc.capture_date,
+            "created_at": doc.created_at,
+            "tags": tags_by_doc[doc.id] 
+        }
+        items.append(doc_dict)
 
     data = GetDocuments(
-        items=documents,
+        items=items,
         pagination={
             "page": 1,
             "size": len(documents),
@@ -76,33 +105,64 @@ def read_documents(jwtToken: dict = Depends(jwtAuth), db: Session = Depends(get_
 
 @router.get("/{document_id}", response_model=ApiResponse[DetailedInfo])
 def get_document(document_id: str, jwtToken: dict = Depends(jwtAuth), db: Session = Depends(get_db)):
-    document = db.query(Document).filter(Document.id == document_id, Document.deleted_at == None).first()
+    document = db.query(Document).filter(
+        Document.id == document_id,
+        Document.deleted_at == None
+    ).first()
 
     if not document:
-        return JSONResponse(
-            status_code=404,
-            content={
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={
                 "success": False,
                 "message": "문서를 찾을 수 없습니다.",
                 "error_code": "DOCUMENT_NOT_FOUND"
             }
         )
+    
+    tagRows = (
+        db.query(Tag.name)
+        .join(DocumentTag, Tag.id == DocumentTag.tag_id)
+        .filter(DocumentTag.document_id == document_id)
+        .all()
+    )
+
+    tags = [row[0] for row in tagRows] # 결과: ['태그1', '태그2']
+
+    resultData = {
+        "id": document.id,
+        "doc_id": document.doc_id,
+        "title": document.title,
+        "category": document.category,
+        "status": document.status,
+        "file_url": document.file_path,
+        "file_type": document.file_type,
+        "file_type": document.file_type,
+        "capture_date": document.capture_date,
+        "summary": document.summary,
+        "raw_text": document.raw_text,
+        "created_at": document.created_at,
+        "tags": tags 
+    }
 
     return ApiResponse(
         success=True,
         message="문서 상세 조회 성공",
-        data=document
+        data=resultData
     )
 
 @router.patch("/{document_id}", response_model=ApiResponse[dict])
 def update_document(update: UpdateDocuments, document_id: str, jwtToken: dict = Depends(jwtAuth), db: Session = Depends(get_db)):
 
-    document = db.query(Document).filter(Document.id == document_id, Document.deleted_at == None).first()
+    document = db.query(Document).filter(
+        Document.id == document_id,
+        Document.deleted_at == None
+    ).first()
 
     if not document:
-        return JSONResponse(
-            status_code=404,
-            content={
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={
                 "success": False,
                 "message": "문서를 찾을 수 없습니다.",
                 "error_code": "DOCUMENT_NOT_FOUND"
@@ -126,12 +186,15 @@ def update_document(update: UpdateDocuments, document_id: str, jwtToken: dict = 
 @router.delete("/{document_id}", response_model=ApiResponse[dict])
 def delete_document(document_id: str, jwtToken: dict = Depends(jwtAuth), db: Session = Depends(get_db)):
     
-    document = db.query(Document).filter(Document.id == document_id, Document.deleted_at == None).first()
+    document = db.query(Document).filter(
+        Document.id == document_id,
+        Document.deleted_at == None
+    ).first()
 
     if not document:
-        return JSONResponse(
-            status_code=404,
-            content={
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={
                 "success": False,
                 "message": "문서를 찾을 수 없습니다.",
                 "error_code": "DOCUMENT_NOT_FOUND"
