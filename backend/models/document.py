@@ -5,7 +5,7 @@ from core.database import Base
 class Document(Base):
     __tablename__ = "documents"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(CHAR(36), primary_key=True)
     user_id = Column(CHAR(36), ForeignKey("users.id"), nullable=False)
     original_filename = Column(String(255), nullable=False)
     stored_filename = Column(String(255), nullable=False)
