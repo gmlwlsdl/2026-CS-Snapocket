@@ -17,9 +17,11 @@ class UpdateDocuments(BaseModel):
     category: str | None = None
     captureDate: datetime | None = None
     summary: str | None = None
+    raw_text: str | None = None
 
 class DocumentInfo(BaseModel):
     id: uuid.UUID
+    doc_id: str | None = None
     title: str
     category: str
     status: str
@@ -32,9 +34,11 @@ class DocumentInfo(BaseModel):
 
 class DetailedInfo(BaseModel):
     id: uuid.UUID
+    doc_id: str | None = None
     title: str
     category: str
-    summary: str
+    summary: str | None = None
+    raw_text: str | None = None
     status: str
     file_url: str
     file_type: str
