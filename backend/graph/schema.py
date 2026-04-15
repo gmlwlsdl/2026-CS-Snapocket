@@ -9,7 +9,7 @@ from core.security import jwtAuth
 from models.document import Document
 from models.document_tag import DocumentTag
 from models.tag import Tag
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from api.apiResponse import ApiResponse
 
 router = APIRouter(prefix="/graph", tags=["graph"])
@@ -52,7 +52,7 @@ class Query:
             # db 조회 후 결과생성
             # 카테고리에 따라 선택적으로 결과값 리턴
             if category:
-                nodes = db.query(Document).filter(Document.category == category).all()
+                nodes = db.query(Document).filter(Document.category == category, Document.deleted_at == None).all()
 
                 if not nodes:
                     raise NotFoundError()
@@ -101,10 +101,12 @@ class Query:
         if not query:
             raise BadUserInputError()
         
+        searchQuery = f"%{query}%"
+        
         try:
 
             # db 조회 후 결과생성
-            nodes = db.query(Document, DocumentTag, Tag).outerjoin(Document.id == DocumentTag.document_id).join(DocumentTag.tag_id == Tag.id).filter(Query in Document.title or Query in Document.summary or query in Tag.name).all()
+            nodes = db.query(Document, DocumentTag, Tag).outerjoin(DocumentTag, Document.id == DocumentTag.document_id).outerjoin(Tag, DocumentTag.tag_id == Tag.id).filter(or_(Document.title.ilike(searchQuery), Document.summary.ilike(searchQuery), Tag.name.ilike(searchQuery)), Document.deleted_at == None).all()
 
             if not nodes:
                 raise NotFoundError()
@@ -121,8 +123,8 @@ data = strawberry.Schema(query=Query)
 def summary(jwtToken: dict = Depends(jwtAuth), db: Session = Depends(get_db)):
 
     # db에서 요약데이터 조회
-    nodeCount = db.query(func.count(Document.id)).scalar()
-    tagCount = db.query(func.count(Tag.id)).scalar()
+    nodeCount = db.query(func.count(Document.id)).filter(Document.deleted_at == None).scalar()
+    tagCount = db.query(func.count(Tag.id)).filter(Document.deleted_at == None).scalar()
     # MVP에서는 0 고도화 후 지원
     edgeCount = 0
 
