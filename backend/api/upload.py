@@ -101,6 +101,6 @@ async def upload_file(
             "document_id": new_document.id,
             "file_url": f"/{file_path}",
             "file_type": file_type,
-            "status": status,
+            "status": status
         }
     )
