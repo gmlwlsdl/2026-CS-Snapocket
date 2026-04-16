@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import type { CategoryFilter, GraphNode, GraphEdge } from "../knowledgeGraph.type";
 import { getNodes, getGraphSummary, type GraphSummaryData } from "@/entities/graph";
+import { searchDocuments } from "@/entities/search";
 import { CATEGORY_TO_NODE_CATEGORY } from "../knowledgeGraph.utils";
 import dynamic from "next/dynamic";
 import { SidebarNav, ToastStatus, type ToastItem } from "@/shared/ui";
@@ -23,6 +24,7 @@ export function KnowledgeGraphPage() {
   const router = useRouter();
   const [activeFilter, setActiveFilter] = useState<CategoryFilter>("all");
   const [searchTerm, setSearchTerm] = useState("");
+  const [matchedNodeIds, setMatchedNodeIds] = useState<string[] | null>(null);
   const [nodes, setNodes] = useState<GraphNode[]>([]);
   const [edges, setEdges] = useState<GraphEdge[]>([]);
   const [modalOpen, setModalOpen] = useState(false);
@@ -107,6 +109,48 @@ export function KnowledgeGraphPage() {
     return () => controller.abort();
   }, [activeFilter]);
 
+  useEffect(() => {
+    const controller = new AbortController();
+    const keyword = searchTerm.trim();
+
+    async function loadMatches() {
+      if (!keyword) {
+        setMatchedNodeIds(null);
+        return;
+      }
+
+      const categoryMap: Record<CategoryFilter, string | undefined> = {
+        all: undefined,
+        lecture: "lecture",
+        assignment: "assignment",
+        notice: "notice",
+        receipt: "receipt",
+        memo: "memo",
+      };
+
+      try {
+        const searchItems = await searchDocuments({
+          keyword,
+          category: categoryMap[activeFilter],
+          page: 1,
+          size: 100,
+        });
+
+        if (!controller.signal.aborted) {
+          setMatchedNodeIds(searchItems.map((item) => item.id));
+        }
+      } catch (error) {
+        if (!controller.signal.aborted) {
+          console.error("Failed to load search matches:", error);
+          setMatchedNodeIds([]);
+        }
+      }
+    }
+
+    loadMatches();
+    return () => controller.abort();
+  }, [activeFilter, searchTerm]);
+
   const handleUpload = useCallback(async (file: File) => {
     const { uploadDocument } = await import("@/entities/document");
 
@@ -146,6 +190,7 @@ export function KnowledgeGraphPage() {
         <div className="absolute inset-0">
           <KnowledgeGraphCanvas
             searchTerm={searchTerm}
+            matchedNodeIds={matchedNodeIds}
             nodes={nodes}
             edges={edges}
             graphRef={graphRef}
