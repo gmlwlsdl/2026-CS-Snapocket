@@ -15,6 +15,8 @@ class Document(Base):
     category = Column(String(100), nullable=True)
     capture_date = Column(Date, nullable=True)
     summary = Column(Text, nullable=True)
+    request_id = Column(String(255), nullable=True)
+    raw_text = Column(Text, nullable=True)
     status = Column(String(50), default="uploaded")
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
