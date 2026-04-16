@@ -1,5 +1,6 @@
 from sqlalchemy import Column, String, Text, Date, DateTime, ForeignKey, CHAR
 from sqlalchemy.sql import func
+from sqlalchemy.orm import relationship
 from core.database import Base
 
 class Document(Base):
@@ -21,3 +22,15 @@ class Document(Base):
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
     deleted_at = Column(DateTime, nullable=True)
+
+    tag_objects = relationship("Tag", secondary="document_tags", back_populates="documents")
+
+    @property
+    def tags(self) -> list[str]:
+        return [tag.name for tag in self.tag_objects]
+    
+    @property
+    def file_url(self) -> str:
+        if not self.file_path:
+            return ""
+        return self.file_path
