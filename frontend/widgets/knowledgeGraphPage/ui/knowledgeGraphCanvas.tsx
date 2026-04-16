@@ -1,29 +1,18 @@
+import React, { useCallback, useMemo, useRef, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import ForceGraph2D, { ForceGraphMethods } from "react-force-graph-2d";
 import type { CategoryFilter, GraphNode, GraphEdge } from "../knowledgeGraph.type";
 import {
-  CANVAS_WIDTH,
-  CANVAS_HEIGHT,
   NODE_COLOR,
   NODE_DOT_SIZE,
-  NODE_DOT_OPACITY,
 } from "../knowledgeGraph.constant";
-
-const PRIMARY_LABEL_STYLE = { color: "#f9f9fd", fontSize: 12, fontWeight: 400 } as const;
-const SECONDARY_LABEL_STYLE = { color: "#aaabaf", fontSize: 10, fontWeight: 400 } as const;
-
-function isNodeVisible(node: GraphNode, filter: CategoryFilter): boolean {
-  if (filter === "all") return true;
-  if (filter === "assignments") return node.category === "assignment";
-  if (filter === "exams") return node.category === "exam";
-  if (filter === "class-materials") return node.category === "class";
-  if (filter === "summaries") return node.category === "summary";
-  return true;
-}
 
 interface KnowledgeGraphCanvasProps {
   activeFilter: CategoryFilter;
   searchTerm?: string;
   nodes: GraphNode[];
   edges: GraphEdge[];
+  graphRef?: React.MutableRefObject<ForceGraphMethods | undefined>;
 }
 
 export function KnowledgeGraphCanvas({
@@ -31,115 +20,142 @@ export function KnowledgeGraphCanvas({
   searchTerm,
   nodes,
   edges,
+  graphRef,
 }: KnowledgeGraphCanvasProps) {
-  const visibleNodes = nodes.filter((n) => isNodeVisible(n, activeFilter));
-  const visibleIds = new Set(visibleNodes.map((n) => n.id));
-  const nodeMap = new Map(nodes.map((n) => [n.id, n]));
+  const router = useRouter();
+  const containerRef = useRef<HTMLDivElement>(null);
 
-  // 검색어 필터링 유틸
-  const isMatched = (label: string) => {
+  // 검색어 매칭 여부 확인 유틸
+  const isMatched = useCallback((label: string) => {
     if (!searchTerm) return true;
     return label.toLowerCase().includes(searchTerm.toLowerCase());
-  };
+  }, [searchTerm]);
+
+  const isCategoryMatch = useCallback((node: GraphNode) => {
+    if (activeFilter === "all") return true;
+    // 백엔드 단수형 명칭에 맞게 매칭 (동적 대응을 위해 CategoryFilter와 node.category를 직접 비교)
+    return node.category === activeFilter;
+  }, [activeFilter]);
+
+  // 그래프 데이터 가공
+  const graphData = useMemo(() => {
+    const filteredNodes = nodes.filter(isCategoryMatch);
+    const nodeIds = new Set(filteredNodes.map(n => n.id));
+    
+    const filteredLinks = edges
+      .filter(e => nodeIds.has(e.from) && nodeIds.has(e.to))
+      .map(e => ({
+        source: e.from,
+        target: e.to,
+      }));
+
+    return {
+      nodes: filteredNodes.map(n => ({
+        ...n,
+        // react-force-graph expects id
+        id: n.id,
+      })),
+      links: filteredLinks,
+    };
+  }, [nodes, edges, isCategoryMatch]);
+
+  // 화면 크기에 맞게 그래프 조정
+  useEffect(() => {
+    const handleResize = () => {
+      if (containerRef.current && graphRef?.current) {
+        const { clientWidth, clientHeight } = containerRef.current;
+      }
+    };
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
+  // 커스텀 노드 렌더링 (Star Effect - Radial Gradient)
+  const drawNode = useCallback((node: any, ctx: CanvasRenderingContext2D, globalScale: number) => {
+    const matched = isMatched(node.label);
+    const opacity = matched ? 1 : 0.1;
+    const color = NODE_COLOR[node.category] ?? "#81ecff";
+    const baseR = (NODE_DOT_SIZE[node.size] ?? 5) / globalScale;
+
+    if (matched) {
+      ctx.save();
+      
+      // 광원 범위 설정 (줌 레벨에 따라 광학적으로 자연스러운 감쇄 적용)
+      // 멀리서 볼 때(줌 아웃) 광원이 너무 커 보이지 않도록 globalScale의 영향을 비선형적으로 조절
+      const glowRadius = baseR * (10 * Math.pow(globalScale, -0.3));
+
+      const gradient = ctx.createRadialGradient(
+        node.x, node.y, 0,
+        node.x, node.y, glowRadius
+      );
+      
+      // 자연스러운 별빛 컬러 스탑 (중심은 핵처럼 밝고 외곽은 부드럽게 감쇄)
+      gradient.addColorStop(0, "rgba(255, 255, 255, 1)");  // 중심부 하얀 핵
+      gradient.addColorStop(0.1, "rgba(129, 236, 255, 0.9)"); // Snap Blue 코어
+      gradient.addColorStop(0.3, "rgba(129, 236, 255, 0.3)"); // 중간층 번짐
+      gradient.addColorStop(0.6, "rgba(129, 236, 255, 0.05)"); // 외곽부 미세 광원
+      gradient.addColorStop(1, "rgba(129, 236, 255, 0)");   // 배경과 완벽히 동화
+
+      ctx.beginPath();
+      ctx.arc(node.x, node.y, glowRadius, 0, 2 * Math.PI, false);
+      ctx.fillStyle = gradient;
+      ctx.globalAlpha = opacity;
+      ctx.fill();
+      
+      ctx.restore();
+    } else {
+      // 매칭되지 않은 노드는 단순한 점으로 표현
+      ctx.beginPath();
+      ctx.arc(node.x, node.y, baseR, 0, 2 * Math.PI, false);
+      ctx.fillStyle = color;
+      ctx.globalAlpha = opacity;
+      ctx.fill();
+    }
+
+    // 레이블 렌더링 (모든 노드 타이틀 상시 표시)
+    if (globalScale > 0.8) {
+      const fontSize = (node.size === "primary" ? 11 : 9) / globalScale;
+      ctx.font = `${node.size === "primary" ? "500" : "400"} ${fontSize}px Inter`;
+      ctx.textAlign = "left";
+      ctx.textBaseline = "middle";
+      ctx.fillStyle = matched ? "#f9f9fd" : "#aaabaf"; // 매칭 여부에 따라 색상 차이만 부여
+      ctx.fillText(node.label, node.x + baseR + 8 / globalScale, node.y);
+    }
+
+    ctx.globalAlpha = 1;
+    ctx.shadowBlur = 0;
+  }, [isMatched]);
 
   return (
     <div
-      className="relative h-full w-full overflow-hidden"
+      ref={containerRef}
+      className="relative h-full w-full overflow-hidden flex items-center justify-center"
       style={{ background: "#0c0e11" }}
     >
       <div
-        className="pointer-events-none absolute inset-0"
+        className="pointer-events-none absolute inset-0 z-0"
         style={{
           background:
             "radial-gradient(ellipse 60% 60% at 50% 50%, rgba(23,26,29,0.8) 0%, transparent 100%)",
         }}
       />
-
-      <svg
-        viewBox={`0 0 ${CANVAS_WIDTH} ${CANVAS_HEIGHT}`}
-        preserveAspectRatio="xMidYMid meet"
-        className="absolute inset-0 h-full w-full"
-        aria-hidden="true"
-      >
-        {edges.map((edge) => {
-          if (!visibleIds.has(edge.from) || !visibleIds.has(edge.to)) return null;
-          const from = nodeMap.get(edge.from);
-          const to = nodeMap.get(edge.to);
-          if (!from || !to) return null;
-
-          // 두 노드 중 하나라도 검색어와 매칭되지 않으면 간선을 투명하게 처리 (맥락 유지 위해 0.05)
-          const edgeOpacity = isMatched(from.label) && isMatched(to.label) ? 1 : 0.05;
-
-          return (
-            <line
-              key={`${edge.from}-${edge.to}`}
-              x1={from.x}
-              y1={from.y}
-              x2={to.x}
-              y2={to.y}
-              stroke="rgba(129,236,255,0.12)"
-              strokeWidth="1"
-              opacity={edgeOpacity}
-              style={{ transition: "opacity 0.3s" }}
-            />
-          );
-        })}
-
-        {visibleNodes.map((node) => {
-          const color = NODE_COLOR[node.category] ?? "#aaabaf";
-          const dotSize = NODE_DOT_SIZE[node.size] ?? 8;
-          const baseOpacity = NODE_DOT_OPACITY[node.size] ?? 0.6;
-
-          // 검색어 매칭 여부에 따른 투명도 조절
-          const matched = isMatched(node.label);
-          const finalOpacity = matched ? baseOpacity : 0.05;
-
-          return (
-            <circle
-              key={node.id}
-              cx={node.x}
-              cy={node.y}
-              r={dotSize / 2}
-              fill={color}
-              opacity={finalOpacity}
-              style={{ transition: "opacity 0.3s" }}
-            />
-          );
-        })}
-      </svg>
-
-      <div className="absolute inset-0" aria-label="Knowledge graph nodes">
-        {visibleNodes.map((node) => {
-          const xPct = (node.x / CANVAS_WIDTH) * 100;
-          const yPct = (node.y / CANVAS_HEIGHT) * 100;
-          const dotSize = NODE_DOT_SIZE[node.size] ?? 8;
-
-          const matched = isMatched(node.label);
-          const labelOpacity = matched ? 1 : 0.05;
-
-          return (
-            <div
-              key={node.id}
-              className="absolute flex items-center gap-2"
-              style={{
-                left: `${xPct}%`,
-                top: `${yPct}%`,
-                transform: "translate(0, -50%)",
-                opacity: labelOpacity,
-                transition: "opacity 0.3s",
-              }}
-            >
-              <div style={{ width: dotSize, height: dotSize, flexShrink: 0 }} />
-              <span
-                className="whitespace-nowrap font-inter leading-none"
-                style={node.size === "primary" ? PRIMARY_LABEL_STYLE : SECONDARY_LABEL_STYLE}
-              >
-                {node.label}
-              </span>
-            </div>
-          );
-        })}
-      </div>
+      
+      <ForceGraph2D
+        ref={graphRef}
+        graphData={graphData}
+        nodeCanvasObject={drawNode}
+        nodeLabel="label"
+        itemColor={node => NODE_COLOR[(node as any).category]}
+        linkColor={() => "rgba(129,236,255,0.12)"}
+        linkWidth={1}
+        backgroundColor="transparent"
+        onNodeClick={(node: any) => {
+          router.push(`/analysis/${node.id}`);
+        }}
+        cooldownTicks={100}
+        d3AlphaDecay={0.02}
+        d3VelocityDecay={0.3}
+      />
     </div>
   );
 }

@@ -2,20 +2,33 @@ import type { ApiNode, ApiNodeCategory } from "@/entities/graph";
 import type { GraphNode, NodeCategory, NodeSize } from "./knowledgeGraph.type";
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from "./knowledgeGraph.constant";
 
-const CATEGORY_TO_NODE_CATEGORY: Record<ApiNodeCategory, NodeCategory> = {
+export const CATEGORY_TO_NODE_CATEGORY: Record<string, NodeCategory> = {
+  // Singular (Backend)
+  lecture: "lecture",
+  assignment: "assignment",
+  notice: "notice",
+  receipt: "receipt",
+  memo: "memo",
+  // Legacy/Plural
   assignments: "assignment",
   exams: "exam",
   class_materials: "class",
   summaries: "summary",
-  receipts: "misc",
-  notices: "misc",
+  receipts: "receipt",
+  notices: "notice",
 };
 
 // 각 카테고리의 기준 각도 (degree)
-const CATEGORY_BASE_ANGLE: Record<ApiNodeCategory, number> = {
-  assignments: -60,
+const CATEGORY_BASE_ANGLE: Record<string, number> = {
+  lecture: 0,
+  assignment: 60,
+  notice: 120,
+  receipt: 180,
+  memo: 240,
+  // Legacy
+  assignments: 60,
   exams: 0,
-  class_materials: 60,
+  class_materials: -60,
   summaries: 120,
   receipts: 180,
   notices: 240,
@@ -25,7 +38,7 @@ export function computeNodePositions(apiNodes: ApiNode[]): GraphNode[] {
   const cx = CANVAS_WIDTH / 2;
   const cy = CANVAS_HEIGHT / 2;
 
-  const categoryGroups = new Map<ApiNodeCategory, ApiNode[]>();
+  const categoryGroups = new Map<string, ApiNode[]>();
   for (const node of apiNodes) {
     if (!categoryGroups.has(node.category)) {
       categoryGroups.set(node.category, []);
@@ -51,7 +64,7 @@ export function computeNodePositions(apiNodes: ApiNode[]): GraphNode[] {
         label: node.title,
         x: Math.round(Math.max(60, Math.min(CANVAS_WIDTH - 60, x))),
         y: Math.round(Math.max(60, Math.min(CANVAS_HEIGHT - 60, y))),
-        category: CATEGORY_TO_NODE_CATEGORY[category],
+        category: CATEGORY_TO_NODE_CATEGORY[category] ?? "misc",
         size,
       });
     });
