@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { useParams, useRouter } from 'next/navigation'
+import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { apiFetchBlobUrl, fetchDocument, deleteDocument } from '@/entities/document'
 import {
   confirmAnalysis,
@@ -10,8 +10,9 @@ import {
   isoToDisplay,
   displayToIso,
 } from '@/entities/analysis'
-import { MOCK_DOCUMENTS } from '@/entities/document'
-import { MOCK_RESULTS } from '@/entities/analysis'
+// [API_ANNOTATED] Mock 임포트 주석 처리
+// import { MOCK_DOCUMENTS } from '@/entities/document'
+// import { MOCK_RESULTS } from '@/entities/analysis'
 import { t as translate } from '@/shared/lib/i18n'
 import type { DocumentStatus } from '@/entities/document'
 import { ApiError } from '@/shared/api'
@@ -32,7 +33,12 @@ interface FormState {
   captureDate: string // MM/DD/YYYY (표시용)
   summary: string
   tags: TagItem[]
-  rawText: string // TODO: [API] raw_text 필드 추가 및 편집 기능 구현 예정
+  rawText: string
+  keyConcepts: string[]
+  deadline: string
+  fileType: string
+  fileUrl: string
+  id: string
 }
 
 const CATEGORY_OPTIONS = [
@@ -58,16 +64,20 @@ function rawTagName(label: string): string {
   return label.startsWith('#') ? label.slice(1) : label
 }
 
-// TODO: [Mock] 백엔드 연결 완료 후 isMockId 분기 전체 제거
+// [API_ANNOTATED] Mock ID 체크 함수 비활성화
+/*
 function isMockId(id: string): boolean {
   return id.startsWith('mock-')
 }
+*/
 
 // ── 컴포넌트 ──────────────────────────────────────────────────────────────────
 
 export function AnalysisDetailPage() {
   const { id } = useParams<{ id: string }>()
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const mode = searchParams.get('mode') // 'result' or null
 
   const [pageStatus, setPageStatus] = useState<PageStatus>('loading')
   const [documentStatus, setDocumentStatus] = useState<DocumentStatus | null>(null)
@@ -81,6 +91,11 @@ export function AnalysisDetailPage() {
     summary: '',
     tags: [],
     rawText: '',
+    keyConcepts: [],
+    deadline: '',
+    fileType: '',
+    fileUrl: '',
+    id: '',
   })
 
   const [categoryOpen, setCategoryOpen] = useState(false)
@@ -93,30 +108,7 @@ export function AnalysisDetailPage() {
   // ── 초기 로딩 ─────────────────────────────────────────────────────────────
 
   const loadResult = useCallback(async () => {
-    // TODO: [Mock] 백엔드 연결 후 아래 mock 분기 제거
-    if (isMockId(id)) {
-      const result = MOCK_RESULTS[id]
-      if (!result) {
-        setErrorMsg('Mock 데이터를 찾을 수 없습니다')
-        setPageStatus('failed')
-        return
-      }
-      setForm({
-        title: result.title,
-        category: result.category,
-        captureDate: isoToDisplay(result.capture_date),
-        summary: result.summary,
-        tags: result.tags.map((t, i) => ({
-          id: i,
-          label: t.startsWith('#') ? t : `#${t}`,
-          color: tagColor(t),
-        })),
-        rawText: result.raw_text || '',
-      })
-      setDocumentStatus('analyzed')
-      setPageStatus('ready')
-      return
-    }
+    // [API_ANNOTATED] Mock 분기 제거
 
     try {
       const result = await fetchAnalysisResult(id)
@@ -130,10 +122,17 @@ export function AnalysisDetailPage() {
           label: t.startsWith('#') ? t : `#${t}`,
           color: tagColor(t),
         })),
+        rawText: result.raw_text,
+        keyConcepts: result.key_concepts,
+        deadline: isoToDisplay(result.deadline),
+        fileType: result.file_type,
+        fileUrl: result.file_url,
+        id: result.id,
       })
       setDocumentStatus('analyzed')
       setPageStatus('ready')
     } catch (e) {
+      // mode=result 인데 결과가 아직 없으면 (HTTP 404 등) 폴링으로 전환 고려
       setErrorMsg(e instanceof ApiError ? e.message : '분석 결과 로드 실패')
       setPageStatus('failed')
     }
@@ -167,29 +166,7 @@ export function AnalysisDetailPage() {
   useEffect(() => {
     if (!id) return
 
-    // TODO: [Mock] 백엔드 연결 후 아래 mock 분기 제거
-    if (isMockId(id)) {
-      const doc = MOCK_DOCUMENTS[id]
-      if (!doc) {
-        setErrorMsg('Mock 데이터를 찾을 수 없습니다')
-        setPageStatus('failed')
-        return
-      }
-      setForm({
-        title: doc.title,
-        category: doc.category,
-        captureDate: isoToDisplay(doc.capture_date),
-        summary: doc.summary,
-        tags: doc.tags.map((t, i) => ({
-          id: i,
-          label: t.startsWith('#') ? t : `#${t}`,
-          color: tagColor(t),
-        })),
-      })
-      setDocumentStatus('analyzed')
-      setPageStatus('ready')
-      return
-    }
+    // [API_ANNOTATED] Mock 분기 제거
 
     let alive = true
     let blobUrl: string | null = null
@@ -198,57 +175,70 @@ export function AnalysisDetailPage() {
       setPageStatus('loading')
       setErrorMsg(null)
 
-      // 문서 정보 + 이미지를 병렬로 요청
-      const [docResult, blobResult] = await Promise.allSettled([
-        fetchDocument(id),
-        apiFetchBlobUrl(`/documents/${id}/file`),
-      ])
+      // 진입 경로에 따른 로직 분기
+      if (mode === 'result') {
+        // [경로1] 토스트 클릭: 즉시 분석 결과를 로드
+        await loadResult()
+      } else {
+        // [경로2] 그래프/캘린더 클릭: 문서 상세 정보를 우선 로드
+        const [docResult, blobResult] = await Promise.allSettled([
+          fetchDocument(id),
+          apiFetchBlobUrl(`/documents/${id}/file`),
+        ])
 
-      if (!alive) return
+        if (!alive) return
 
-      if (docResult.status === 'rejected') {
-        const err = docResult.reason
-        setErrorMsg(err instanceof ApiError ? err.message : '문서 로드 실패')
-        setPageStatus('failed')
-        return
-      }
-
-      const doc = docResult.value
-
-      if (blobResult.status === 'fulfilled') {
-        blobUrl = blobResult.value
-        imageBlobRef.current = blobUrl
-        setImageUrl(blobUrl)
-      }
-
-      // 이미 document에 데이터가 있으면 폼 기본값으로 세팅
-      setForm({
-        title: doc.title,
-        category: doc.category,
-        captureDate: isoToDisplay(doc.capture_date),
-        summary: doc.summary,
-        tags: doc.tags.map((t, i) => ({
-          id: i,
-          label: t.startsWith('#') ? t : `#${t}`,
-          color: tagColor(t),
-        })),
-      })
-
-      setDocumentStatus(doc.status)
-
-      switch (doc.status) {
-        case 'analyzed':
-          await loadResult()
-          break
-        case 'processing':
-          startPolling()
-          break
-        case 'uploaded':
-          setPageStatus('not-started')
-          break
-        case 'failed':
+        if (docResult.status === 'rejected') {
+          const err = docResult.reason
+          setErrorMsg(err instanceof ApiError ? err.message : '문서 로드 실패')
           setPageStatus('failed')
-          break
+          return
+        }
+
+        const doc = docResult.value
+
+        if (blobResult.status === 'fulfilled') {
+          blobUrl = blobResult.value
+          imageBlobRef.current = blobUrl
+          setImageUrl(blobUrl)
+        }
+
+        // 폼 데이터 세팅 (DocumentDetail에 이미 분석된 데이터가 포함되어 있으므로 추가 호출 방지)
+        setForm({
+          title: doc.title,
+          category: doc.category,
+          captureDate: isoToDisplay(doc.capture_date),
+          summary: doc.summary,
+          tags: doc.tags.map((t, i) => ({
+            id: i,
+            label: t.startsWith('#') ? t : `#${t}`,
+            color: tagColor(t),
+          })),
+          rawText: doc.raw_text,
+          keyConcepts: doc.key_concepts,
+          deadline: isoToDisplay(doc.deadline),
+          fileType: doc.file_type,
+          fileUrl: doc.file_url,
+          id: doc.id,
+        })
+
+        setDocumentStatus(doc.status)
+
+        switch (doc.status) {
+          case 'analyzed':
+            // 이미 분석 완료 상태라면 READY로 전환 (중복 loadResult 방지)
+            setPageStatus('ready')
+            break
+          case 'processing':
+            startPolling()
+            break
+          case 'uploaded':
+            setPageStatus('not-started')
+            break
+          case 'failed':
+            setPageStatus('failed')
+            break
+        }
       }
     }
 
@@ -267,10 +257,7 @@ export function AnalysisDetailPage() {
   // ── 액션 핸들러 ────────────────────────────────────────────────────────────
 
   async function handleConfirm() {
-    if (isMockId(id)) {
-      router.push('/')
-      return
-    }
+    // [API_ANNOTATED] Mock 분기 제거
     setPageStatus('saving')
     try {
       await confirmAnalysis(id, {
@@ -288,7 +275,7 @@ export function AnalysisDetailPage() {
   }
 
   async function handleRecalibrate() {
-    if (isMockId(id)) return
+    // [API_ANNOTATED] Mock 분기 제거
     if (pollTimerRef.current) {
       clearInterval(pollTimerRef.current)
       pollTimerRef.current = null
@@ -307,10 +294,7 @@ export function AnalysisDetailPage() {
   }
 
   async function handleDiscard() {
-    if (isMockId(id)) {
-      router.push('/')
-      return
-    }
+    // [API_ANNOTATED] Mock 분기 제거
     if (!confirm('추출 데이터를 삭제하고 목록으로 돌아갑니다. 계속할까요?')) return
     setPageStatus('discarding')
     try {
@@ -579,26 +563,52 @@ export function AnalysisDetailPage() {
               )}
             </div>
 
-            {/* Capture Date */}
-            <div className="flex flex-1 flex-col gap-1.5">
-              <label className="text-[10px] font-normal tracking-[2px] text-snap-muted leading-[15px]">
-                {translate('captureDate', 'ko')}  
-              </label>
-              <div
-                className="flex items-center justify-between rounded-lg px-4 h-[44px] bg-snap-input"
-              >
-                <input
-                  type="text"
-                  value={form.captureDate}
-                  onChange={(e) => setForm((f) => ({ ...f, captureDate: e.target.value }))}
-                  disabled={!isInteractive}
-                  className="bg-transparent outline-none disabled:opacity-60 text-[14px] font-medium text-snap-white"
-                  placeholder="MM/DD/YYYY"
-                />
-                <svg width="18" height="18" viewBox="0 0 18 18" fill="none" opacity={0.4}>
-                  <rect x="1.5" y="3" width="15" height="13.5" rx="2" stroke="#aaabaf" strokeWidth="1.4" />
-                  <path d="M5.5 1.5V4.5M12.5 1.5V4.5M1.5 7.5H16.5" stroke="#aaabaf" strokeWidth="1.4" strokeLinecap="round" />
-                </svg>
+            {/* Capture Date & Deadline */}
+            <div className="flex flex-1 gap-4">
+              {/* Capture Date */}
+              <div className="flex flex-1 flex-col gap-1.5">
+                <label className="text-[10px] font-normal tracking-[2px] text-snap-muted leading-[15px]">
+                  {translate('captureDate', 'ko')}  
+                </label>
+                <div
+                  className="flex items-center justify-between rounded-lg px-4 h-[44px] bg-snap-input"
+                >
+                  <input
+                    type="text"
+                    value={form.captureDate}
+                    onChange={(e) => setForm((f) => ({ ...f, captureDate: e.target.value }))}
+                    disabled={!isInteractive}
+                    className="bg-transparent outline-none disabled:opacity-60 text-[14px] font-medium text-snap-white"
+                    placeholder="MM/DD/YYYY"
+                  />
+                  <svg width="18" height="18" viewBox="0 0 18 18" fill="none" opacity={0.4}>
+                    <rect x="1.5" y="3" width="15" height="13.5" rx="2" stroke="#aaabaf" strokeWidth="1.4" />
+                    <path d="M5.5 1.5V4.5M12.5 1.5V4.5M1.5 7.5H16.5" stroke="#aaabaf" strokeWidth="1.4" strokeLinecap="round" />
+                  </svg>
+                </div>
+              </div>
+
+              {/* Deadline */}
+              <div className="flex flex-1 flex-col gap-1.5">
+                <label className="text-[10px] font-normal tracking-[2px] text-snap-muted leading-[15px]">
+                  {translate('deadline', 'ko')}
+                </label>
+                <div
+                  className="flex items-center justify-between rounded-lg px-4 h-[44px] bg-snap-input"
+                >
+                  <input
+                    type="text"
+                    value={form.deadline}
+                    onChange={(e) => setForm((f) => ({ ...f, deadline: e.target.value }))}
+                    disabled={!isInteractive}
+                    className="bg-transparent outline-none disabled:opacity-60 text-[14px] font-medium text-snap-white"
+                    placeholder="MM/DD/YYYY"
+                  />
+                  <svg width="18" height="18" viewBox="0 0 18 18" fill="none" opacity={0.4}>
+                    <path d="M9 4.5v4.5l3 3" stroke="#aaabaf" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+                    <circle cx="9" cy="9" r="7.5" stroke="#aaabaf" strokeWidth="1.4" />
+                  </svg>
+                </div>
               </div>
             </div>
           </div>
@@ -623,24 +633,50 @@ export function AnalysisDetailPage() {
               value={form.summary}
               onChange={(e) => setForm((f) => ({ ...f, summary: e.target.value }))}
               disabled={!isInteractive}
-              className="w-full resize-none rounded-xl px-6 py-6 outline-none disabled:opacity-60 h-[300px] bg-snap-input text-[16px] font-normal leading-[26px] text-snap-muted"
+              className="w-full resize-none rounded-xl px-6 py-6 outline-none disabled:opacity-60 h-[240px] bg-snap-input text-[16px] font-normal leading-[26px] text-snap-muted"
               placeholder={isProcessing ? translate('analyzing', 'ko') : ''}
             />
           </div>
 
-          {/* TODO: [UI] RAW TEXT 섹션 추가 예정
-            - 사용자가 직접 수정 가능하도록 textarea로 구현
-            - 스크롤 가능하도록 높이 고정
-            - 원문 내용을 수정하고 다시 분석을 요청하는 시나리오 고려
-          */}
-          {/* <div className="flex flex-col gap-2">
+          {/* Key Concepts */}
+          {mode === 'result' && <div className="flex flex-col gap-3">
             <span className="text-[10px] font-normal tracking-[2px] text-snap-muted leading-[15px]">
-              {translate('rawText', 'ko')} (TODO)
+              {translate('keyConcepts', 'ko')}
             </span>
+
+            <div className="flex flex-wrap gap-2">
+              { form.keyConcepts.length > 0 ? (
+                form.keyConcepts.map((concept, idx) => (
+                  <span
+                    key={idx}
+                    className="rounded-full px-3 py-1 bg-[#171a1d] text-[12px] font-medium text-snap-cyan/80 border border-snap-cyan/20"
+                  >
+                    {concept}
+                  </span>
+                ))
+              ) : (
+                <span className="text-[12px] text-snap-muted/40 italic">
+                  {isProcessing ? 'Extracting concepts…' : 'No concepts extracted'}
+                </span>
+              )}
+            </div>
+          </div>}
+
+          {/* 추가 가능성 있음 [API_ANNOTATED] Raw Text 섹션 */}
+          {/* <div className="flex flex-col gap-2">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-normal tracking-[2px] text-snap-muted leading-[15px]">
+                {translate('rawText', 'ko')}
+              </span>
+              <span className="text-[9px] font-bold text-snap-muted/30 tracking-[1px]">
+                [API_ANNOTATED]
+              </span>
+            </div>
             <textarea
+              readOnly
               value={form.rawText}
-              onChange={(e) => setForm((f) => ({ ...f, rawText: e.target.value }))}
-              className="w-full h-[200px] bg-snap-input ..."
+              className="w-full h-[180px] resize-none rounded-xl px-6 py-6 outline-none bg-snap-input/50 text-[14px] font-normal leading-[22px] text-snap-muted/60 border border-snap-border/5"
+              placeholder={isProcessing ? 'Extracting text…' : 'No text available'}
             />
           </div> */}
 
