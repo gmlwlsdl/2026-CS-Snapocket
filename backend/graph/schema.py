@@ -1,3 +1,5 @@
+import re
+import datetime
 import strawberry
 from strawberry.types import Info
 from typing import List, Optional
@@ -15,13 +17,46 @@ from api.apiResponse import ApiResponse
 
 router = APIRouter(prefix="/graph", tags=["graph"])
 
+def makeHighlightSnippet(document: Document, queryStr: str) -> str:
+    if not queryStr:
+        return ""
+
+    pattern = re.compile(re.escape(queryStr), re.IGNORECASE)
+
+    def extract_snippet(text: str) -> str | None:
+        if not text:
+            return None
+        match = pattern.search(text)
+        if match:
+            start = max(0, match.start() - 20)
+            end = min(len(text), match.end() + 20)
+            snippet = text[start:end]
+            
+            if start > 0: snippet = "..." + snippet
+            if end < len(text): snippet = snippet + "..."
+            
+            return pattern.sub(r'**\g<0>**', snippet)
+        return None
+    
+    title_match = extract_snippet(document.title)
+    if title_match: return title_match
+
+    for tag in document.tags:
+        if queryStr.lower() in tag.lower():
+            return f"태그: {pattern.sub(r'**\g<0>**', tag)}"
+
+    summary_match = extract_snippet(document.summary)
+    if summary_match: return summary_match
+
+    return f"**{queryStr}** 포함됨"
+
 @strawberry.type
 class Node:
     id: str
     title: str
     category: str
     tags: list[str]
-    created_at: str
+    created_at: datetime.datetime
     connection_count: int
 
 """ @strawberry.type
@@ -54,24 +89,57 @@ class Query:
 
             # db 조회 후 결과생성
             # 카테고리에 따라 선택적으로 결과값 리턴
+            subquery = (
+                db.query(
+                    Document.category, 
+                    func.count(Document.id).label("cat_count")
+                )
+                .filter(
+                    Document.user_id == userInfo.id, 
+                    Document.deleted_at.is_(None)
+                )
+                .group_by(Document.category)
+                .subquery()
+            )
+
+            query = (
+                db.query(Document, subquery.c.cat_count)
+                .options(joinedload(Document.tag_objects))
+                .outerjoin(subquery, Document.category == subquery.c.category)
+                .filter(
+                    Document.user_id == userInfo.id, 
+                    Document.deleted_at.is_(None)
+                )
+            )
+
             if category:
-                nodes = db.query(Document).filter(Document.user_id == userInfo.id, Document.category == category, Document.deleted_at.is_(None)).all()
+                query = query.filter(Document.category == category)
 
-                if not nodes:
-                    raise NotFoundError()
+            results = query.all()
 
-                return nodes
-            
-            nodes = db.query(Document).filter(Document.user_id == userInfo.id, Document.deleted_at.is_(None)).all()
-
-            if not nodes:
-                raise NotFoundError()
-
-            return nodes
             
         except Exception as e:
             print(e)
             raise InternalServerError()
+        
+        if not results:
+            raise NotFoundError()
+        
+        nodes = []
+
+        for doc, cat_count in results:
+            nodes.append(
+                Node(
+                    id=doc.id,
+                    title=doc.title,
+                    category=doc.category or "미분류",
+                    tags=doc.tags,
+                    created_at=doc.created_at,
+                    connection_count=cat_count or 0
+                )
+            )
+
+        return nodes            
     
     """ @strawberry.field
     def edges(self, info:Info) -> List[Edge]:
@@ -126,17 +194,27 @@ class Query:
                     )
                 ).all()
             )
-
-            nodes = documents
-
-            if not nodes:
-                raise NotFoundError()
-
-            return nodes
             
         except Exception as e:
             print(e)
             raise InternalServerError()
+
+        if not documents:
+            raise NotFoundError()
+        
+        nodes = []
+
+        for doc in documents:
+            nodes.append(
+                SearchNode(
+                    id=doc.id,
+                    title=doc.title,
+                    category=doc.category or "미분류",
+                    highlight=makeHighlightSnippet(doc, query)
+                )
+            )
+
+        return nodes
     
 data = strawberry.Schema(query=Query)
 
