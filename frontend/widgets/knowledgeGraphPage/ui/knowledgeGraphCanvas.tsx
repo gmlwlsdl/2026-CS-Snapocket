@@ -1,6 +1,6 @@
 import React, { useCallback, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
-import ForceGraph2D, { ForceGraphMethods } from "react-force-graph-2d";
+import ForceGraph2D, { type ForceGraphMethods, type NodeObject } from "react-force-graph-2d";
 import type { GraphNode, GraphEdge } from "../knowledgeGraph.type";
 import {
   NODE_COLOR,
@@ -11,7 +11,7 @@ interface KnowledgeGraphCanvasProps {
   searchTerm?: string;
   nodes: GraphNode[];
   edges: GraphEdge[];
-  graphRef?: React.MutableRefObject<ForceGraphMethods | undefined>;
+  graphRef?: React.MutableRefObject<ForceGraphMethods<NodeObject<GraphNode>> | undefined>;
 }
 
 export function KnowledgeGraphCanvas({
@@ -41,7 +41,7 @@ export function KnowledgeGraphCanvas({
     return { nodes, links: filteredLinks };
   }, [nodes, edges]);
 
-  const drawNode = useCallback((node: any, ctx: CanvasRenderingContext2D, globalScale: number) => {
+  const drawNode = useCallback((node: NodeObject<GraphNode>, ctx: CanvasRenderingContext2D, globalScale: number) => {
     const matched = isMatched(node.label);
     const opacity = matched ? 1 : 0.1;
     const color = NODE_COLOR[node.category] ?? "#81ecff";
@@ -114,7 +114,7 @@ export function KnowledgeGraphCanvas({
         linkColor={() => "rgba(129,236,255,0.12)"}
         linkWidth={1}
         backgroundColor="transparent"
-        onNodeClick={(node: any) => {
+        onNodeClick={(node: NodeObject<GraphNode>) => {
           router.push(`/analysis/${node.id}`);
         }}
         cooldownTicks={100}
