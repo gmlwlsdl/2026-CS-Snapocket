@@ -1,6 +1,7 @@
 "use client";
 
-import type { CategoryFilter, GraphSummaryData } from "../knowledgeGraph.type";
+import type { CategoryFilter } from "../knowledgeGraph.type";
+import type { GraphSummaryData } from "@/entities/graph";
 import { CATEGORY_FILTERS } from "../knowledgeGraph.constant";
 
 interface TopHeaderProps {

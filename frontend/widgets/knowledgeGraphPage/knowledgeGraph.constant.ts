@@ -1,16 +1,7 @@
-import type { CategoryFilter, GraphEdge, GraphNode } from "./knowledgeGraph.type";
+import type { CategoryFilter } from "./knowledgeGraph.type";
 
 export const CANVAS_WIDTH = 1200;
 export const CANVAS_HEIGHT = 1024;
-
-/* [API_ANNOTATED] 가상 데이터 주석 처리
-export const GRAPH_NODES: GraphNode[] = [
-  ...
-];
-*/
-
-export const GRAPH_NODES: GraphNode[] = [];
-export const GRAPH_EDGES: GraphEdge[] = [];
 
 
 export const CATEGORY_FILTERS: { id: CategoryFilter; label: string }[] = [
