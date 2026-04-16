@@ -28,3 +28,9 @@ class Document(Base):
     @property
     def tags(self) -> list[str]:
         return [tag.name for tag in self.tag_objects]
+    
+    @property
+    def file_url(self) -> str:
+        if not self.file_path:
+            return ""
+        return self.file_path

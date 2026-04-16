@@ -7,7 +7,7 @@ async def getContext(request: Request, db: Session = Depends(get_db)):
 
     authHeader = request.headers.get("Authorization")
 
-    if not authHeader or not authHeader.startswith("bearer "):
+    if not authHeader or not authHeader.startswith("Bearer "):
         return {"user": None, "request": request, "db": db}
         
     token = authHeader.split(" ")[1]

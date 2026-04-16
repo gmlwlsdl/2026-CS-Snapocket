@@ -22,8 +22,8 @@ class UpdateDocuments(BaseModel):
 class DocumentInfo(BaseModel):
     id: uuid.UUID
     doc_id: str | None = None
-    title: str
-    category: str
+    title: str | None = None
+    category: str | None = None
     status: str
     file_type: str
     capture_date: datetime | None = None
@@ -35,8 +35,8 @@ class DocumentInfo(BaseModel):
 class DetailedInfo(BaseModel):
     id: uuid.UUID
     doc_id: str | None = None
-    title: str
-    category: str
+    title: str | None = None
+    category: str | None = None
     summary: str | None = None
     raw_text: str | None = None
     status: str
