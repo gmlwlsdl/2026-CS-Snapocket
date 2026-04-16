@@ -1,18 +1,12 @@
-export type ApiNodeCategory =
-  | "assignments"
-  | "exams"
-  | "class_materials"
-  | "summaries"
-  | "receipts"
-  | "notices";
+export type ApiNodeCategory = string;
 
 export interface ApiNode {
   id: string;
   title: string;
   category: ApiNodeCategory;
   tags: string[];
-  created_at: string;
-  connection_count: number;
+  createdAt: string;
+  connectionCount: number;
 }
 
 export interface ApiEdge {
@@ -23,7 +17,7 @@ export interface ApiEdge {
 
 export interface GraphSummaryData {
   node_count: number;
-  document_count: number;
+  documents_count: number;
   tag_count: number;
   edge_count: number;
 }

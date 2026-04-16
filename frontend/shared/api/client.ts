@@ -1,28 +1,5 @@
 export const BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
 
-/** 바이너리 응답을 받아 Blob Object URL을 반환. 사용 후 URL.revokeObjectURL() 호출 필요. */
-export async function apiFetchBlobUrl(path: string): Promise<string> {
-  const headers = new Headers();
-  const token = getAccessToken();
-  if (token) {
-    headers.set("Authorization", `Bearer ${token}`);
-  }
-
-  const res = await fetch(`${BASE_URL}${path}`, { headers });
-
-  if (res.status === 401 && typeof window !== 'undefined') {
-    clearAccessToken();
-    window.location.href = '/login';
-    throw new ApiError(401, 'Unauthorized');
-  }
-  if (!res.ok) throw new ApiError(res.status, res.statusText);
-
-  const blob = await res.blob();
-  return URL.createObjectURL(blob);
-}
-
-// ── 공통 타입 및 직접 호출 클라이언트 ──────────────────────────────────────
-
 export class ApiError extends Error {
   constructor(
     public readonly status: number,
@@ -53,6 +30,31 @@ export function clearAccessToken(): void {
   localStorage.removeItem("access_token");
 }
 
+function redirectToLogin(): never {
+  clearAccessToken();
+  if (typeof window !== "undefined") {
+    window.location.href = "/login";
+  }
+  throw new ApiError(401, "Unauthorized");
+}
+
+/** 바이너리 응답을 받아 Blob Object URL을 반환. 사용 후 URL.revokeObjectURL() 호출 필요. */
+export async function apiFetchBlobUrl(path: string): Promise<string> {
+  const headers = new Headers();
+  const token = getAccessToken();
+  if (token) {
+    headers.set("Authorization", `Bearer ${token}`);
+  }
+
+  const res = await fetch(`${BASE_URL}${path}`, { headers });
+
+  if (res.status === 401) redirectToLogin();
+  if (!res.ok) throw new ApiError(res.status, res.statusText);
+
+  const blob = await res.blob();
+  return URL.createObjectURL(blob);
+}
+
 export async function apiClient<T>(
   path: string,
   options: RequestInit & { requireAuth?: boolean } = {}
@@ -67,15 +69,16 @@ export async function apiClient<T>(
 
   if (requireAuth) {
     const token = getAccessToken();
-    if (token) {
-      headers.set("Authorization", `Bearer ${token}`);
-    }
+    if (!token) redirectToLogin();
+    headers.set("Authorization", `Bearer ${token}`);
   }
 
   const res = await fetch(`${BASE_URL}${path}`, {
     ...fetchOptions,
     headers,
   });
+
+  if (res.status === 401) redirectToLogin();
 
   const body = await res.json().catch(() => null) as (ApiResponse<T> & { error_code?: string }) | null;
 
@@ -87,5 +90,7 @@ export async function apiClient<T>(
     );
   }
 
-  return body as ApiResponse<T>;
+  if (!body) throw new ApiError(500, "Empty response");
+
+  return body;
 }

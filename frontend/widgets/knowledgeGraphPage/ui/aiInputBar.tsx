@@ -1,9 +1,22 @@
 'use client'
 
 import { useState } from 'react'
+import {t as translate} from '@/shared/lib/i18n'
 
-export function AiInputBar() {
+interface AiInputBarProps {
+  onSearch?: (value: string) => void
+}
+
+export function AiInputBar({ onSearch }: AiInputBarProps) {
   const [value, setValue] = useState('')
+
+  const handleSearch = () => {
+    if (value.trim()) {
+      onSearch?.(value.trim())
+    } else {
+      onSearch?.('')
+    }
+  }
 
   return (
     <div className="absolute bottom-8 left-1/2 z-10 w-[672px] -translate-x-1/2">
@@ -23,16 +36,21 @@ export function AiInputBar() {
         <input
           type="text"
           value={value}
-          onChange={(e) => setValue(e.target.value)}
-          placeholder="Ask AI about your knowledge graph..."
+          onChange={(e) => {
+            setValue(e.target.value)
+            if (e.target.value === '') onSearch?.('')
+          }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') handleSearch()
+          }}
+          placeholder={translate('askAiAboutKnowledgeGraph', 'ko')}
           className="flex-1 bg-transparent font-inter text-snap-white outline-none placeholder:text-snap-muted"
           style={{ fontSize: 14, lineHeight: '16.94px' }}
           aria-label="Ask AI about your knowledge graph"
         />
 
-        {/* TODO: [API] 전송 시 searchNodes(value) 호출 → 매칭된 노드 id 목록을 부모로 전달해 캔버스에서 하이라이트/포커스.
-              현재는 입력값만 관리하고 실제 검색 요청 없음. onSearch prop 추가 필요. */}
         <button
+          onClick={handleSearch}
           className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full"
           style={{ background: value ? '#81ecff' : 'rgba(70,72,75,0.3)' }}
           aria-label="Send"

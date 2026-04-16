@@ -1,5 +1,6 @@
 import type { AnalysisResult } from '../model/types'
 
+/* [API_ANNOTATED] 가상 데이터 주석 처리
 export const MOCK_RESULTS: Record<string, AnalysisResult> = {
   'mock-1': {
     title: 'CS204 Operating Systems — Week 9 Lecture',
@@ -24,3 +25,7 @@ export const MOCK_RESULTS: Record<string, AnalysisResult> = {
     deadline: '2026-04-14T23:59:00.000Z',
   },
 }
+*/
+const MOCK_RESULTS: Record<string, AnalysisResult> = {}
+export { MOCK_RESULTS }
+

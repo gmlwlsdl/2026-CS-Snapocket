@@ -1,5 +1,6 @@
 import type { DocumentDetail } from '../model/types'
 
+/* [API_ANNOTATED] 가상 데이터 주석 처리
 export const MOCK_DOCUMENTS: Record<string, DocumentDetail> = {
   'mock-1': {
     id: 'mock-1',
@@ -30,3 +31,7 @@ export const MOCK_DOCUMENTS: Record<string, DocumentDetail> = {
     created_at: '2026-04-05T09:10:00.000Z',
   },
 }
+*/
+const MOCK_DOCUMENTS: Record<string, DocumentDetail> = {}
+export { MOCK_DOCUMENTS }
+

@@ -1,4 +1,4 @@
-export type NodeCategory = "assignment" | "exam" | "class" | "summary" | "misc" | "root";
+export type NodeCategory = "assignment" | "exam" | "class" | "summary" | "misc" | "root" | "lecture" | "notice" | "receipt" | "memo";
 
 export type NodeSize = "root" | "primary" | "secondary";
 
@@ -16,4 +16,4 @@ export interface GraphEdge {
   to: string;
 }
 
-export type CategoryFilter = "all" | "assignments" | "exams" | "class-materials" | "summaries";
+export type CategoryFilter = "all" | "lecture" | "assignment" | "notice" | "receipt" | "memo";
