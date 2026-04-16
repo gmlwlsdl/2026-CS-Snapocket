@@ -7,6 +7,7 @@ export interface AnalysisStatus {
 
 /** GET /analysis/{id}/result → data */
 export interface AnalysisResult {
+  id: string
   title: string
   category: string
   capture_date: string | null
@@ -15,6 +16,8 @@ export interface AnalysisResult {
   raw_text: string
   key_concepts: string[]
   deadline: string | null
+  file_type: string
+  file_url: string
 }
 
 /** POST /analysis/{id}/confirm request body */
