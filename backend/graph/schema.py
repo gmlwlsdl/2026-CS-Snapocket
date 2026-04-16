@@ -136,7 +136,7 @@ def summary(jwtToken: dict = Depends(jwtAuth), db: Session = Depends(get_db)):
 
     # db에서 요약데이터 조회
     nodeCount = db.query(func.count(Document.id)).filter(Document.deleted_at.is_(None)).scalar()
-    tagCount = db.query(func.count(Tag.id)).filter(Document.deleted_at.is_(None)).scalar()
+    tagCount = db.query(func.count(Tag.id)).join(Document.tags).filter(Document.deleted_at.is_(None)).scalar()
     # MVP에서는 0 고도화 후 지원
     edgeCount = 0
 
