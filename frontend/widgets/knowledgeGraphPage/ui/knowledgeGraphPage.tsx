@@ -3,128 +3,161 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import type { CategoryFilter, GraphNode, GraphEdge } from "../knowledgeGraph.type";
-import { GRAPH_NODES, GRAPH_EDGES } from "../knowledgeGraph.constant";
-import { getNodes } from "@/entities/graph";
-import { computeNodePositions } from "../knowledgeGraph.utils";
+import { getNodes, getGraphSummary, type GraphSummaryData } from "@/entities/graph";
+import { CATEGORY_TO_NODE_CATEGORY } from "../knowledgeGraph.utils";
+import dynamic from "next/dynamic";
 import { SidebarNav, ToastStatus, type ToastItem } from "@/shared/ui";
 import { UploadModal } from "@/features/upload";
 import { TopHeader } from "./topHeader";
-import { KnowledgeGraphCanvas } from "./knowledgeGraphCanvas";
+import type { ForceGraphMethods } from "react-force-graph-2d";
+
+const KnowledgeGraphCanvas = dynamic(
+  () => import("./knowledgeGraphCanvas").then((mod) => mod.KnowledgeGraphCanvas),
+  { ssr: false }
+);
+
 import { GraphControls } from "./graphControls";
 import { AiInputBar } from "./aiInputBar";
-
-// TODO: [Mock] 백엔드 연결 후 INITIAL_TOASTS 제거. 초기값은 빈 배열([])로 변경.
-//   업로드 완료 toast는 handleUpload에서 실제 API 응답 후 추가되어야 함.
-const INITIAL_TOASTS: ToastItem[] = [
-  {
-    id: "mock-1",
-    fileName: "CS204_Lecture_Notes.pdf",
-    status: "complete",
-    analysisId: "mock-1",
-  },
-  {
-    id: "mock-2",
-    fileName: "Algorithm_Assignment3.pdf",
-    status: "processing",
-    analysisId: "mock-2",
-  },
-];
 
 export function KnowledgeGraphPage() {
   const router = useRouter();
   const [activeFilter, setActiveFilter] = useState<CategoryFilter>("all");
-  const [nodes, setNodes] = useState<GraphNode[]>(GRAPH_NODES);
-  const [edges] = useState<GraphEdge[]>(GRAPH_EDGES);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [nodes, setNodes] = useState<GraphNode[]>([]);
+  const [edges, setEdges] = useState<GraphEdge[]>([]);
   const [modalOpen, setModalOpen] = useState(false);
-  const [toastItems, setToastItems] = useState<ToastItem[]>(INITIAL_TOASTS);
-  const nextIdRef = useRef(100);
-  const processingTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+  const [toastItems, setToastItems] = useState<ToastItem[]>([]);
+  const [summaryData, setSummaryData] = useState<GraphSummaryData>();
+
+  const graphRef = useRef<ForceGraphMethods | undefined>(undefined);
+
+  const handleZoomIn = useCallback(() => {
+    if (graphRef.current) {
+      const currentZoom = graphRef.current.zoom();
+      graphRef.current.zoom(currentZoom * 1.2, 400);
+    }
+  }, []);
+
+  const handleZoomOut = useCallback(() => {
+    if (graphRef.current) {
+      const currentZoom = graphRef.current.zoom();
+      graphRef.current.zoom(currentZoom * 0.8, 400);
+    }
+  }, []);
+
+  const handleFit = useCallback(() => {
+    if (graphRef.current) {
+      graphRef.current.zoomToFit(600, 80);
+    }
+  }, []);
+
+  // summary는 카테고리 필터와 무관하므로 마운트 시 1회만 호출
+  useEffect(() => {
+    getGraphSummary()
+      .then(setSummaryData)
+      .catch((err) => console.error("Failed to load graph summary:", err));
+  }, []);
 
   useEffect(() => {
     const controller = new AbortController();
 
-    getNodes()
-      .then((apiNodes) => {
+    async function loadNodes() {
+      const categoryMap: Record<CategoryFilter, string | undefined> = {
+        all: undefined,
+        lecture: "lecture",
+        assignment: "assignment",
+        notice: "notice",
+        receipt: "receipt",
+        memo: "memo",
+      };
+
+      try {
+        const apiNodes = await getNodes(categoryMap[activeFilter]);
+
         if (!controller.signal.aborted) {
-          setNodes(computeNodePositions(apiNodes));
+          const mappedNodes: GraphNode[] = apiNodes.map((n) => ({
+            id: n.id,
+            label: n.title,
+            x: 0,
+            y: 0,
+            category: CATEGORY_TO_NODE_CATEGORY[n.category] ?? "misc",
+            size: n.connectionCount > 2 ? "primary" : "secondary",
+          }));
+
+          setNodes(mappedNodes);
+
+          // [FE_MOCK] 백엔드 엣지 API 연동 전 임시로 노드를 순차 연결하여 시각화
+          if (mappedNodes.length > 1) {
+            const mockEdges: GraphEdge[] = mappedNodes.slice(0, -1).map((n, i) => ({
+              from: n.id,
+              to: mappedNodes[i + 1].id,
+            }));
+            setEdges(mockEdges);
+          } else {
+            setEdges([]);
+          }
         }
-      })
-      .catch(() => {
-        // no-op: keep constant graph on failure
-      });
+      } catch (error) {
+        console.error("Failed to load graph data:", error);
+      }
+    }
+
+    loadNodes();
 
     return () => controller.abort();
-  }, []);
+  }, [activeFilter]);
 
-  // TODO: [Mock] INITIAL_TOASTS 제거 시 이 useEffect도 함께 삭제
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setToastItems((prev) =>
-        prev.map((item) =>
-          item.id === "mock-2" ? { ...item, status: "complete" } : item
-        )
-      );
-    }, 3500);
-    return () => clearTimeout(timer);
-  }, []);
+  const handleUpload = useCallback(async (file: File) => {
+    const { uploadDocument } = await import("@/entities/document");
 
-  // TODO: [API] 실제 업로드 흐름으로 교체:
-  //   1. uploadDocument(file) 호출 → document_id 획득
-  //   2. toast를 "processing" 상태로 추가 (analysisId = document_id)
-  //   3. fetchAnalysisStatus(document_id) 폴링으로 "analyzed" 확인 후 status → "complete"
-  //   현재는 타이머로 3.5초 후 complete 처리하는 목업 동작.
-  const handleUpload = useCallback((file: File) => {
-    const id = `upload-${nextIdRef.current++}`;
-    const newItem: ToastItem = {
-      id,
-      fileName: file.name,
-      status: "processing",
-      analysisId: "mock-1", // TODO: [Mock] uploadDocument 반환 document_id로 교체
-    };
+    try {
+      const uploadRes = await uploadDocument(file);
+      const documentId = uploadRes.document_id;
 
-    setToastItems((prev) => [newItem, ...prev]);
-
-    // TODO: [Mock] 아래 타이머 제거 후 fetchAnalysisStatus 폴링으로 대체
-    const timer = setTimeout(() => {
-      setToastItems((prev) =>
-        prev.map((item) => (item.id === id ? { ...item, status: "complete" } : item))
-      );
-      processingTimersRef.current.delete(id);
-    }, 3500);
-
-    processingTimersRef.current.set(id, timer);
+      setToastItems((prev) => [
+        { id: documentId, fileName: file.name, status: "processing", analysisId: documentId },
+        ...prev,
+      ]);
+    } catch (error) {
+      console.error("Upload failed:", error);
+    }
   }, []);
 
   const handleToastClick = useCallback(
     (item: ToastItem) => {
       if (item.status === "complete") {
-        router.push(`/analysis/${item.analysisId}`);
+        router.push(`/analysis/${item.analysisId}?mode=result`);
       }
     },
     [router]
   );
-
-  useEffect(() => {
-    const timers = processingTimersRef.current;
-    return () => {
-      timers.forEach((t) => clearTimeout(t));
-      timers.clear();
-    };
-  }, []);
 
   return (
     <div className="flex h-screen w-full overflow-hidden bg-snap-bg">
       <SidebarNav onUpload={() => setModalOpen(true)} />
 
       <main className="relative flex-1" style={{ marginLeft: 81 }}>
-        <TopHeader activeFilter={activeFilter} onFilterChange={setActiveFilter} />
+        <TopHeader
+          activeFilter={activeFilter}
+          onFilterChange={setActiveFilter}
+          summaryData={summaryData}
+        />
 
         <div className="absolute inset-0">
-          <KnowledgeGraphCanvas activeFilter={activeFilter} nodes={nodes} edges={edges} />
+          <KnowledgeGraphCanvas
+            searchTerm={searchTerm}
+            nodes={nodes}
+            edges={edges}
+            graphRef={graphRef}
+          />
         </div>
 
-        <GraphControls />
-        <AiInputBar />
+        <GraphControls
+          onZoomIn={handleZoomIn}
+          onZoomOut={handleZoomOut}
+          onFit={handleFit}
+        />
+        <AiInputBar onSearch={setSearchTerm} />
         <ToastStatus items={toastItems} onItemClick={handleToastClick} />
       </main>
 

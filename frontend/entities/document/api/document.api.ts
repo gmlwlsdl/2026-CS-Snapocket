@@ -46,20 +46,20 @@ export async function uploadDocument(
 }
 
 export async function fetchDocument(id: string): Promise<DocumentDetail> {
-  const res = await apiClient<{ document: DocumentDetail }>(`/documents/${id}`, { requireAuth: true })
-  return res.data.document
+  const res = await apiClient<DocumentDetail>(`/documents/${id}`, { requireAuth: true })
+  return res.data
 }
 
 export async function updateDocument(
   id: string,
   payload: UpdateDocumentPayload,
 ): Promise<DocumentDetail> {
-  const res = await apiClient<{ document: DocumentDetail }>(`/documents/${id}`, {
+  const res = await apiClient<DocumentDetail>(`/documents/${id}`, {
     method: 'PATCH',
     body: JSON.stringify(payload),
     requireAuth: true,
   })
-  return res.data.document
+  return res.data
 }
 
 export async function deleteDocument(id: string): Promise<void> {

@@ -42,9 +42,10 @@ async function graphqlRequest<T>(
 export async function getNodes(category?: ApiNodeCategory): Promise<ApiNode[]> {
   const variables = category !== undefined ? { category } : {};
   const data = await graphqlRequest<{ nodes: ApiNode[] }>(
-    "query GetNodes($category: String) { nodes(category: $category) { id title category tags created_at connection_count } }",
+    "query GetNodes($category: String) { nodes(category: $category) { id title category tags createdAt connectionCount } }",
     variables
   );
+
   return data.nodes;
 }
 

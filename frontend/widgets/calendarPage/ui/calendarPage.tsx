@@ -3,22 +3,23 @@
 import { useState, useRef, useCallback } from 'react'
 import { SidebarNav } from '@/shared/ui'
 import { UploadModal } from '@/features/upload'
+import { t as translate } from '@/shared/lib/i18n'
 
-const WEEKDAYS = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN']
+const WEEKDAYS = ['월', '화', '수', '목', '금', '토', '일']
 
 const MONTH_NAMES = [
-  'January',
-  'February',
-  'March',
-  'April',
-  'May',
-  'June',
-  'July',
-  'August',
-  'September',
-  'October',
-  'November',
-  'December',
+  '1월',
+  '2월',
+  '3월',
+  '4월',
+  '5월',
+  '6월',
+  '7월',
+  '8월',
+  '9월',
+  '10월',
+  '11월',
+  '12월',
 ]
 
 // TODO: [Mock] fetchCalendarMonth({ year, month }) 응답(CalendarDates)으로 교체.
@@ -26,12 +27,12 @@ const MONTH_NAMES = [
 //   category 필터 칩이 생기면 category 파라미터도 함께 전달.
 /** 월별 Mock 이벤트 — key: "YYYY-MM-DD" */
 const MOCK_EVENTS: Record<string, { label: string; color: string }[]> = {
-  '2025-10-03': [{ label: 'document 1', color: '#ac89ff' }],
-  '2025-10-12': [{ label: 'Active', color: '#81ecff' }],
-  '2025-10-17': [{ label: 'document 2', color: '#fab0ff' }],
-  '2025-10-24': [{ label: 'Lab Report', color: '#ac89ff' }],
-  '2025-10-07': [{ label: 'Lecture Note', color: '#81ecff' }],
-  '2025-10-15': [
+  '2026-04-15': [{ label: 'document 1', color: '#ac89ff' }],
+  '2026-04-16': [{ label: 'Active', color: '#81ecff' }],
+  '2026-04-17': [{ label: 'document 2', color: '#fab0ff' }],
+  '2026-04-18': [{ label: 'Lab Report', color: '#ac89ff' }],
+  '2026-04-19': [{ label: 'Lecture Note', color: '#81ecff' }],
+  '2026-04-20': [
     { label: 'Assignment', color: '#81ecff' },
     { label: 'Summary', color: '#fab0ff' },
   ],
@@ -248,7 +249,7 @@ export function CalendarPage() {
               onChange={(e) => setSearch(e.target.value)}
               className="flex-1 bg-transparent font-manrope text-[10px] font-medium tracking-widest outline-none"
               style={{ color: '#aaabaf', letterSpacing: '1.4px' }}
-              placeholder="FIND DOCUMENT..."
+              placeholder={translate('findDocument', 'ko')}
               aria-label="문서 검색"
             />
             {search && (

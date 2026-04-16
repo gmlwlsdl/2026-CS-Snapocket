@@ -1,14 +1,17 @@
 "use client";
 
 import type { CategoryFilter } from "../knowledgeGraph.type";
+import type { GraphSummaryData } from "@/entities/graph";
 import { CATEGORY_FILTERS } from "../knowledgeGraph.constant";
 
 interface TopHeaderProps {
   activeFilter: CategoryFilter;
   onFilterChange: (filter: CategoryFilter) => void;
+  summaryData?: GraphSummaryData;
 }
 
-export function TopHeader({ activeFilter, onFilterChange }: TopHeaderProps) {
+export function TopHeader({ activeFilter, onFilterChange, summaryData }: TopHeaderProps) {
+
   return (
     <header
       className="fixed left-[81px] right-0 top-0 z-10 flex h-16 items-center px-6"
@@ -69,6 +72,21 @@ export function TopHeader({ activeFilter, onFilterChange }: TopHeaderProps) {
         })}
       </nav>
 
+      <div className="ml-auto flex items-center gap-6">
+        <div className="flex flex-col items-end">
+          <span className="text-[10px] uppercase tracking-[1px] text-snap-muted">Nodes</span>
+          <span className="text-[14px] font-bold text-snap-white">
+            {summaryData?.node_count ?? 0}
+          </span>
+        </div>
+        <div className="flex flex-col items-end border-l border-snap-border/10 pl-6">
+          <span className="text-[10px] uppercase tracking-[1px] text-snap-muted">Tags</span>
+          <span className="text-[14px] font-bold text-snap-white">
+            {summaryData?.tag_count ?? 0}
+          </span>
+        </div>
+      </div>
     </header>
+
   );
 }

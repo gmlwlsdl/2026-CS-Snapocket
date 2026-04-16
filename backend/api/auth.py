@@ -51,7 +51,7 @@ def sighup(user : UserCreate, db: Session = Depends(get_db)):
         )
 
     # 유저 id생성
-    userId = uuid.uuid1()
+    userId = uuid.uuid4()
 
     # 유저정보 db저장 부분
     newUser = User(

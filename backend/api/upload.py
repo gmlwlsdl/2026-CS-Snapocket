@@ -57,6 +57,8 @@ async def upload_file(
             },
         )
     
+    documentId = uuid.uuid4()
+    
     userName = jwtToken.get("sub")
     userInfo = db.query(User).filter(User.email == userName).first()
 
@@ -74,15 +76,18 @@ async def upload_file(
     # auth 붙기 전까지는 임시 user_id 사용
     # 나중에 토큰 기반으로 교체
     new_document = Document(
+        id=documentId,
         user_id=userInfo.id,
         original_filename=file.filename,
         stored_filename=unique_name,
         file_path=file_path,
         file_type=file_type,
+        doc_id=None,
         title=file.filename,
         category="memo",
         summary="업로드된 문서",
-        status=status,
+        raw_text=None,
+        status=status
     )
 
     db.add(new_document)
@@ -96,6 +101,6 @@ async def upload_file(
             "document_id": new_document.id,
             "file_url": f"/{file_path}",
             "file_type": file_type,
-            "status": status,
+            "status": status
         }
     )
