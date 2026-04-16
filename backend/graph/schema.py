@@ -225,7 +225,7 @@ def summary(jwtToken: dict = Depends(jwtAuth), db: Session = Depends(get_db)):
     userInfo = db.query(User).filter(User.email == userName).first()
 
     # db에서 요약데이터 조회
-    nodeCount = db.query(func.count(Document.id)).filter(Document.deleted_at.is_(None)).scalar()
+    nodeCount = db.query(func.count(Document.id)).filter(Document.user_id == userInfo.id,Document.deleted_at.is_(None)).scalar()
     tagCount = (
         db.query(func.count(func.distinct(Tag.id)))
         .select_from(Document)
