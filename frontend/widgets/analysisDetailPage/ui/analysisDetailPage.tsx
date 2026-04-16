@@ -7,12 +7,10 @@ import {
   confirmAnalysis,
   fetchAnalysisResult,
   fetchAnalysisStatus,
+  retryAnalysis,
   isoToDisplay,
   displayToIso,
 } from '@/entities/analysis'
-// [API_ANNOTATED] Mock 임포트 주석 처리
-// import { MOCK_DOCUMENTS } from '@/entities/document'
-// import { MOCK_RESULTS } from '@/entities/analysis'
 import { t as translate } from '@/shared/lib/i18n'
 import type { DocumentStatus } from '@/entities/document'
 import { ApiError } from '@/shared/api'
@@ -64,12 +62,13 @@ function rawTagName(label: string): string {
   return label.startsWith('#') ? label.slice(1) : label
 }
 
-// [API_ANNOTATED] Mock ID 체크 함수 비활성화
-/*
-function isMockId(id: string): boolean {
-  return id.startsWith('mock-')
+function normaliseTags(tags: string[]): TagItem[] {
+  return tags.map((t, i) => ({
+    id: i,
+    label: t.startsWith('#') ? t : `#${t}`,
+    color: tagColor(t),
+  }))
 }
-*/
 
 // ── 컴포넌트 ──────────────────────────────────────────────────────────────────
 
@@ -108,8 +107,6 @@ export function AnalysisDetailPage() {
   // ── 초기 로딩 ─────────────────────────────────────────────────────────────
 
   const loadResult = useCallback(async () => {
-    // [API_ANNOTATED] Mock 분기 제거
-
     try {
       const result = await fetchAnalysisResult(id)
       setForm({
@@ -117,11 +114,7 @@ export function AnalysisDetailPage() {
         category: result.category,
         captureDate: isoToDisplay(result.capture_date),
         summary: result.summary,
-        tags: result.tags.map((t, i) => ({
-          id: i,
-          label: t.startsWith('#') ? t : `#${t}`,
-          color: tagColor(t),
-        })),
+        tags: normaliseTags(result.tags),
         rawText: result.raw_text,
         keyConcepts: result.key_concepts,
         deadline: isoToDisplay(result.deadline),
@@ -166,8 +159,6 @@ export function AnalysisDetailPage() {
   useEffect(() => {
     if (!id) return
 
-    // [API_ANNOTATED] Mock 분기 제거
-
     let alive = true
     let blobUrl: string | null = null
 
@@ -209,11 +200,7 @@ export function AnalysisDetailPage() {
           category: doc.category,
           captureDate: isoToDisplay(doc.capture_date),
           summary: doc.summary,
-          tags: doc.tags.map((t, i) => ({
-            id: i,
-            label: t.startsWith('#') ? t : `#${t}`,
-            color: tagColor(t),
-          })),
+          tags: normaliseTags(doc.tags),
           rawText: doc.raw_text,
           keyConcepts: doc.key_concepts,
           deadline: isoToDisplay(doc.deadline),
@@ -257,7 +244,6 @@ export function AnalysisDetailPage() {
   // ── 액션 핸들러 ────────────────────────────────────────────────────────────
 
   async function handleConfirm() {
-    // [API_ANNOTATED] Mock 분기 제거
     setPageStatus('saving')
     try {
       await confirmAnalysis(id, {
@@ -275,26 +261,19 @@ export function AnalysisDetailPage() {
   }
 
   async function handleRecalibrate() {
-    // [API_ANNOTATED] Mock 분기 제거
     if (pollTimerRef.current) {
       clearInterval(pollTimerRef.current)
       pollTimerRef.current = null
     }
     try {
-      await retryAnalysisCall()
+      await retryAnalysis(id)
       startPolling()
     } catch (e) {
       setErrorMsg(e instanceof ApiError ? e.message : '재분석 요청 실패')
     }
   }
 
-  async function retryAnalysisCall() {
-    const { retryAnalysis } = await import('@/entities/analysis')
-    await retryAnalysis(id)
-  }
-
   async function handleDiscard() {
-    // [API_ANNOTATED] Mock 분기 제거
     if (!confirm('추출 데이터를 삭제하고 목록으로 돌아갑니다. 계속할까요?')) return
     setPageStatus('discarding')
     try {
@@ -662,16 +641,11 @@ export function AnalysisDetailPage() {
             </div>
           </div>}
 
-          {/* 추가 가능성 있음 [API_ANNOTATED] Raw Text 섹션 */}
-          {/* <div className="flex flex-col gap-2">
-            <div className="flex items-center justify-between">
-              <span className="text-[10px] font-normal tracking-[2px] text-snap-muted leading-[15px]">
-                {translate('rawText', 'ko')}
-              </span>
-              <span className="text-[9px] font-bold text-snap-muted/30 tracking-[1px]">
-                [API_ANNOTATED]
-              </span>
-            </div>
+          {/* Raw Text (추후 표시 예정)
+          <div className="flex flex-col gap-2">
+            <span className="text-[10px] font-normal tracking-[2px] text-snap-muted leading-[15px]">
+              {translate('rawText', 'ko')}
+            </span>
             <textarea
               readOnly
               value={form.rawText}

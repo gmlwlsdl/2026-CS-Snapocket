@@ -49,7 +49,9 @@ const dictionary = {
     contentSummary: 'CONTENT SUMMARY',
     tags: 'TAGS',
     addTag: '+ Add Tag',
+    aiGenerated: 'AI-generated summary.',
     discardExtraction: 'Discard Extraction',
+    discarding: 'Deleting...',
     recalibrateAiLens: 'Recalibrate AI Lens',
     askAiAboutKnowledgeGraph: 'Ask AI about your knowledge graph...',
     clickToView: 'CLICK TO VIEW →',
@@ -67,6 +69,6 @@ const dictionary = {
   },
 } as const
 
-export const t = (key: keyof typeof dictionary['ko'], lang: Language = 'en') => {
+export const t = (key: keyof typeof dictionary['ko'], lang: Language = 'ko') => {
   return dictionary[lang][key] || key
 }
