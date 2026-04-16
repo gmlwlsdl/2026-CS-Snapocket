@@ -1,8 +1,10 @@
-'use client'
+"use client";
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import { getMe } from '@/entities/auth'
+import type { MeResponseData } from '@/entities/auth/api/auth.api.type'
 
 import GraphIcon from '@/public/graph.svg'
 import CalendarIcon from '@/public/calendar.svg'
@@ -13,7 +15,17 @@ interface SidebarNavProps {
 
 export function SidebarNav({ onUpload }: SidebarNavProps) {
   const [isOpen, setIsOpen] = useState(false)
+  const [user, setUser] = useState<MeResponseData | null>(null)
   const pathname = usePathname()
+
+  useEffect(() => {
+    getMe()
+      .then(setUser)
+      .catch((err) => {
+        console.warn('Failed to fetch user profile:', err)
+        setUser(null)
+      })
+  }, [])
 
   const isGraph = pathname === '/'
   const isCalendar = pathname === '/calendar'
@@ -229,7 +241,6 @@ export function SidebarNav({ onUpload }: SidebarNavProps) {
             </svg>
           </div>
 
-          {/* TODO: [API] getMe() 호출 후 name, email(또는 role) 표시. 현재는 하드코딩 값 사용 */}
           <div
             className="ml-3 flex flex-col transition-all duration-300 overflow-hidden"
             style={{
@@ -242,13 +253,13 @@ export function SidebarNav({ onUpload }: SidebarNavProps) {
               className="font-inter font-bold text-xs"
               style={{ color: '#f9f9fd', letterSpacing: '-0.4px' }}
             >
-              Alex Rivera
+              {user?.name ?? "김스냅"}
             </span>
             <span
               className="font-inter text-[10px]"
               style={{ color: '#aaabaf', letterSpacing: '-0.4px' }}
             >
-              Premium Curator
+              {user?.email ?? "kimsnap@gmail.com"}
             </span>
           </div>
         </div>

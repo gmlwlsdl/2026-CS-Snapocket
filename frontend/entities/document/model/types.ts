@@ -7,12 +7,14 @@ export interface DocumentDetail {
   id: string
   title: string
   category: string
+  capture_date: string | null
   summary: string
   tags: string[]
+  key_concepts: string[]
+  raw_text: string
   file_url: string
   file_type: FileType
   status: DocumentStatus
-  capture_date: string | null
   deadline: string | null
   created_at: string
 }

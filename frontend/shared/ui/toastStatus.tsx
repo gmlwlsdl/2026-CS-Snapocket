@@ -1,5 +1,7 @@
 'use client'
 
+import { t as translate } from '@/shared/lib/i18n'
+
 export interface ToastItem {
   id: string
   fileName: string
@@ -61,7 +63,7 @@ function ToastCard({ item, onClick }: { item: ToastItem; onClick: () => void }) 
             className="font-inter"
             style={{ fontSize: 12, fontWeight: 600, color: '#f9f9fd' }}
           >
-            {isComplete ? 'Analysis Complete' : 'Analyzing…'}
+            {isComplete ? translate('analysisComplete', 'ko') : translate('analyzing', 'ko')}
           </span>
         </div>
 
@@ -98,38 +100,16 @@ function ToastCard({ item, onClick }: { item: ToastItem; onClick: () => void }) 
         {item.fileName}
       </span>
 
-      {/* Row 3: progress bar */}
-      <div
-        className="h-[3px] w-full overflow-hidden rounded-full"
-        style={{ background: 'rgba(129,236,255,0.08)' }}
-      >
-        {isComplete ? (
-          <div
-            className="h-full w-full rounded-full"
-            style={{
-              background: 'linear-gradient(90deg, #81ecff 0%, #ac89ff 100%)',
-            }}
-          />
-        ) : (
-          <div
-            className="h-full rounded-full"
-            style={{
-              width: '60%',
-              background: 'linear-gradient(90deg, #f59e0b 0%, #fcd34d 100%)',
-              animation: 'toast-progress 2s ease-in-out infinite alternate',
-            }}
-          />
-        )}
-      </div>
-
       {/* Click hint for complete */}
       {isComplete && (
-        <span
-          className="font-inter"
-          style={{ fontSize: 10, color: 'rgba(129,236,255,0.5)', letterSpacing: '0.8px' }}
-        >
-          CLICK TO VIEW →
-        </span>
+        <div className="flex flex-col gap-1.5 mt-0.5">
+          <span
+            className="font-inter"
+            style={{ fontSize: 10, color: 'rgba(129,236,255,0.5)', letterSpacing: '0.8px' }}
+          >
+            {translate('clickToView', 'ko')}
+          </span>
+        </div>
       )}
 
       <style>{`
