@@ -77,6 +77,13 @@ export async function apiClient<T>(
     headers,
   });
 
+  // 401 Unauthorized 처리: 토큰 만료 또는 미로그인 시 자동 리다이렉트
+  if (res.status === 401 && typeof window !== "undefined") {
+    clearAccessToken();
+    window.location.href = "/login";
+    throw new ApiError(401, "Unauthorized");
+  }
+
   const body = await res.json().catch(() => null) as (ApiResponse<T> & { error_code?: string }) | null;
 
   if (!res.ok) {

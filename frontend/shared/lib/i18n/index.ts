@@ -30,6 +30,9 @@ const dictionary = {
     startAnalysis: '분석 시작',
     dropFilesHereOrClickToBrowse: '여기에 파일을 드롭하거나 클릭하여 찾아보세요.',
     findDocument: '문서 검색',
+    deadline: '마감일',
+    keyConcepts: '주요 개념',
+    rawText: '추출된 원문',
   },
   en: {
     analysisDetail: 'Analysis Detail',
@@ -58,6 +61,9 @@ const dictionary = {
     startAnalysis: 'Start Analysis',
     dropFilesHereOrClickToBrowse: 'Drop files here or click to browse',
     findDocument: 'FIND DOCUMENT...',
+    deadline: 'DEADLINE',
+    keyConcepts: 'KEY CONCEPTS',
+    rawText: 'EXTRACTED RAW TEXT',
   },
 } as const
 
