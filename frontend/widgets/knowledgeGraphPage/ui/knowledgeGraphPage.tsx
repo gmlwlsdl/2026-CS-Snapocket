@@ -9,7 +9,7 @@ import dynamic from "next/dynamic";
 import { SidebarNav, ToastStatus, type ToastItem } from "@/shared/ui";
 import { UploadModal } from "@/features/upload";
 import { TopHeader } from "./topHeader";
-import type { ForceGraphMethods } from "react-force-graph-2d";
+import type { ForceGraphMethods, NodeObject } from "react-force-graph-2d";
 
 const KnowledgeGraphCanvas = dynamic(
   () => import("./knowledgeGraphCanvas").then((mod) => mod.KnowledgeGraphCanvas),
@@ -29,7 +29,7 @@ export function KnowledgeGraphPage() {
   const [toastItems, setToastItems] = useState<ToastItem[]>([]);
   const [summaryData, setSummaryData] = useState<GraphSummaryData>();
 
-  const graphRef = useRef<ForceGraphMethods | undefined>(undefined);
+  const graphRef = useRef<ForceGraphMethods<NodeObject<GraphNode>> | undefined>(undefined);
 
   const handleZoomIn = useCallback(() => {
     if (graphRef.current) {
