@@ -12,6 +12,7 @@ from core.database import SessionLocal, get_db
 from core.security import jwtAuth
 from models.analysis_job import AnalysisJob
 from models.document import Document
+from models.user import User
 from services.ai_client import AIClientError, map_analysis_result, request_analysis
 
 # 분석 API 라우터 (/analysis/*)
@@ -63,9 +64,22 @@ def _run_analysis_job(job_id: int, document_id: int):
     # 백그라운드에서 실제 AI 서버를 호출하고 결과를 반영한다.
     db = SessionLocal()
     try:
-        document = db.query(Document).filter(Document.id == document_id).first()
         job = db.query(AnalysisJob).filter(AnalysisJob.id == job_id).first()
-        if not document or not job:
+        if not job:
+            return
+        document = (
+            db.query(Document)
+            .filter(
+                Document.id == document_id,
+                Document.deleted_at.is_(None),
+            )
+            .first()
+        )
+        if not document:
+            job.status = "failed"
+            job.error_message = "문서를 찾을 수 없습니다."
+            job.finished_at = datetime.now()
+            db.commit()
             return
 
         # 분석 대상 파일 존재 확인
@@ -90,7 +104,14 @@ def _run_analysis_job(job_id: int, document_id: int):
     except AIClientError as exc:
         # 예상 가능한 AI 통신/응답 오류
         db.rollback()
-        document = db.query(Document).filter(Document.id == document_id).first()
+        document = (
+            db.query(Document)
+            .filter(
+                Document.id == document_id,
+                Document.deleted_at.is_(None),
+            )
+            .first()
+        )
         job = db.query(AnalysisJob).filter(AnalysisJob.id == job_id).first()
         if document:
             document.status = "failed"
@@ -102,7 +123,14 @@ def _run_analysis_job(job_id: int, document_id: int):
     except Exception as exc:
         # 그 외 예외도 failed로 처리해 상태 일관성을 유지한다.
         db.rollback()
-        document = db.query(Document).filter(Document.id == document_id).first()
+        document = (
+            db.query(Document)
+            .filter(
+                Document.id == document_id,
+                Document.deleted_at.is_(None),
+            )
+            .first()
+        )
         job = db.query(AnalysisJob).filter(AnalysisJob.id == job_id).first()
         if document:
             document.status = "failed"
@@ -123,7 +151,26 @@ def start_analysis(
     db: Session = Depends(get_db),
 ):
     # 분석 시작: 문서/파일 검증 -> Job 생성 -> 백그라운드 실행
-    document = db.query(Document).filter(Document.id == document_id).first()
+    user_name = jwtToken.get("sub")
+    user_info = db.query(User).filter(User.email == user_name).first()
+    if not user_info:
+        return JSONResponse(
+            status_code=401,
+            content={
+                "success": False,
+                "message": "유효하지 않은 사용자입니다.",
+                "error_code": "UNAUTHORIZED",
+            },
+        )
+    document = (
+        db.query(Document)
+        .filter(
+            Document.id == document_id,
+            Document.user_id == user_info.id,
+            Document.deleted_at.is_(None),
+        )
+        .first()
+    )
     if not document:
         return JSONResponse(
             status_code=404,
@@ -188,7 +235,26 @@ def status_analysis(
     db: Session = Depends(get_db),
 ):
     # 최신 Job 기준으로 분석 진행 상태와 시작/종료 시각을 반환
-    document = db.query(Document).filter(Document.id == document_id).first()
+    user_name = jwtToken.get("sub")
+    user_info = db.query(User).filter(User.email == user_name).first()
+    if not user_info:
+        return JSONResponse(
+            status_code=401,
+            content={
+                "success": False,
+                "message": "유효하지 않은 사용자입니다.",
+                "error_code": "UNAUTHORIZED",
+            },
+        )
+    document = (
+        db.query(Document)
+        .filter(
+            Document.id == document_id,
+            Document.user_id == user_info.id,
+            Document.deleted_at.is_(None),
+        )
+        .first()
+    )
     if not document:
         return JSONResponse(
             status_code=404,
@@ -218,7 +284,26 @@ def result_analysis(
     db: Session = Depends(get_db),
 ):
     # 분석 완료 문서의 최신 결과를 반환
-    document = db.query(Document).filter(Document.id == document_id).first()
+    user_name = jwtToken.get("sub")
+    user_info = db.query(User).filter(User.email == user_name).first()
+    if not user_info:
+        return JSONResponse(
+            status_code=401,
+            content={
+                "success": False,
+                "message": "유효하지 않은 사용자입니다.",
+                "error_code": "UNAUTHORIZED",
+            },
+        )
+    document = (
+        db.query(Document)
+        .filter(
+            Document.id == document_id,
+            Document.user_id == user_info.id,
+            Document.deleted_at.is_(None),
+        )
+        .first()
+    )
     if not document:
         return JSONResponse(
             status_code=404,
@@ -270,7 +355,26 @@ def save_analysis(
     db: Session = Depends(get_db),
 ):
     # 사용자 수정값으로 분석 결과를 확정 저장
-    document = db.query(Document).filter(Document.id == document_id).first()
+    user_name = jwtToken.get("sub")
+    user_info = db.query(User).filter(User.email == user_name).first()
+    if not user_info:
+        return JSONResponse(
+            status_code=401,
+            content={
+                "success": False,
+                "message": "유효하지 않은 사용자입니다.",
+                "error_code": "UNAUTHORIZED",
+            },
+        )
+    document = (
+        db.query(Document)
+        .filter(
+            Document.id == document_id,
+            Document.user_id == user_info.id,
+            Document.deleted_at.is_(None),
+        )
+        .first()
+    )
     if not document:
         return JSONResponse(
             status_code=404,
@@ -281,7 +385,7 @@ def save_analysis(
             },
         )
 
-    if document.status not in {"analyzed", "saved"}:
+    if document.status not in {"analyzed"}:
         return JSONResponse(
             status_code=409,
             content={
@@ -300,7 +404,7 @@ def save_analysis(
     document.capture_date = confirm.capture_date.date()
     document.summary = confirm.summary
     document.raw_text = str(latest_result.get("raw_text") or document.raw_text or "")
-    document.status = "saved"
+    document.status = "analyzed"
 
     # 최신 Job의 raw_result도 저장 데이터 기준으로 동기화
     if latest_job:
@@ -325,7 +429,7 @@ def save_analysis(
         message="분석 결과 저장 완료",
         data={
             "document_id": str(document.id),
-            "status": "saved",
+            "status": "analyzed",
         },
     )
 
@@ -338,7 +442,26 @@ def retry_analysis(
     db: Session = Depends(get_db),
 ):
     # 실패한 최신 Job만 재시도 가능
-    document = db.query(Document).filter(Document.id == document_id).first()
+    user_name = jwtToken.get("sub")
+    user_info = db.query(User).filter(User.email == user_name).first()
+    if not user_info:
+        return JSONResponse(
+            status_code=401,
+            content={
+                "success": False,
+                "message": "유효하지 않은 사용자입니다.",
+                "error_code": "UNAUTHORIZED",
+            },
+        )
+    document = (
+        db.query(Document)
+        .filter(
+            Document.id == document_id,
+            Document.user_id == user_info.id,
+            Document.deleted_at.is_(None),
+        )
+        .first()
+    )
     if not document:
         return JSONResponse(
             status_code=404,
