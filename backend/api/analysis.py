@@ -441,7 +441,7 @@ def retry_analysis(
     jwtToken: dict = Depends(jwtAuth),
     db: Session = Depends(get_db),
 ):
-    # 실패한 최신 Job만 재시도 가능
+    # 최신 분석 Job 기준으로 재분석을 시작한다.
     user_name = jwtToken.get("sub")
     user_info = db.query(User).filter(User.email == user_name).first()
     if not user_info:
@@ -483,13 +483,23 @@ def retry_analysis(
             },
         )
 
-    if latest_job.status != "failed":
+    if latest_job.status == "processing" or document.status == "processing":
         return JSONResponse(
             status_code=409,
             content={
                 "success": False,
-                "message": "실패한 분석만 재시도할 수 있습니다.",
-                "error_code": "NOT_FAILED_STATUS",
+                "message": "이미 분석 중인 문서입니다.",
+                "error_code": "ALREADY_PROCESSING",
+            },
+        )
+
+    if latest_job.status not in {"analyzed", "failed"}:
+        return JSONResponse(
+            status_code=409,
+            content={
+                "success": False,
+                "message": "분석 완료 또는 실패 상태에서만 재시도할 수 있습니다.",
+                "error_code": "NOT_RETRYABLE_STATUS",
             },
         )
 
