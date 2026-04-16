@@ -1,6 +1,5 @@
 from fastapi import APIRouter, HTTPException, status, Depends
 from pydantic import BaseModel, ConfigDict
-from collections import defaultdict
 from sqlalchemy.sql import func
 from sqlalchemy.orm import Session, joinedload
 from datetime import datetime
@@ -8,8 +7,6 @@ from core.security import jwtAuth
 from core.database import get_db
 from models.user import User
 from models.document import Document
-from models.document_tag import DocumentTag
-from models.tag import Tag
 import uuid
 from api.apiResponse import ApiResponse
 
