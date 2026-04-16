@@ -46,7 +46,9 @@ def makeHighlightSnippet(document: Document, queryStr: str) -> str:
 
     for tag in document.tags:
         if queryStr.lower() in tag.lower():
-            return f"태그: {pattern.sub(r'**\g<0>**', tag)}"
+            highlighted_tag = pattern.sub(r"**\g<0>**", tag)
+            return "태그: " + highlighted_tag
+
 
     summary_match = extract_snippet(document.summary)
     if summary_match: 
