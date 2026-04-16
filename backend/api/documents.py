@@ -1,15 +1,12 @@
 from fastapi import APIRouter, HTTPException, status, Depends
 from pydantic import BaseModel, ConfigDict
-from collections import defaultdict
 from sqlalchemy.sql import func
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from datetime import datetime
 from core.security import jwtAuth
 from core.database import get_db
 from models.user import User
 from models.document import Document
-from models.document_tag import DocumentTag
-from models.tag import Tag
 import uuid
 from api.apiResponse import ApiResponse
 
@@ -63,37 +60,18 @@ def read_documents(jwtToken: dict = Depends(jwtAuth), db: Session = Depends(get_
     userName = jwtToken.get("sub")
     userInfo = db.query(User).filter(User.email == userName).first()
 
-    documents = db.query(Document).filter(Document.user_id == userInfo.id, Document.deleted_at.is_(None)).all()
-    doc_ids = [doc.id for doc in documents]
-    
-    tags_data = (
-        db.query(DocumentTag.document_id, Tag.name)
-        .join(Tag, DocumentTag.tag_id == Tag.id)
-        .filter(DocumentTag.document_id.in_(doc_ids))
+    documents = (
+        db.query(Document)
+        .options(joinedload(Document.tag_objects)) 
+        .filter(
+            Document.user_id == userInfo.id, 
+            Document.deleted_at.is_(None)
+        )
         .all()
     )
-    
-    tags_by_doc = defaultdict(list)
-    for doc_id, tag_name in tags_data:
-        tags_by_doc[doc_id].append(tag_name)
-        
-    items = []
-    for doc in documents:
-        doc_dict = {
-            "id": doc.id,
-            "doc_id": doc.doc_id,
-            "title": doc.title,
-            "category": doc.category,
-            "status": doc.status,
-            "file_type": doc.file_type,
-            "capture_date": doc.capture_date,
-            "created_at": doc.created_at,
-            "tags": tags_by_doc[doc.id] 
-        }
-        items.append(doc_dict)
 
     data = GetDocuments(
-        items=items,
+        items=documents,
         pagination={
             "page": 1,
             "size": len(documents),
@@ -114,11 +92,16 @@ def get_document(document_id: str, jwtToken: dict = Depends(jwtAuth), db: Sessio
     userName = jwtToken.get("sub")
     userInfo = db.query(User).filter(User.email == userName).first()
     
-    document = db.query(Document).filter(
-        Document.user_id == userInfo.id,
-        Document.id == document_id,
-        Document.deleted_at.is_(None)
-    ).first()
+    document = (
+        db.query(Document)
+        .options(joinedload(Document.tag_objects))
+        .filter(
+            Document.id == document_id, 
+            Document.user_id == userInfo.id,
+            Document.deleted_at.is_(None)
+        )
+        .first()
+    )
 
     if not document:
         raise HTTPException(
@@ -130,34 +113,11 @@ def get_document(document_id: str, jwtToken: dict = Depends(jwtAuth), db: Sessio
             }
         )
     
-    tagRows = (
-        db.query(Tag.name)
-        .join(DocumentTag, Tag.id == DocumentTag.tag_id)
-        .filter(DocumentTag.document_id == document_id)
-        .all()
-    )
-
-    tags = [row[0] for row in tagRows]
-
-    resultData = {
-        "id": document.id,
-        "doc_id": document.doc_id,
-        "title": document.title,
-        "category": document.category,
-        "status": document.status,
-        "file_url": document.file_path,
-        "file_type": document.file_type,
-        "capture_date": document.capture_date,
-        "summary": document.summary,
-        "raw_text": document.raw_text,
-        "created_at": document.created_at,
-        "tags": tags 
-    }
 
     return ApiResponse(
         success=True,
         message="문서 상세 조회 성공",
-        data=resultData
+        data=document
     )
 
 @router.patch("/{document_id}", response_model=ApiResponse[dict])

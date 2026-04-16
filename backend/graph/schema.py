@@ -6,10 +6,11 @@ from sqlalchemy.orm import Session
 from core.exceptions import UnauthorizedError, NotFoundError, BadUserInputError, InternalServerError
 from core.database import get_db
 from core.security import jwtAuth
+from models.user import User
 from models.document import Document
-from models.document_tag import DocumentTag
 from models.tag import Tag
-from sqlalchemy import func, or_
+from sqlalchemy import func, or_, and_
+from sqlalchemy.orm import joinedload
 from api.apiResponse import ApiResponse
 
 router = APIRouter(prefix="/graph", tags=["graph"])
@@ -44,6 +45,8 @@ class Query:
         db= info.context.get("db")
         user = info.context.get("user")
 
+        userInfo = db.query(User).filter(User.email == user.get("sub")).first()
+
         if not user:
             raise UnauthorizedError()
 
@@ -52,14 +55,14 @@ class Query:
             # db 조회 후 결과생성
             # 카테고리에 따라 선택적으로 결과값 리턴
             if category:
-                nodes = db.query(Document).filter(Document.category == category, Document.deleted_at.is_(None)).all()
+                nodes = db.query(Document).filter(Document.user_id == userInfo.id, Document.category == category, Document.deleted_at.is_(None)).all()
 
                 if not nodes:
                     raise NotFoundError()
 
                 return nodes
             
-            nodes = db.query(Document).filter(Document.deleted_at.is_(None)).all()
+            nodes = db.query(Document).filter(Document.user_id == userInfo.id, Document.deleted_at.is_(None)).all()
 
             if not nodes:
                 raise NotFoundError()
@@ -95,6 +98,8 @@ class Query:
         db= info.context.get("db")
         user = info.context.get("user")
 
+        userInfo = db.query(User).filter(User.email == user.get("sub")).first()
+
         if not user:
             raise UnauthorizedError()
 
@@ -106,19 +111,23 @@ class Query:
         try:
 
             # db 조회 후 결과생성
-            nodes = db.query(Document, DocumentTag, Tag).outerjoin(
-                DocumentTag,
-                Document.id == DocumentTag.document_id
-            ).outerjoin(
-                Tag,
-                DocumentTag.tag_id == Tag.id
-            ).filter(
-                or_(Document.title.ilike(searchQuery),
-                    Document.summary.ilike(searchQuery),
-                    Tag.name.ilike(searchQuery)
-                ),
-                Document.deleted_at.is_(None)
-            ).all()
+            documents = (
+                db.query(Document)
+                .options(joinedload(Document.tag_objects))
+                .filter(
+                    and_(
+                        Document.user_id == userInfo.id,
+                        Document.deleted_at.is_(None),
+                        or_(
+                            Document.title.ilike(searchQuery),
+                            Document.summary.ilike(searchQuery),
+                            Document.tag_objects.any(Tag.name.ilike(searchQuery))
+                        )
+                    )
+                ).all()
+            )
+
+            nodes = documents
 
             if not nodes:
                 raise NotFoundError()
@@ -134,9 +143,21 @@ data = strawberry.Schema(query=Query)
 @router.get("/summary", response_model=ApiResponse[dict])
 def summary(jwtToken: dict = Depends(jwtAuth), db: Session = Depends(get_db)):
 
+    userName = jwtToken.get("sub")
+    userInfo = db.query(User).filter(User.email == userName).first()
+
     # db에서 요약데이터 조회
     nodeCount = db.query(func.count(Document.id)).filter(Document.deleted_at.is_(None)).scalar()
-    tagCount = db.query(func.count(Tag.id)).filter(Document.deleted_at.is_(None)).scalar()
+    tagCount = (
+        db.query(func.count(func.distinct(Tag.id)))
+        .select_from(Document)
+        .join(Document.tag_objects)
+        .filter(
+            Document.user_id == userInfo.id,  
+            Document.deleted_at.is_(None)
+        )
+        .scalar() or 0
+    )
     # MVP에서는 0 고도화 후 지원
     edgeCount = 0
 
