@@ -32,21 +32,25 @@ def makeHighlightSnippet(document: Document, queryStr: str) -> str:
             end = min(len(text), match.end() + 20)
             snippet = text[start:end]
             
-            if start > 0: snippet = "..." + snippet
-            if end < len(text): snippet = snippet + "..."
+            if start > 0: 
+                snippet = "..." + snippet
+            if end < len(text): 
+                snippet = snippet + "..."
             
             return pattern.sub(r'**\g<0>**', snippet)
         return None
     
     title_match = extract_snippet(document.title)
-    if title_match: return title_match
+    if title_match: 
+        return title_match
 
     for tag in document.tags:
         if queryStr.lower() in tag.lower():
             return f"태그: {pattern.sub(r'**\g<0>**', tag)}"
 
     summary_match = extract_snippet(document.summary)
-    if summary_match: return summary_match
+    if summary_match: 
+        return summary_match
 
     return f"**{queryStr}** 포함됨"
 
