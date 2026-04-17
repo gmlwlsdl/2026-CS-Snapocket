@@ -16,7 +16,8 @@ ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES"))
 
 # AI Server
 AI_SERVER_URL = os.getenv("AI_SERVER_URL", "").strip()
-AI_SERVER_API_KEY = os.getenv("AI_SERVER_API_KEY", "").strip()
+# 운영 환경에 따라 키 이름이 다를 수 있어 AIOPS_API_KEY를 보조 fallback으로 허용한다.
+AI_SERVER_API_KEY = os.getenv("AI_SERVER_API_KEY", os.getenv("AIOPS_API_KEY", "")).strip()
 AI_SERVER_TIMEOUT_S = float(os.getenv("AI_SERVER_TIMEOUT_S", "60"))
 
 # 키 누락 방지
