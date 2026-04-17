@@ -1,4 +1,7 @@
-export const BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
+export const BASE_URL =
+  typeof window === "undefined"
+    ? (process.env.API_BASE_URL ?? "http://localhost:8000") // SSR: Next.js 서버 → FastAPI 직접
+    : "/api"; // 브라우저: Next.js 서버를 거쳐 프록시
 
 export class ApiError extends Error {
   constructor(
