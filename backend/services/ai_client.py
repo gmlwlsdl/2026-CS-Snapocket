@@ -4,12 +4,39 @@ import os
 import uuid
 from urllib import error as urlerror
 from urllib import request as urlrequest
+from urllib.parse import urlparse, urlunparse
 
 from core.config import AI_SERVER_API_KEY, AI_SERVER_TIMEOUT_S, AI_SERVER_URL
 
 
 class AIClientError(RuntimeError):
     pass
+
+
+_KNOWN_ANALYSIS_PATHS = {"/v1/infer", "/analyze", "/v1/backend/analyze"}
+
+
+def _normalize_ai_server_url(raw_url: str) -> str:
+    token = str(raw_url or "").strip()
+    if not token:
+        return ""
+
+    parsed = urlparse(token)
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        raise AIClientError(
+            "AI_SERVER_URL 형식이 올바르지 않습니다. 예: http://127.0.0.1:18080/v1/infer"
+        )
+
+    path = (parsed.path or "").rstrip("/")
+    if path in {"", "/v1"}:
+        path = "/v1/infer"
+    elif path.startswith("/ops"):
+        path = "/v1/infer"
+    elif path and path not in _KNOWN_ANALYSIS_PATHS:
+        # 커스텀 프록시 경로를 쓰는 경우를 위해 알 수 없는 path는 그대로 둔다.
+        path = parsed.path
+
+    return urlunparse((parsed.scheme, parsed.netloc, path, "", parsed.query, ""))
 
 
 def _make_multipart_body(*, fields: list[tuple[str, str]], file_path: str) -> tuple[str, bytes]:
@@ -75,6 +102,7 @@ def request_analysis(*, file_path: str, doc_id: str) -> dict:
         raise AIClientError("AI_SERVER_URL이 설정되지 않았습니다.")
     if not os.path.exists(file_path):
         raise AIClientError("분석할 파일이 존재하지 않습니다.")
+    target_url = _normalize_ai_server_url(AI_SERVER_URL)
 
     content_type, body = _make_multipart_body(
         fields=[("doc_id", str(doc_id)), ("engine_hint", "auto")],
@@ -88,7 +116,7 @@ def request_analysis(*, file_path: str, doc_id: str) -> dict:
         headers["x-api-key"] = AI_SERVER_API_KEY
 
     req = urlrequest.Request(
-        url=AI_SERVER_URL,
+        url=target_url,
         method="POST",
         data=body,
         headers=headers,
@@ -105,9 +133,18 @@ def request_analysis(*, file_path: str, doc_id: str) -> dict:
         if isinstance(payload, dict):
             error = payload.get("error")
             if isinstance(error, dict) and error.get("message"):
-                raise AIClientError(str(error.get("message"))) from exc
+                message = str(error.get("message"))
+                if exc.code == 401 and "Invalid API key" in message:
+                    raise AIClientError(
+                        "Invalid API key: 백엔드 AI_SERVER_API_KEY 값이 aiops-api의 AIOPS_API_KEY와 일치해야 합니다."
+                    ) from exc
+                raise AIClientError(message) from exc
             if payload.get("message"):
                 raise AIClientError(str(payload.get("message"))) from exc
+        if exc.code == 405:
+            raise AIClientError(
+                f"AI 엔드포인트가 잘못됐습니다: {target_url} (권장: /v1/infer 또는 /analyze)"
+            ) from exc
         raise AIClientError(f"AI 서버 요청 실패(HTTP {exc.code})") from exc
     except urlerror.URLError as exc:
         raise AIClientError(f"AI 서버 연결 실패: {exc.reason}") from exc
@@ -142,4 +179,3 @@ def map_analysis_result(payload: dict, *, fallback_doc_id: str) -> dict:
         "deadline": data.get("deadline") or domain.get("deadline"),
     }
     return mapped
-
