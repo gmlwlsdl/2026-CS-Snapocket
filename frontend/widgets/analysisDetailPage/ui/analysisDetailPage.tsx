@@ -2,7 +2,11 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
-import { apiFetchBlobUrl, fetchDocument, deleteDocument } from '@/entities/document'
+import {
+  apiFetchBlobUrl,
+  fetchDocument,
+  deleteDocument,
+} from '@/entities/document'
 import {
   confirmAnalysis,
   fetchAnalysisResult,
@@ -17,7 +21,14 @@ import { ApiError } from '@/shared/api'
 
 // ── 로컬 타입 ────────────────────────────────────────────────────────────────
 
-type PageStatus = 'loading' | 'polling' | 'ready' | 'not-started' | 'failed' | 'saving' | 'discarding'
+type PageStatus =
+  | 'loading'
+  | 'polling'
+  | 'ready'
+  | 'not-started'
+  | 'failed'
+  | 'saving'
+  | 'discarding'
 
 interface TagItem {
   id: number
@@ -39,14 +50,7 @@ interface FormState {
   id: string
 }
 
-const CATEGORY_OPTIONS = [
-  'Class Materials',
-  'Research Papers',
-  'Personal Notes',
-  'Assignments',
-  'Receipts',
-  'Notices',
-]
+const CATEGORY_OPTIONS = ['lecture', 'assignment', 'notice', 'receipt', 'memo']
 
 const POLL_INTERVAL_MS = 3_000
 
@@ -79,7 +83,9 @@ export function AnalysisDetailPage() {
   const mode = searchParams.get('mode') // 'result' or null
 
   const [pageStatus, setPageStatus] = useState<PageStatus>('loading')
-  const [documentStatus, setDocumentStatus] = useState<DocumentStatus | null>(null)
+  const [documentStatus, setDocumentStatus] = useState<DocumentStatus | null>(
+    null,
+  )
   const [imageUrl, setImageUrl] = useState<string | null>(null)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
 
@@ -274,7 +280,8 @@ export function AnalysisDetailPage() {
   }
 
   async function handleDiscard() {
-    if (!confirm('추출 데이터를 삭제하고 목록으로 돌아갑니다. 계속할까요?')) return
+    if (!confirm('추출 데이터를 삭제하고 목록으로 돌아갑니다. 계속할까요?'))
+      return
     setPageStatus('discarding')
     try {
       await deleteDocument(id)
@@ -343,7 +350,11 @@ export function AnalysisDetailPage() {
             <div className="flex items-center gap-2">
               <span
                 className={`inline-block rounded-full w-2 h-2 transition-colors duration-300 ${
-                  isProcessing ? 'bg-amber-500' : pageStatus === 'failed' ? 'bg-red-600' : 'bg-snap-cyan'
+                  isProcessing
+                    ? 'bg-amber-500'
+                    : pageStatus === 'failed'
+                      ? 'bg-red-600'
+                      : 'bg-snap-cyan'
                 }`}
               />
               <span className="text-[12px] font-normal tracking-[1.2px] text-snap-muted leading-[16px]">
@@ -366,20 +377,19 @@ export function AnalysisDetailPage() {
           className="flex items-center justify-center rounded-full transition-opacity disabled:cursor-not-allowed disabled:opacity-40 hover:opacity-90 w-[184px] h-[44px] bg-gradient-to-br from-snap-cyan to-snap-cyan-3"
         >
           <span className="text-[14px] font-bold text-snap-btn-text">
-            {isSaving ? translate('saving', 'ko') : translate('confirmSave', 'ko')}
+            {isSaving
+              ? translate('saving', 'ko')
+              : translate('confirmSave', 'ko')}
           </span>
         </button>
       </header>
 
       {/* ── Main ───────────────────────────────────────────────────────────── */}
       <main className="flex flex-1 gap-12 overflow-hidden px-8 py-8">
-
         {/* ── Left Panel (38%) ─────────────────────────────────────────────── */}
         <div className="flex w-[38.4%] shrink-0 flex-col gap-4">
           {/* Image container */}
-          <div
-            className="relative flex-1 overflow-hidden rounded-xl bg-black border border-snap-border/15 min-h-0"
-          >
+          <div className="relative flex-1 overflow-hidden rounded-xl bg-black border border-snap-border/15 min-h-0">
             {imageUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
@@ -465,7 +475,13 @@ export function AnalysisDetailPage() {
               aria-label="설정"
             >
               <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
-                <circle cx="9" cy="9" r="2.5" stroke="#aaabaf" strokeWidth="1.4" />
+                <circle
+                  cx="9"
+                  cy="9"
+                  r="2.5"
+                  stroke="#aaabaf"
+                  strokeWidth="1.4"
+                />
                 <path
                   d="M9 1.5v2M9 14.5v2M1.5 9h2M14.5 9h2M3.7 3.7l1.4 1.4M12.9 12.9l1.4 1.4M3.7 14.3l1.4-1.4M12.9 5.1l1.4-1.4"
                   stroke="#aaabaf"
@@ -479,7 +495,6 @@ export function AnalysisDetailPage() {
 
         {/* ── Right Panel (60%) ────────────────────────────────────────────── */}
         <div className="flex flex-1 min-w-0 flex-col gap-8 overflow-y-auto">
-
           {/* Document Title */}
           <div className="flex flex-col gap-1.5">
             <label className="text-[10px] font-normal tracking-[2px] text-snap-muted leading-[15px]">
@@ -488,7 +503,9 @@ export function AnalysisDetailPage() {
             <div className="rounded-lg px-3 py-3.5 border border-gray-500">
               <input
                 value={form.title}
-                onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, title: e.target.value }))
+                }
                 disabled={!isInteractive}
                 className="w-full bg-transparent outline-none disabled:opacity-60 text-[36px] font-semibold leading-[40px] text-snap-white"
                 placeholder={isProcessing ? 'Analyzing…' : '문서 제목'}
@@ -521,18 +538,25 @@ export function AnalysisDetailPage() {
                     transition: 'transform 0.15s',
                   }}
                 >
-                  <path d="M5 8L10.5 13.5L16 8" stroke="#aaabaf" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                  <path
+                    d="M5 8L10.5 13.5L16 8"
+                    stroke="#aaabaf"
+                    strokeWidth="1.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
                 </svg>
               </button>
 
               {categoryOpen && (
-                <div
-                  className="absolute left-0 right-0 z-20 overflow-hidden rounded-lg bg-[#1d2024] border border-snap-border/30 top-[calc(100%+4px)]"
-                >
+                <div className="absolute left-0 right-0 z-20 overflow-hidden rounded-lg bg-[#1d2024] border border-snap-border/30 top-[calc(100%+4px)]">
                   {CATEGORY_OPTIONS.map((opt) => (
                     <button
                       key={opt}
-                      onClick={() => { setForm((f) => ({ ...f, category: opt })); setCategoryOpen(false) }}
+                      onClick={() => {
+                        setForm((f) => ({ ...f, category: opt }))
+                        setCategoryOpen(false)
+                      }}
                       className={`flex w-full items-center px-4 transition-colors hover:bg-white/5 h-10 text-[14px] ${opt === form.category ? 'font-semibold text-snap-cyan' : 'font-normal text-snap-white'}`}
                     >
                       {opt}
@@ -547,22 +571,41 @@ export function AnalysisDetailPage() {
               {/* Capture Date */}
               <div className="flex flex-1 flex-col gap-1.5">
                 <label className="text-[10px] font-normal tracking-[2px] text-snap-muted leading-[15px]">
-                  {translate('captureDate', 'ko')}  
+                  {translate('captureDate', 'ko')}
                 </label>
-                <div
-                  className="flex items-center justify-between rounded-lg px-4 h-[44px] bg-snap-input"
-                >
+                <div className="flex items-center justify-between rounded-lg px-4 h-[44px] bg-snap-input">
                   <input
                     type="text"
                     value={form.captureDate}
-                    onChange={(e) => setForm((f) => ({ ...f, captureDate: e.target.value }))}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...f, captureDate: e.target.value }))
+                    }
                     disabled={!isInteractive}
                     className="bg-transparent outline-none disabled:opacity-60 text-[14px] font-medium text-snap-white"
                     placeholder="MM/DD/YYYY"
                   />
-                  <svg width="18" height="18" viewBox="0 0 18 18" fill="none" opacity={0.4}>
-                    <rect x="1.5" y="3" width="15" height="13.5" rx="2" stroke="#aaabaf" strokeWidth="1.4" />
-                    <path d="M5.5 1.5V4.5M12.5 1.5V4.5M1.5 7.5H16.5" stroke="#aaabaf" strokeWidth="1.4" strokeLinecap="round" />
+                  <svg
+                    width="18"
+                    height="18"
+                    viewBox="0 0 18 18"
+                    fill="none"
+                    opacity={0.4}
+                  >
+                    <rect
+                      x="1.5"
+                      y="3"
+                      width="15"
+                      height="13.5"
+                      rx="2"
+                      stroke="#aaabaf"
+                      strokeWidth="1.4"
+                    />
+                    <path
+                      d="M5.5 1.5V4.5M12.5 1.5V4.5M1.5 7.5H16.5"
+                      stroke="#aaabaf"
+                      strokeWidth="1.4"
+                      strokeLinecap="round"
+                    />
                   </svg>
                 </div>
               </div>
@@ -572,20 +615,38 @@ export function AnalysisDetailPage() {
                 <label className="text-[10px] font-normal tracking-[2px] text-snap-muted leading-[15px]">
                   {translate('deadline', 'ko')}
                 </label>
-                <div
-                  className="flex items-center justify-between rounded-lg px-4 h-[44px] bg-snap-input"
-                >
+                <div className="flex items-center justify-between rounded-lg px-4 h-[44px] bg-snap-input">
                   <input
                     type="text"
                     value={form.deadline}
-                    onChange={(e) => setForm((f) => ({ ...f, deadline: e.target.value }))}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...f, deadline: e.target.value }))
+                    }
                     disabled={!isInteractive}
                     className="bg-transparent outline-none disabled:opacity-60 text-[14px] font-medium text-snap-white"
                     placeholder="MM/DD/YYYY"
                   />
-                  <svg width="18" height="18" viewBox="0 0 18 18" fill="none" opacity={0.4}>
-                    <path d="M9 4.5v4.5l3 3" stroke="#aaabaf" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
-                    <circle cx="9" cy="9" r="7.5" stroke="#aaabaf" strokeWidth="1.4" />
+                  <svg
+                    width="18"
+                    height="18"
+                    viewBox="0 0 18 18"
+                    fill="none"
+                    opacity={0.4}
+                  >
+                    <path
+                      d="M9 4.5v4.5l3 3"
+                      stroke="#aaabaf"
+                      strokeWidth="1.4"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                    <circle
+                      cx="9"
+                      cy="9"
+                      r="7.5"
+                      stroke="#aaabaf"
+                      strokeWidth="1.4"
+                    />
                   </svg>
                 </div>
               </div>
@@ -600,8 +661,19 @@ export function AnalysisDetailPage() {
               </span>
               <div className="flex items-center gap-1.5">
                 <svg width="11" height="11" viewBox="0 0 11 11" fill="none">
-                  <circle cx="5.5" cy="5.5" r="4.5" stroke="#81ecff" strokeWidth="1" />
-                  <path d="M5.5 3.5V5.5M5.5 7.5V7.6" stroke="#81ecff" strokeWidth="1" strokeLinecap="round" />
+                  <circle
+                    cx="5.5"
+                    cy="5.5"
+                    r="4.5"
+                    stroke="#81ecff"
+                    strokeWidth="1"
+                  />
+                  <path
+                    d="M5.5 3.5V5.5M5.5 7.5V7.6"
+                    stroke="#81ecff"
+                    strokeWidth="1"
+                    strokeLinecap="round"
+                  />
                 </svg>
                 <span className="text-[10px] font-bold text-snap-cyan leading-[15px]">
                   {translate('aiGenerated', 'ko')}
@@ -610,7 +682,9 @@ export function AnalysisDetailPage() {
             </div>
             <textarea
               value={form.summary}
-              onChange={(e) => setForm((f) => ({ ...f, summary: e.target.value }))}
+              onChange={(e) =>
+                setForm((f) => ({ ...f, summary: e.target.value }))
+              }
               disabled={!isInteractive}
               className="w-full resize-none rounded-xl px-6 py-6 outline-none disabled:opacity-60 h-[240px] bg-snap-input text-[16px] font-normal leading-[26px] text-snap-muted"
               placeholder={isProcessing ? translate('analyzing', 'ko') : ''}
@@ -618,28 +692,32 @@ export function AnalysisDetailPage() {
           </div>
 
           {/* Key Concepts */}
-          {mode === 'result' && <div className="flex flex-col gap-3">
-            <span className="text-[10px] font-normal tracking-[2px] text-snap-muted leading-[15px]">
-              {translate('keyConcepts', 'ko')}
-            </span>
+          {mode === 'result' && (
+            <div className="flex flex-col gap-3">
+              <span className="text-[10px] font-normal tracking-[2px] text-snap-muted leading-[15px]">
+                {translate('keyConcepts', 'ko')}
+              </span>
 
-            <div className="flex flex-wrap gap-2">
-              { form.keyConcepts.length > 0 ? (
-                form.keyConcepts.map((concept, idx) => (
-                  <span
-                    key={idx}
-                    className="rounded-full px-3 py-1 bg-[#171a1d] text-[12px] font-medium text-snap-cyan/80 border border-snap-cyan/20"
-                  >
-                    {concept}
+              <div className="flex flex-wrap gap-2">
+                {form.keyConcepts.length > 0 ? (
+                  form.keyConcepts.map((concept, idx) => (
+                    <span
+                      key={idx}
+                      className="rounded-full px-3 py-1 bg-[#171a1d] text-[12px] font-medium text-snap-cyan/80 border border-snap-cyan/20"
+                    >
+                      {concept}
+                    </span>
+                  ))
+                ) : (
+                  <span className="text-[12px] text-snap-muted/40 italic">
+                    {isProcessing
+                      ? 'Extracting concepts…'
+                      : 'No concepts extracted'}
                   </span>
-                ))
-              ) : (
-                <span className="text-[12px] text-snap-muted/40 italic">
-                  {isProcessing ? 'Extracting concepts…' : 'No concepts extracted'}
-                </span>
-              )}
+                )}
+              </div>
             </div>
-          </div>}
+          )}
 
           {/* Raw Text (추후 표시 예정)
           <div className="flex flex-col gap-2">
@@ -666,7 +744,10 @@ export function AnalysisDetailPage() {
                   className="group flex items-center gap-1 rounded-md px-3 py-1 bg-[#292c31]"
                   style={{ border: `1px solid ${tag.color}33` }}
                 >
-                  <span className="text-[12px] font-bold leading-[16px]" style={{ color: tag.color }}>
+                  <span
+                    className="text-[12px] font-bold leading-[16px]"
+                    style={{ color: tag.color }}
+                  >
                     {tag.label}
                   </span>
                   {isInteractive && (
@@ -675,21 +756,34 @@ export function AnalysisDetailPage() {
                       className="ml-0.5 opacity-0 transition-opacity group-hover:opacity-60"
                       aria-label="태그 제거"
                     >
-                      <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
-                        <path d="M2 2L8 8M8 2L2 8" stroke={tag.color} strokeWidth="1.3" strokeLinecap="round" />
+                      <svg
+                        width="10"
+                        height="10"
+                        viewBox="0 0 10 10"
+                        fill="none"
+                      >
+                        <path
+                          d="M2 2L8 8M8 2L2 8"
+                          stroke={tag.color}
+                          strokeWidth="1.3"
+                          strokeLinecap="round"
+                        />
                       </svg>
                     </button>
                   )}
                 </span>
               ))}
 
-              {isInteractive && (
-                addingTag ? (
+              {isInteractive &&
+                (addingTag ? (
                   <input
                     autoFocus
                     value={newTag}
                     onChange={(e) => setNewTag(e.target.value)}
-                    onKeyDown={(e) => { if (e.key === 'Enter') handleAddTag(); if (e.key === 'Escape') setAddingTag(false) }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') handleAddTag()
+                      if (e.key === 'Escape') setAddingTag(false)
+                    }}
                     onBlur={handleAddTag}
                     className="rounded-md px-3 outline-none h-[26px] bg-[#292c31] border border-snap-cyan/30 text-[12px] font-bold text-snap-cyan w-[100px]"
                     placeholder="#tag"
@@ -701,25 +795,30 @@ export function AnalysisDetailPage() {
                   >
                     {translate('addTag', 'ko')}
                   </button>
-                )
-              )}
+                ))}
             </div>
           </div>
 
           {/* Footer */}
-          <div
-            className="mt-auto flex items-center pt-6 border-t border-snap-border/10"
-          >
+          <div className="mt-auto flex items-center pt-6 border-t border-snap-border/10">
             <button
               onClick={handleDiscard}
               disabled={isDiscarding || isSaving}
               className="flex items-center gap-2 transition-opacity hover:opacity-70 disabled:opacity-40"
             >
               <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                <path d="M2 4H14M5 4V2.5C5 2 5.5 1.5 6 1.5H10C10.5 1.5 11 2 11 2.5V4M6.5 7V12M9.5 7V12M3.5 4L4.5 13.5C4.5 14 5 14.5 5.5 14.5H10.5C11 14.5 11.5 14 11.5 13.5L12.5 4" stroke="#d7383b" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+                <path
+                  d="M2 4H14M5 4V2.5C5 2 5.5 1.5 6 1.5H10C10.5 1.5 11 2 11 2.5V4M6.5 7V12M9.5 7V12M3.5 4L4.5 13.5C4.5 14 5 14.5 5.5 14.5H10.5C11 14.5 11.5 14 11.5 13.5L12.5 4"
+                  stroke="#d7383b"
+                  strokeWidth="1.3"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
               </svg>
               <span className="text-[14px] font-semibold text-red-600 leading-[20px]">
-                {isDiscarding ? translate('discarding', 'ko') : translate('discardExtraction', 'ko')}
+                {isDiscarding
+                  ? translate('discarding', 'ko')
+                  : translate('discardExtraction', 'ko')}
               </span>
             </button>
           </div>

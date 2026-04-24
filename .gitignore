@@ -45,6 +45,7 @@ Thumbs.db
 # ── Aigent ─────────────────────────────────────────────────────────────────────────
 .mcp.json
 CLAUDE.md
+.claude/
 
 # aws
 snapocket-aws.pem
