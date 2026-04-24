@@ -13,12 +13,13 @@ import { TopHeader } from "./topHeader";
 import type { ForceGraphMethods, NodeObject } from "react-force-graph-2d";
 
 const KnowledgeGraphCanvas = dynamic(
-  () => import("./knowledgeGraphCanvas").then((mod) => mod.KnowledgeGraphCanvas),
-  { ssr: false }
-);
+  () =>
+    import('./knowledgeGraphCanvas').then((mod) => mod.KnowledgeGraphCanvas),
+  { ssr: false },
+)
 
-import { GraphControls } from "./graphControls";
-import { AiInputBar } from "./aiInputBar";
+import { GraphControls } from './graphControls'
+import { AiInputBar } from './aiInputBar'
 
 export function KnowledgeGraphPage() {
   const router = useRouter();
@@ -31,50 +32,52 @@ export function KnowledgeGraphPage() {
   const [toastItems, setToastItems] = useState<ToastItem[]>([]);
   const [summaryData, setSummaryData] = useState<GraphSummaryData>();
 
-  const graphRef = useRef<ForceGraphMethods<NodeObject<GraphNode>> | undefined>(undefined);
+  const graphRef = useRef<ForceGraphMethods<NodeObject<GraphNode>> | undefined>(
+    undefined,
+  )
 
   const handleZoomIn = useCallback(() => {
     if (graphRef.current) {
-      const currentZoom = graphRef.current.zoom();
-      graphRef.current.zoom(currentZoom * 1.2, 400);
+      const currentZoom = graphRef.current.zoom()
+      graphRef.current.zoom(currentZoom * 1.2, 400)
     }
-  }, []);
+  }, [])
 
   const handleZoomOut = useCallback(() => {
     if (graphRef.current) {
-      const currentZoom = graphRef.current.zoom();
-      graphRef.current.zoom(currentZoom * 0.8, 400);
+      const currentZoom = graphRef.current.zoom()
+      graphRef.current.zoom(currentZoom * 0.8, 400)
     }
-  }, []);
+  }, [])
 
   const handleFit = useCallback(() => {
     if (graphRef.current) {
-      graphRef.current.zoomToFit(600, 80);
+      graphRef.current.zoomToFit(600, 80)
     }
-  }, []);
+  }, [])
 
   // summary는 카테고리 필터와 무관하므로 마운트 시 1회만 호출
   useEffect(() => {
     getGraphSummary()
       .then(setSummaryData)
-      .catch((err) => console.error("Failed to load graph summary:", err));
-  }, []);
+      .catch((err) => console.error('Failed to load graph summary:', err))
+  }, [])
 
   useEffect(() => {
-    const controller = new AbortController();
+    const controller = new AbortController()
 
     async function loadNodes() {
       const categoryMap: Record<CategoryFilter, string | undefined> = {
         all: undefined,
-        lecture: "lecture",
-        assignment: "assignment",
-        notice: "notice",
-        receipt: "receipt",
-        memo: "memo",
-      };
+        lecture: 'lecture',
+        assignment: 'assignment',
+        notice: 'notice',
+        receipt: 'receipt',
+        memo: 'memo',
+      }
 
       try {
-        const apiNodes = await getNodes(categoryMap[activeFilter]);
+        const apiNodes = await getNodes(categoryMap[activeFilter])
 
         if (!controller.signal.aborted) {
           const mappedNodes: GraphNode[] = apiNodes.map((n) => ({
@@ -82,32 +85,70 @@ export function KnowledgeGraphPage() {
             label: n.title,
             x: 0,
             y: 0,
-            category: CATEGORY_TO_NODE_CATEGORY[n.category] ?? "misc",
-            size: n.connectionCount > 2 ? "primary" : "secondary",
-          }));
+            category: CATEGORY_TO_NODE_CATEGORY[n.category] ?? 'misc',
+            size: n.connectionCount > 2 ? 'primary' : 'secondary',
+          }))
 
-          setNodes(mappedNodes);
+          setNodes(mappedNodes)
 
           // [FE_MOCK] 백엔드 엣지 API 연동 전 임시로 노드를 순차 연결하여 시각화
           if (mappedNodes.length > 1) {
-            const mockEdges: GraphEdge[] = mappedNodes.slice(0, -1).map((n, i) => ({
-              from: n.id,
-              to: mappedNodes[i + 1].id,
-            }));
-            setEdges(mockEdges);
+            const mockEdges: GraphEdge[] = mappedNodes
+              .slice(0, -1)
+              .map((n, i) => ({
+                from: n.id,
+                to: mappedNodes[i + 1].id,
+              }))
+            setEdges(mockEdges)
           } else {
-            setEdges([]);
+            setEdges([])
           }
         }
       } catch (error) {
-        console.error("Failed to load graph data:", error);
+        console.error('Failed to load graph data:', error)
       }
     }
 
-    loadNodes();
+    loadNodes()
 
-    return () => controller.abort();
-  }, [activeFilter]);
+    return () => controller.abort()
+  }, [activeFilter])
+
+  useEffect(() => {
+    const processing = toastItems.filter((i) => i.status === 'processing')
+    if (processing.length === 0) return
+
+    const timers = processing.map((item) =>
+      setInterval(async () => {
+        try {
+          const { status } = await fetchAnalysisStatus(item.id)
+          if (status === 'analyzed') {
+            setToastItems((prev) =>
+              prev.map((i) =>
+                i.id === item.id ? { ...i, status: 'complete' } : i,
+              ),
+            )
+          } else if (status === 'failed') {
+            setToastItems((prev) =>
+              prev.map((i) =>
+                i.id === item.id ? { ...i, status: 'error' } : i,
+              ),
+            )
+          }
+        } catch {
+          setToastItems((prev) =>
+            prev.map((i) => (i.id === item.id ? { ...i, status: 'error' } : i)),
+          )
+        }
+      }, 3000),
+    )
+
+    return () => timers.forEach(clearInterval)
+  }, [toastItems])
+
+  const handleToastCancel = useCallback((item: ToastItem) => {
+    setToastItems((prev) => prev.filter((i) => i.id !== item.id))
+  }, [])
 
   useEffect(() => {
     const controller = new AbortController();
@@ -152,29 +193,34 @@ export function KnowledgeGraphPage() {
   }, [activeFilter, searchTerm]);
 
   const handleUpload = useCallback(async (file: File) => {
-    const { uploadDocument } = await import("@/entities/document");
+    const { uploadDocument } = await import('@/entities/document')
 
     try {
-      const uploadRes = await uploadDocument(file);
-      const documentId = uploadRes.document_id;
+      const uploadRes = await uploadDocument(file)
+      const documentId = uploadRes.document_id
 
       setToastItems((prev) => [
-        { id: documentId, fileName: file.name, status: "processing", analysisId: documentId },
+        {
+          id: documentId,
+          fileName: file.name,
+          status: 'processing',
+          analysisId: documentId,
+        },
         ...prev,
-      ]);
+      ])
     } catch (error) {
-      console.error("Upload failed:", error);
+      console.error('Upload failed:', error)
     }
-  }, []);
+  }, [])
 
   const handleToastClick = useCallback(
     (item: ToastItem) => {
-      if (item.status === "complete") {
-        router.push(`/analysis/${item.analysisId}?mode=result`);
+      if (item.status === 'complete') {
+        router.push(`/analysis/${item.analysisId}?mode=result`)
       }
     },
-    [router]
-  );
+    [router],
+  )
 
   return (
     <div className="flex h-screen w-full overflow-hidden bg-snap-bg">
@@ -203,7 +249,11 @@ export function KnowledgeGraphPage() {
           onFit={handleFit}
         />
         <AiInputBar onSearch={setSearchTerm} />
-        <ToastStatus items={toastItems} onItemClick={handleToastClick} />
+        <ToastStatus
+          items={toastItems}
+          onItemClick={handleToastClick}
+          onCancel={handleToastCancel}
+        />
       </main>
 
       <UploadModal
@@ -212,5 +262,5 @@ export function KnowledgeGraphPage() {
         onUpload={handleUpload}
       />
     </div>
-  );
+  )
 }

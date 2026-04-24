@@ -1,11 +1,17 @@
 services:
   app:
-    build: .
+    image: gmlwls/snapocket:latest
     ports:
       - "3000:3000"   # Next.js
       - "8000:8000"   # FastAPI
     environment:
       - APP_ENV=production
+      - DATABASE_URL=${DATABASE_URL}
+      - SECRET_KEY=${SECRET_KEY}
+      - ALGORITHM=${ALGORITHM:-HS256}
+      - ACCESS_TOKEN_EXPIRE_MINUTES=${ACCESS_TOKEN_EXPIRE_MINUTES:-30}
+      - AI_SERVER_URL=${AI_SERVER_URL}
+      - AI_SERVER_API_KEY=${AI_SERVER_API_KEY}
     networks:
       - default
       - shared_snapocket
