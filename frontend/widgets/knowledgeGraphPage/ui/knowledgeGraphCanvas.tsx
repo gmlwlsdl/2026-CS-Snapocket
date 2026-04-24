@@ -9,6 +9,7 @@ import {
 
 interface KnowledgeGraphCanvasProps {
   searchTerm?: string;
+  matchedNodeIds?: string[] | null;
   nodes: GraphNode[];
   edges: GraphEdge[];
   graphRef?: React.MutableRefObject<ForceGraphMethods<NodeObject<GraphNode>> | undefined>;
@@ -16,17 +17,20 @@ interface KnowledgeGraphCanvasProps {
 
 export function KnowledgeGraphCanvas({
   searchTerm,
+  matchedNodeIds,
   nodes,
   edges,
   graphRef,
 }: KnowledgeGraphCanvasProps) {
   const router = useRouter();
   const containerRef = useRef<HTMLDivElement>(null);
+  const matchedNodeIdSet = useMemo(() => new Set(matchedNodeIds ?? []), [matchedNodeIds]);
 
-  const isMatched = useCallback((label: string) => {
+  const isMatched = useCallback((node: NodeObject<GraphNode>) => {
     if (!searchTerm) return true;
-    return label.toLowerCase().includes(searchTerm.toLowerCase());
-  }, [searchTerm]);
+    if (matchedNodeIds) return matchedNodeIdSet.has(String(node.id));
+    return node.label.toLowerCase().includes(searchTerm.toLowerCase());
+  }, [matchedNodeIdSet, matchedNodeIds, searchTerm]);
 
   const graphData = useMemo(() => {
     const nodeIds = new Set(nodes.map(n => n.id));
@@ -42,7 +46,7 @@ export function KnowledgeGraphCanvas({
   }, [nodes, edges]);
 
   const drawNode = useCallback((node: NodeObject<GraphNode>, ctx: CanvasRenderingContext2D, globalScale: number) => {
-    const matched = isMatched(node.label);
+    const matched = isMatched(node);
     const opacity = matched ? 1 : 0.1;
     const color = NODE_COLOR[node.category] ?? "#81ecff";
     const baseR = (NODE_DOT_SIZE[node.size] ?? 5) / globalScale;
