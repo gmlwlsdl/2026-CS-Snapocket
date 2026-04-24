@@ -1,16 +1,24 @@
-"use client";
+'use client'
 
-import { useState, useEffect, useRef, useCallback } from "react";
-import { useRouter } from "next/navigation";
-import type { CategoryFilter, GraphNode, GraphEdge } from "../knowledgeGraph.type";
-import { getNodes, getGraphSummary, type GraphSummaryData } from "@/entities/graph";
-import { searchDocuments } from "@/entities/search";
-import { CATEGORY_TO_NODE_CATEGORY } from "../knowledgeGraph.utils";
-import dynamic from "next/dynamic";
-import { SidebarNav, ToastStatus, type ToastItem } from "@/shared/ui";
-import { UploadModal } from "@/features/upload";
-import { TopHeader } from "./topHeader";
-import type { ForceGraphMethods, NodeObject } from "react-force-graph-2d";
+import { useState, useEffect, useRef, useCallback } from 'react'
+import { useRouter } from 'next/navigation'
+import type {
+  CategoryFilter,
+  GraphNode,
+  GraphEdge,
+} from '../knowledgeGraph.type'
+import {
+  getNodes,
+  getGraphSummary,
+  type GraphSummaryData,
+} from '@/entities/graph'
+import { CATEGORY_TO_NODE_CATEGORY } from '../knowledgeGraph.utils'
+import dynamic from 'next/dynamic'
+import { SidebarNav, ToastStatus, type ToastItem } from '@/shared/ui'
+import { UploadModal } from '@/features/upload'
+import { fetchAnalysisStatus } from '@/entities/analysis'
+import { TopHeader } from './topHeader'
+import type { ForceGraphMethods, NodeObject } from 'react-force-graph-2d'
 
 const KnowledgeGraphCanvas = dynamic(
   () =>
@@ -22,15 +30,21 @@ import { GraphControls } from './graphControls'
 import { AiInputBar } from './aiInputBar'
 
 export function KnowledgeGraphPage() {
-  const router = useRouter();
-  const [activeFilter, setActiveFilter] = useState<CategoryFilter>("all");
-  const [searchTerm, setSearchTerm] = useState("");
-  const [matchedNodeIds, setMatchedNodeIds] = useState<string[] | null>(null);
-  const [nodes, setNodes] = useState<GraphNode[]>([]);
-  const [edges, setEdges] = useState<GraphEdge[]>([]);
-  const [modalOpen, setModalOpen] = useState(false);
-  const [toastItems, setToastItems] = useState<ToastItem[]>([]);
-  const [summaryData, setSummaryData] = useState<GraphSummaryData>();
+  const router = useRouter()
+  const [activeFilter, setActiveFilter] = useState<CategoryFilter>('all')
+  const [searchTerm, setSearchTerm] = useState('')
+  const [nodes, setNodes] = useState<GraphNode[]>([])
+  const [edges, setEdges] = useState<GraphEdge[]>([])
+  const [modalOpen, setModalOpen] = useState(false)
+  const [toastItems, setToastItems] = useState<ToastItem[]>([
+    {
+      id: 'test-error',
+      fileName: 'lecture_note_week12.pdf',
+      status: 'error',
+      analysisId: 'test-error',
+    },
+  ])
+  const [summaryData, setSummaryData] = useState<GraphSummaryData>()
 
   const graphRef = useRef<ForceGraphMethods<NodeObject<GraphNode>> | undefined>(
     undefined,
@@ -150,48 +164,6 @@ export function KnowledgeGraphPage() {
     setToastItems((prev) => prev.filter((i) => i.id !== item.id))
   }, [])
 
-  useEffect(() => {
-    const controller = new AbortController();
-    const keyword = searchTerm.trim();
-
-    async function loadMatches() {
-      if (!keyword) {
-        setMatchedNodeIds(null);
-        return;
-      }
-
-      const categoryMap: Record<CategoryFilter, string | undefined> = {
-        all: undefined,
-        lecture: "lecture",
-        assignment: "assignment",
-        notice: "notice",
-        receipt: "receipt",
-        memo: "memo",
-      };
-
-      try {
-        const searchItems = await searchDocuments({
-          keyword,
-          category: categoryMap[activeFilter],
-          page: 1,
-          size: 100,
-        });
-
-        if (!controller.signal.aborted) {
-          setMatchedNodeIds(searchItems.map((item) => item.id));
-        }
-      } catch (error) {
-        if (!controller.signal.aborted) {
-          console.error("Failed to load search matches:", error);
-          setMatchedNodeIds([]);
-        }
-      }
-    }
-
-    loadMatches();
-    return () => controller.abort();
-  }, [activeFilter, searchTerm]);
-
   const handleUpload = useCallback(async (file: File) => {
     const { uploadDocument } = await import('@/entities/document')
 
@@ -236,7 +208,6 @@ export function KnowledgeGraphPage() {
         <div className="absolute inset-0">
           <KnowledgeGraphCanvas
             searchTerm={searchTerm}
-            matchedNodeIds={matchedNodeIds}
             nodes={nodes}
             edges={edges}
             graphRef={graphRef}
