@@ -1,11 +1,16 @@
 import json
+import logging
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from urllib import error as urlerror
 from urllib import request as urlrequest
 from urllib.parse import urlparse, urlunparse
 
+from core.database import SessionLocal
 from core.config import AI_SERVER_API_KEY, AI_SERVER_TIMEOUT_S, AI_SERVER_URL
+from models.document import Document
+
+logger = logging.getLogger(__name__)
 
 
 class SemanticSearchError(RuntimeError):
@@ -105,6 +110,32 @@ def _serialize_datetime(value: datetime | None) -> str:
     return value.isoformat()
 
 
+def _normalize_datetime_token(value: str | None) -> datetime | None:
+    token = str(value or "").strip()
+    if not token:
+        return None
+
+    normalized = token.replace("Z", "+00:00")
+    try:
+        parsed = datetime.fromisoformat(normalized)
+    except ValueError:
+        return None
+
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    else:
+        parsed = parsed.astimezone(timezone.utc)
+    return parsed.replace(microsecond=0)
+
+
+def _is_same_updated_at(indexed_value: str | None, db_value: datetime | None) -> bool:
+    indexed_dt = _normalize_datetime_token(indexed_value)
+    db_dt = _normalize_datetime_token(_serialize_datetime(db_value))
+    if indexed_dt is None or db_dt is None:
+        return not indexed_value and db_value is None
+    return indexed_dt == db_dt
+
+
 def ai_search_status(*, force_refresh: bool = False) -> dict:
     # 상태 조회는 검색 입력 중 자주 호출될 수 있어 짧은 TTL 캐시를 둔다.
     now = time.monotonic()
@@ -169,6 +200,13 @@ def search_semantic_documents(*, query: str, user_id: str, limit: int = 10) -> l
     return items if isinstance(items, list) else []
 
 
+def list_semantic_documents(*, user_id: str) -> list[dict]:
+    payload = {"user_id": user_id}
+    data = _unwrap_ok_response(_request_json(path="/v1/search/index-state", method="POST", payload=payload))
+    items = data.get("items")
+    return items if isinstance(items, list) else []
+
+
 def serialize_document_for_index(document, *, user_id: str) -> dict:
     # 현재 PRD 범위에서는 raw_text와 updated_at만 올려도 정합성 검증이 가능하다.
     return {
@@ -177,3 +215,50 @@ def serialize_document_for_index(document, *, user_id: str) -> dict:
         "updated_at": _serialize_datetime(getattr(document, "updated_at", None)),
         "raw_text": str(getattr(document, "raw_text", "") or ""),
     }
+
+
+def reconcile_semantic_replica_for_user(*, user_id: str) -> dict[str, int]:
+    # 로그인 직후 1회 수행되는 레플리카 점검 로직:
+    # MySQL 원본과 Qdrant 메타데이터를 비교해 차이 나는 문서만 재임베딩한다.
+    db = SessionLocal()
+    try:
+        documents = db.query(Document).filter(Document.user_id == user_id).all()
+        indexed_items = list_semantic_documents(user_id=user_id)
+        indexed_by_id = {
+            str(item.get("document_id") or ""): str(item.get("updated_at") or "")
+            for item in indexed_items
+            if str(item.get("document_id") or "").strip()
+        }
+
+        active_documents = {
+            str(document.id): document
+            for document in documents
+            if document.deleted_at is None
+        }
+        stale_or_missing_documents = [
+            document
+            for document_id, document in active_documents.items()
+            if not _is_same_updated_at(indexed_by_id.get(document_id), document.updated_at)
+        ]
+        deleted_doc_ids = [
+            document_id
+            for document_id in indexed_by_id
+            if document_id not in active_documents
+        ]
+
+        if not stale_or_missing_documents and not deleted_doc_ids:
+            return {"upserted": 0, "deleted": 0}
+
+        return sync_semantic_documents(
+            user_id=user_id,
+            documents=[
+                serialize_document_for_index(document, user_id=user_id)
+                for document in stale_or_missing_documents
+            ],
+            deleted_document_ids=deleted_doc_ids,
+        )
+    except Exception as exc:
+        logger.exception("Semantic replica reconciliation failed for user %s: %s", user_id, exc)
+        raise
+    finally:
+        db.close()

@@ -39,6 +39,10 @@ class SemanticDeleteRequest(BaseModel):
     user_id: str | None = None
 
 
+class SemanticIndexStateRequest(BaseModel):
+    user_id: str = Field(min_length=1)
+
+
 class SemanticSyncRequest(BaseModel):
     user_id: str
     documents: list[SemanticDocumentPayload] = Field(default_factory=list)
@@ -66,6 +70,16 @@ def semantic_search(request: Request, payload: SemanticSearchRequest, state: App
     try:
         # 실제 유사도 검색은 서비스 계층에서 임베딩 생성 + Qdrant 조회로 처리한다.
         data = service.search(query=payload.query, user_id=payload.user_id, limit=payload.limit)
+    except SemanticSearchUnavailable as exc:
+        raise api_error(503, "SEMANTIC_SEARCH_UNAVAILABLE", str(exc)) from exc
+    return ok_response(request, {"items": data})
+
+
+@router.post("/index-state", dependencies=[Depends(require_api_key)])
+def semantic_index_state(request: Request, payload: SemanticIndexStateRequest, state: AppState = Depends(get_state)):
+    service = _service_or_503(state)
+    try:
+        data = service.list_documents(user_id=payload.user_id)
     except SemanticSearchUnavailable as exc:
         raise api_error(503, "SEMANTIC_SEARCH_UNAVAILABLE", str(exc)) from exc
     return ok_response(request, {"items": data})

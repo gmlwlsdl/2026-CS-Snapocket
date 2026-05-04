@@ -290,6 +290,40 @@ class SemanticSearchService:
             for point in points
         ]
 
+    def list_documents(self, *, user_id: str, batch_size: int = 256) -> list[dict[str, str]]:
+        # 사용자별로 현재 Qdrant에 들어 있는 문서 메타데이터를 전부 조회한다.
+        self._ensure_available()
+        assert self._client is not None
+
+        items: list[dict[str, str]] = []
+        next_offset: Any = None
+        while True:
+            points, next_offset = self._client.scroll(
+                collection_name=self._collection_name,
+                scroll_filter=qdrant_models.Filter(
+                    must=[
+                        qdrant_models.FieldCondition(
+                            key="user_id",
+                            match=qdrant_models.MatchValue(value=user_id),
+                        )
+                    ]
+                ),
+                with_payload=True,
+                with_vectors=False,
+                limit=max(1, min(batch_size, 1000)),
+                offset=next_offset,
+            )
+            items.extend(
+                {
+                    "document_id": str(point.payload.get("document_id") or point.id),
+                    "updated_at": str(point.payload.get("updated_at") or ""),
+                }
+                for point in points
+            )
+            if next_offset is None:
+                break
+        return items
+
     def sync_documents(
         self,
         *,

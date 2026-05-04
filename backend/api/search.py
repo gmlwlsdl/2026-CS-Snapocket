@@ -1,6 +1,5 @@
 from collections import defaultdict
-from datetime import datetime, timezone
-import time
+from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
@@ -18,14 +17,9 @@ from services.semantic_search import (
     SemanticSearchError,
     ai_search_status,
     search_semantic_documents,
-    serialize_document_for_index,
-    sync_semantic_documents,
 )
 
 router = APIRouter(prefix="/search", tags=["search"])
-
-_SEMANTIC_SYNC_TTL_S = 30.0
-_semantic_sync_cache: dict[str, float] = {}
 
 
 class SearchItem(BaseModel):
@@ -124,40 +118,6 @@ def _load_tags_by_doc(db: Session, doc_ids: list[str]) -> dict[str, list[str]]:
     for document_id, tag_name in tag_rows:
         tags_by_doc[str(document_id)].append(tag_name)
     return tags_by_doc
-
-
-def _serialize_updated_at(value: datetime | None) -> str:
-    if value is None:
-        return ""
-    return value.isoformat()
-
-
-def _normalize_datetime_token(value: str | None) -> datetime | None:
-    token = str(value or "").strip()
-    if not token:
-        return None
-
-    normalized = token.replace("Z", "+00:00")
-    try:
-        parsed = datetime.fromisoformat(normalized)
-    except ValueError:
-        return None
-
-    # DB/AI 서버마다 timezone 포함 여부와 microsecond 정밀도가 다를 수 있어
-    # UTC 기준 초 단위까지만 맞춰 비교한다.
-    if parsed.tzinfo is None:
-        parsed = parsed.replace(tzinfo=timezone.utc)
-    else:
-        parsed = parsed.astimezone(timezone.utc)
-    return parsed.replace(microsecond=0)
-
-
-def _is_same_updated_at(indexed_value: str | None, db_value: datetime | None) -> bool:
-    indexed_dt = _normalize_datetime_token(indexed_value)
-    db_dt = _normalize_datetime_token(_serialize_updated_at(db_value))
-    if indexed_dt is None or db_dt is None:
-        return not indexed_value and db_value is None
-    return indexed_dt == db_dt
 
 
 def _normalize_scores(items: list[tuple[str, float]]) -> dict[str, float]:
@@ -267,39 +227,6 @@ def _build_search_items(
     ]
 
 
-def _should_skip_semantic_sync(user_id: str) -> bool:
-    last_synced_at = _semantic_sync_cache.get(user_id, 0.0)
-    return time.monotonic() - last_synced_at < _SEMANTIC_SYNC_TTL_S
-
-
-def _mark_semantic_sync(user_id: str) -> None:
-    _semantic_sync_cache[user_id] = time.monotonic()
-
-
-def _sync_user_documents(db: Session, *, user_id: str, force: bool = False) -> None:
-    # 검색할 때마다 전체 재동기화를 하면 비용이 커서, 짧은 TTL 동안은 재사용한다.
-    if not force and _should_skip_semantic_sync(user_id):
-        return
-
-    documents = (
-        db.query(Document)
-        .filter(Document.user_id == user_id, Document.deleted_at.is_(None))
-        .all()
-    )
-    deleted_doc_ids = [
-        str(item[0])
-        for item in db.query(Document.id)
-        .filter(Document.user_id == user_id, Document.deleted_at.is_not(None))
-        .all()
-    ]
-    sync_semantic_documents(
-        user_id=user_id,
-        documents=[serialize_document_for_index(document, user_id=user_id) for document in documents],
-        deleted_document_ids=deleted_doc_ids,
-    )
-    _mark_semantic_sync(user_id)
-
-
 def _semantic_search(
     *,
     db: Session,
@@ -308,8 +235,6 @@ def _semantic_search(
     category: str | None = None,
     limit: int = 20,
 ) -> list[SearchItem]:
-    # AI 서버의 인덱스가 조금 늦게 반영되더라도, 검색 직전 최소 1회는 정합성을 맞춘다.
-    _sync_user_documents(db, user_id=user_id)
     results = search_semantic_documents(query=keyword, user_id=user_id, limit=limit)
     if not results:
         return []
@@ -327,35 +252,16 @@ def _semantic_search(
     )
     docs_by_id = {str(doc.id): doc for doc in documents}
 
-    stale_doc_ids: list[str] = []
     valid_rows: list[tuple[Document, list[str], float]] = []
     for item in results:
         doc_id = str(item.get("document_id") or "")
         doc = docs_by_id.get(doc_id)
         if doc is None:
-            stale_doc_ids.append(doc_id)
             continue
         if category and doc.category != category:
             continue
 
-        updated_at = str(item.get("updated_at") or "")
-        if not _is_same_updated_at(updated_at, doc.updated_at):
-            stale_doc_ids.append(doc_id)
-            continue
-
         valid_rows.append((doc, list(doc.tags), float(item.get("score") or 0.0)))
-
-    if stale_doc_ids:
-        stale_documents = [docs_by_id[doc_id] for doc_id in stale_doc_ids if doc_id in docs_by_id]
-        try:
-            sync_semantic_documents(
-                user_id=user_id,
-                documents=[serialize_document_for_index(document, user_id=user_id) for document in stale_documents],
-                deleted_document_ids=[doc_id for doc_id in stale_doc_ids if doc_id not in docs_by_id],
-            )
-            _mark_semantic_sync(user_id)
-        except SemanticSearchError:
-            pass
 
     normalized = _normalize_scores([(str(doc.id), score) for doc, _tags, score in valid_rows])
     return [
@@ -415,6 +321,7 @@ def search_documents(
 @router.get("/status", response_model=ApiResponse[SearchStatusResponse])
 def search_status():
     status_data = ai_search_status()
+
     return ApiResponse(
         success=True,
         message="검색 상태 조회 성공",
