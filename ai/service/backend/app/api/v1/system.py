@@ -1,4 +1,10 @@
-"""시스템 상태 점검 API(live/ready/metrics/status)."""
+"""이 파일은 AI 서버의 운영 상태를 점검하는 시스템 API를 제공한다.
+
+- 프로세스 live 확인
+- readiness 확인
+- semantic search 가용성 노출
+- 운영용 상세 상태 조회
+"""
 
 from __future__ import annotations
 
@@ -15,6 +21,7 @@ router = APIRouter(tags=["system"])
 
 
 def _safe_engine_available(engine: object | None) -> bool:
+    # 엔진 객체가 없거나 내부 예외가 나더라도 상태 API 자체는 실패하지 않게 방어한다.
     if engine is None or not hasattr(engine, "available"):
         return False
     try:
@@ -24,6 +31,7 @@ def _safe_engine_available(engine: object | None) -> bool:
 
 
 def _safe_engine_cache(engine: object | None) -> dict:
+    # availability_detail은 운영 진단용 보조 정보이므로 실패해도 빈 dict로 처리한다.
     if engine is None or not hasattr(engine, "availability_detail"):
         return {}
     try:
@@ -69,14 +77,18 @@ def ready(state: AppState = Depends(get_state)):
             "error": redis.error,
         },
     }
+    semantic = getattr(state, "semantic_search", None)
+    semantic_detail = semantic.availability_detail() if semantic is not None else {"enabled": False, "available": False}
 
+    # 이번 검색 기능에서는 semantic search 준비 상태도 ready 판정에 포함한다.
     # Ready 정책: OCR 설정이 존재하고, 핵심 인프라 의존성이 모두 정상이어야 한다.
-    ready_ok = any(configured.values()) and db.get("ok", False) and redis.ok
+    ready_ok = any(configured.values()) and db.get("ok", False) and redis.ok and bool(semantic_detail.get("available"))
     return {
         "ok": ready_ok,
         "configured": configured,
         "runtime": runtime,
         "dependencies": dependencies,
+        "semantic_search": semantic_detail,
     }
 
 
@@ -132,6 +144,12 @@ def system_status(request: Request, state: AppState = Depends(get_state)):
                 "error": redis.error,
             },
         },
+        "semantic_search": (
+            # semantic search는 별도 상태 묶음으로 노출해 검색 장애를 쉽게 분리해서 보게 한다.
+            state.semantic_search.availability_detail()
+            if getattr(state, "semantic_search", None) is not None
+            else {"enabled": False, "available": False}
+        ),
         "models": [m.model_dump() for m in state.model_registry.list_models()],
         "jobs": [j.model_dump() for j in state.job_manager.list_jobs()],
         "metrics": state.metrics.snapshot(),

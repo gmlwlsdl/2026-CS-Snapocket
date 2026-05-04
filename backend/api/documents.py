@@ -9,6 +9,12 @@ from models.user import User
 from models.document import Document
 import uuid
 from api.apiResponse import ApiResponse
+from services.semantic_search import (
+    SemanticSearchError,
+    delete_semantic_documents,
+    serialize_document_for_index,
+    sync_semantic_documents,
+)
 
 router = APIRouter(prefix="/documents", tags=["documents"])
 
@@ -149,6 +155,14 @@ def update_document(update: UpdateDocuments, document_id: str, jwtToken: dict = 
 
     db.commit()
     db.refresh(document)
+    try:
+        sync_semantic_documents(
+            user_id=str(userInfo.id),
+            documents=[serialize_document_for_index(document, user_id=str(userInfo.id))],
+            deleted_document_ids=[],
+        )
+    except SemanticSearchError:
+        pass
 
     return ApiResponse(
         success=True,
@@ -181,6 +195,10 @@ def delete_document(document_id: str, jwtToken: dict = Depends(jwtAuth), db: Ses
     document.deleted_at = func.now()
     db.commit()
     db.refresh(document)
+    try:
+        delete_semantic_documents(document_ids=[str(document.id)], user_id=str(userInfo.id))
+    except SemanticSearchError:
+        pass
 
     return ApiResponse(
         success=True,

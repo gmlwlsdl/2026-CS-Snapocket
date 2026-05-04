@@ -12,6 +12,7 @@ import {
   getGraphSummary,
   type GraphSummaryData,
 } from '@/entities/graph'
+import { getSearchStatus, queryDocuments } from '@/entities/search'
 import { CATEGORY_TO_NODE_CATEGORY } from '../knowledgeGraph.utils'
 import dynamic from 'next/dynamic'
 import { SidebarNav, ToastStatus, type ToastItem } from '@/shared/ui'
@@ -33,6 +34,11 @@ export function KnowledgeGraphPage() {
   const router = useRouter()
   const [activeFilter, setActiveFilter] = useState<CategoryFilter>('all')
   const [searchTerm, setSearchTerm] = useState('')
+  const [matchedNodeIds, setMatchedNodeIds] = useState<string[] | null>(null)
+  const [matchedScores, setMatchedScores] = useState<Record<string, number> | null>(null)
+  const [aiAvailable, setAiAvailable] = useState(false)
+  const [modeUsed, setModeUsed] = useState<'text' | 'semantic' | null>(null)
+  const [isSearching, setIsSearching] = useState(false)
   const [nodes, setNodes] = useState<GraphNode[]>([])
   const [edges, setEdges] = useState<GraphEdge[]>([])
   const [modalOpen, setModalOpen] = useState(false)
@@ -49,6 +55,12 @@ export function KnowledgeGraphPage() {
   const graphRef = useRef<ForceGraphMethods<NodeObject<GraphNode>> | undefined>(
     undefined,
   )
+
+  const clearSearchState = useCallback(() => {
+    setMatchedNodeIds(null)
+    setMatchedScores(null)
+    setModeUsed(null)
+  }, [])
 
   const handleZoomIn = useCallback(() => {
     if (graphRef.current) {
@@ -70,12 +82,67 @@ export function KnowledgeGraphPage() {
     }
   }, [])
 
-  // summary는 카테고리 필터와 무관하므로 마운트 시 1회만 호출
+  const applySearchResults = useCallback(
+    (
+      items: { id: string; score?: number | null }[],
+      nextMode: 'text' | 'semantic',
+      nextAiAvailable: boolean,
+    ) => {
+      setModeUsed(nextMode)
+      setAiAvailable(nextAiAvailable)
+      setMatchedNodeIds(items.map((item) => item.id))
+      setMatchedScores(
+        items.reduce<Record<string, number>>((acc, item) => {
+          acc[item.id] = Math.max(0, Math.min(1, item.score ?? 0))
+          return acc
+        }, {}),
+      )
+    },
+    [],
+  )
+
+  const loadAiAvailability = useCallback(async () => {
+    try {
+      const status = await getSearchStatus()
+      setAiAvailable(status.aiAvailable)
+    } catch (err) {
+      console.error('Failed to load search status:', err)
+    }
+  }, [])
+
+  const runTextSearch = useCallback(
+    async (keyword: string) => {
+      const response = await queryDocuments({
+        keyword,
+        mode: 'text',
+        category: activeFilter === 'all' ? undefined : activeFilter,
+        size: 50,
+      })
+      applySearchResults(response.items, response.modeUsed, response.aiAvailable)
+    },
+    [activeFilter, applySearchResults],
+  )
+
+  const runAutoSearch = useCallback(
+    async (keyword: string) => {
+      const response = await queryDocuments({
+        keyword,
+        mode: 'auto',
+        category: activeFilter === 'all' ? undefined : activeFilter,
+        size: 50,
+      })
+      applySearchResults(response.items, response.modeUsed, response.aiAvailable)
+    },
+    [activeFilter, applySearchResults],
+  )
+
   useEffect(() => {
     getGraphSummary()
       .then(setSummaryData)
       .catch((err) => console.error('Failed to load graph summary:', err))
-  }, [])
+
+    loadAiAvailability()
+  }, [loadAiAvailability])
 
   useEffect(() => {
     const controller = new AbortController()
@@ -105,7 +172,6 @@ export function KnowledgeGraphPage() {
 
           setNodes(mappedNodes)
 
-          // [FE_MOCK] 백엔드 엣지 API 연동 전 임시로 노드를 순차 연결하여 시각화
           if (mappedNodes.length > 1) {
             const mockEdges: GraphEdge[] = mappedNodes
               .slice(0, -1)
@@ -127,6 +193,25 @@ export function KnowledgeGraphPage() {
 
     return () => controller.abort()
   }, [activeFilter])
+
+  useEffect(() => {
+    const normalizedKeyword = searchTerm.trim()
+    if (!normalizedKeyword) {
+      clearSearchState()
+      return
+    }
+
+    // 입력 중에는 빠른 텍스트 검색으로 즉시 반응성을 유지한다.
+    const timer = setTimeout(async () => {
+      try {
+        await runTextSearch(normalizedKeyword)
+      } catch (error) {
+        console.error('Failed to run text search:', error)
+      }
+    }, 200)
+
+    return () => clearTimeout(timer)
+  }, [clearSearchState, runTextSearch, searchTerm])
 
   useEffect(() => {
     const processing = toastItems.filter((i) => i.status === 'processing')
@@ -194,6 +279,25 @@ export function KnowledgeGraphPage() {
     [router],
   )
 
+  const handleSemanticSearch = useCallback(async () => {
+    const normalizedKeyword = searchTerm.trim()
+    if (!normalizedKeyword) {
+      clearSearchState()
+      return
+    }
+
+    setIsSearching(true)
+    try {
+      // Enter/버튼 시에는 AI 상태를 반영한 auto 검색을 호출한다.
+      await runAutoSearch(normalizedKeyword)
+    } catch (error) {
+      console.error('Failed to run semantic search:', error)
+      await loadAiAvailability()
+    } finally {
+      setIsSearching(false)
+    }
+  }, [clearSearchState, loadAiAvailability, runAutoSearch, searchTerm])
+
   return (
     <div className="flex h-screen w-full overflow-hidden bg-snap-bg">
       <SidebarNav onUpload={() => setModalOpen(true)} />
@@ -208,6 +312,8 @@ export function KnowledgeGraphPage() {
         <div className="absolute inset-0">
           <KnowledgeGraphCanvas
             searchTerm={searchTerm}
+            matchedNodeIds={matchedNodeIds}
+            matchedScores={matchedScores}
             nodes={nodes}
             edges={edges}
             graphRef={graphRef}
@@ -219,7 +325,14 @@ export function KnowledgeGraphPage() {
           onZoomOut={handleZoomOut}
           onFit={handleFit}
         />
-        <AiInputBar onSearch={setSearchTerm} />
+        <AiInputBar
+          value={searchTerm}
+          aiAvailable={aiAvailable}
+          modeUsed={modeUsed}
+          isSearching={isSearching}
+          onValueChange={setSearchTerm}
+          onSubmitSearch={handleSemanticSearch}
+        />
         <ToastStatus
           items={toastItems}
           onItemClick={handleToastClick}

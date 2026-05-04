@@ -1,4 +1,10 @@
-"""환경변수 기반 런타임 설정 로더."""
+"""이 파일은 AI 서버 런타임 설정을 환경변수에서 읽어온다.
+
+- 기존 OCR/ASR 설정
+- semantic search on/off
+- 임베딩 모델 경로
+- Qdrant 연결 정보
+"""
 
 from __future__ import annotations
 
@@ -7,6 +13,7 @@ from dataclasses import dataclass
 
 
 def _as_bool(value: str | None, default: bool = False) -> bool:
+    # 다양한 형식의 환경변수 값을 bool로 통일한다.
     if value is None:
         return default
     return value.strip().lower() in {"1", "true", "yes", "on"}
@@ -113,6 +120,13 @@ class Settings:
     malware_scan_enable: bool = _as_bool(os.getenv("MALWARE_SCAN_ENABLE"), False)
     malware_scan_command: str = os.getenv("MALWARE_SCAN_COMMAND", "").strip()
     malware_scan_timeout_s: float = float(os.getenv("MALWARE_SCAN_TIMEOUT_S", "5"))
+    # 아래 설정들은 semantic search 전용이다.
+    semantic_search_enable: bool = _as_bool(os.getenv("SEMANTIC_SEARCH_ENABLE"), True)
+    semantic_embedding_model: str = os.getenv("SEMANTIC_EMBEDDING_MODEL", "dragonkue/BGE-m3-ko")
+    semantic_qdrant_url: str = os.getenv("SEMANTIC_QDRANT_URL", "http://qdrant:6333")
+    semantic_qdrant_collection: str = os.getenv("SEMANTIC_QDRANT_COLLECTION", "documents")
+    semantic_qdrant_timeout_s: float = float(os.getenv("SEMANTIC_QDRANT_TIMEOUT_S", "10"))
+    semantic_raw_text_max_chars: int = int(os.getenv("SEMANTIC_RAW_TEXT_MAX_CHARS", "12000"))
 
     @property
     def allowed_upload_types(self) -> set[str]:
@@ -211,4 +225,10 @@ def load_settings() -> Settings:
         malware_scan_enable=_as_bool(os.getenv("MALWARE_SCAN_ENABLE"), False),
         malware_scan_command=os.getenv("MALWARE_SCAN_COMMAND", "").strip(),
         malware_scan_timeout_s=float(os.getenv("MALWARE_SCAN_TIMEOUT_S", "5")),
+        semantic_search_enable=_as_bool(os.getenv("SEMANTIC_SEARCH_ENABLE"), True),
+        semantic_embedding_model=os.getenv("SEMANTIC_EMBEDDING_MODEL", "dragonkue/BGE-m3-ko"),
+        semantic_qdrant_url=os.getenv("SEMANTIC_QDRANT_URL", "http://qdrant:6333"),
+        semantic_qdrant_collection=os.getenv("SEMANTIC_QDRANT_COLLECTION", "documents"),
+        semantic_qdrant_timeout_s=float(os.getenv("SEMANTIC_QDRANT_TIMEOUT_S", "10")),
+        semantic_raw_text_max_chars=int(os.getenv("SEMANTIC_RAW_TEXT_MAX_CHARS", "12000")),
     )

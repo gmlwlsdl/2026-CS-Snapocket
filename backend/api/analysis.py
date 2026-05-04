@@ -14,6 +14,11 @@ from models.analysis_job import AnalysisJob
 from models.document import Document
 from models.user import User
 from services.ai_client import AIClientError, map_analysis_result, request_analysis
+from services.semantic_search import (
+    SemanticSearchError,
+    serialize_document_for_index,
+    sync_semantic_documents,
+)
 
 # 분석 API 라우터 (/analysis/*)
 router = APIRouter(prefix="/analysis", tags=["analysis"])
@@ -101,6 +106,15 @@ def _run_analysis_job(job_id: int, document_id: int):
         document.doc_id = str(mapped.get("doc_id") or document.doc_id)
         document.raw_text = str(mapped.get("raw_text") or "")
         db.commit()
+        db.refresh(document)
+        try:
+            sync_semantic_documents(
+                user_id=str(document.user_id),
+                documents=[serialize_document_for_index(document, user_id=str(document.user_id))],
+                deleted_document_ids=[],
+            )
+        except SemanticSearchError:
+            pass
     except AIClientError as exc:
         # 예상 가능한 AI 통신/응답 오류
         db.rollback()
@@ -423,6 +437,15 @@ def save_analysis(
         latest_job.raw_result = updated_result
 
     db.commit()
+    db.refresh(document)
+    try:
+        sync_semantic_documents(
+            user_id=str(user_info.id),
+            documents=[serialize_document_for_index(document, user_id=str(user_info.id))],
+            deleted_document_ids=[],
+        )
+    except SemanticSearchError:
+        pass
 
     return ApiResponse(
         success=True,
