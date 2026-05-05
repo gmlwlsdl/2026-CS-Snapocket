@@ -33,9 +33,23 @@ const ORPHAN_RING_RADIUS = 420
 const CLUSTER_RING_RADIUS = 280
 const CHILD_RING_BASE = 74
 const GRANDCHILD_RING_BASE = 48
+const SEARCH_GLOW_FLOOR = 0.18
 
 function clamp01(value: number) {
   return Math.max(0, Math.min(1, value))
+}
+
+function smoothstep(value: number) {
+  const t = clamp01(value)
+  return t * t * (3 - 2 * t)
+}
+
+function getVisualMatchStrength(score: number) {
+  const raw = clamp01(score)
+  if (raw <= 0) return 0
+
+  const lifted = smoothstep((raw - SEARCH_GLOW_FLOOR) / (1 - SEARCH_GLOW_FLOOR))
+  return clamp01(raw * 0.16 + lifted * 0.84)
 }
 
 function hashString(value: string) {
@@ -279,42 +293,42 @@ export function KnowledgeGraphCanvas({
   }, [nodes, edges])
 
   const getNodeOpacity = useCallback(
-    (strength: number) => {
+    (visualStrength: number) => {
       if (!searchTerm) return 1
-      if (strength <= 0) return 0.14
-      return 0.55 + strength * 0.45
+      if (visualStrength <= 0) return 0.14
+      return 0.2 + visualStrength * 0.8
     },
     [searchTerm],
   )
 
-  const getGlowRadius = useCallback((baseRadius: number, strength: number, globalScale: number) => {
-    return baseRadius * ((8 + strength * 10) * Math.pow(globalScale, -0.3))
+  const getGlowRadius = useCallback((baseRadius: number, visualStrength: number, globalScale: number) => {
+    return baseRadius * ((4 + visualStrength * 14) * Math.pow(globalScale, -0.3))
   }, [])
 
   const drawNode = useCallback((node: NodeObject<GraphNode>, ctx: CanvasRenderingContext2D, globalScale: number) => {
     const strength = getMatchStrength(node)
-    const matched = strength > 0
-    const normalizedStrength = Math.max(0, Math.min(1, strength))
-    // 검색 점수가 높을수록 더 밝고 또렷하게 보여주고,
-    // 비매칭 노드는 충분히 어둡게 내려서 대비를 만든다.
-    const opacity = getNodeOpacity(normalizedStrength)
+    const visualStrength = searchTerm ? getVisualMatchStrength(strength) : 1
+    const matched = visualStrength > 0
+    // 검색 점수는 soft-knee 곡선으로 시각화한다. 낮은 유사도도 완전히
+    // 사라지지는 않지만, 상위 결과와 같은 halo 체급으로 보이지 않게 한다.
+    const opacity = getNodeOpacity(visualStrength)
     const color = NODE_COLOR[node.category] ?? '#81ecff'
     const baseR = ((NODE_DOT_SIZE[node.size] ?? 5) + Math.max(0, 2 - Number(node.depth ?? 2))) / globalScale
 
     if (matched) {
       ctx.save()
 
-      const glowRadius = getGlowRadius(baseR, normalizedStrength, globalScale)
+      const glowRadius = getGlowRadius(baseR, visualStrength, globalScale)
 
       const gradient = ctx.createRadialGradient(
         node.x, node.y, 0,
         node.x, node.y, glowRadius,
       )
 
-      gradient.addColorStop(0, 'rgba(255, 255, 255, 1)')
-      gradient.addColorStop(0.12, `rgba(241, 247, 255, ${0.45 + normalizedStrength * 0.35})`)
-      gradient.addColorStop(0.3, `rgba(116, 195, 213, ${0.16 + normalizedStrength * 0.14})`)
-      gradient.addColorStop(0.6, `rgba(116, 195, 213, ${0.03 + normalizedStrength * 0.04})`)
+      gradient.addColorStop(0, `rgba(255, 255, 255, ${0.18 + visualStrength * 0.82})`)
+      gradient.addColorStop(0.12, `rgba(241, 247, 255, ${0.16 + visualStrength * 0.62})`)
+      gradient.addColorStop(0.3, `rgba(116, 195, 213, ${0.04 + visualStrength * 0.26})`)
+      gradient.addColorStop(0.6, `rgba(116, 195, 213, ${0.01 + visualStrength * 0.06})`)
       gradient.addColorStop(1, 'rgba(116, 195, 213, 0)')
 
       ctx.beginPath()
@@ -324,7 +338,7 @@ export function KnowledgeGraphCanvas({
       ctx.fill()
 
       ctx.beginPath()
-      ctx.arc(node.x, node.y, baseR + normalizedStrength * (2 / globalScale), 0, 2 * Math.PI, false)
+      ctx.arc(node.x, node.y, baseR + visualStrength * (2 / globalScale), 0, 2 * Math.PI, false)
       ctx.fillStyle = color
       ctx.globalAlpha = opacity
       ctx.fill()
@@ -343,13 +357,17 @@ export function KnowledgeGraphCanvas({
       ctx.font = `${node.size === 'root' ? '650' : node.size === 'primary' ? '520' : '400'} ${fontSize}px Inter`
       ctx.textAlign = 'left'
       ctx.textBaseline = 'middle'
-      ctx.fillStyle = matched ? '#f9f9fd' : node.size === 'secondary' ? '#707982' : '#adb8c2'
+      ctx.fillStyle = !matched
+        ? (node.size === 'secondary' ? '#707982' : '#adb8c2')
+        : visualStrength > 0.45
+          ? '#f9f9fd'
+          : 'rgba(210, 224, 232, 0.72)'
       ctx.fillText(node.label, node.x + baseR + 8 / globalScale, node.y)
     }
 
     ctx.globalAlpha = 1
     ctx.shadowBlur = 0
-  }, [getGlowRadius, getMatchStrength, getNodeOpacity])
+  }, [getGlowRadius, getMatchStrength, getNodeOpacity, searchTerm])
 
   return (
     <div
