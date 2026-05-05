@@ -9,6 +9,7 @@ from models.user import User
 from models.document import Document
 import uuid
 from api.apiResponse import ApiResponse
+from services.graph_builder import delete_document_edges, refresh_document_edges
 from services.semantic_search import (
     SemanticSearchError,
     delete_semantic_documents,
@@ -163,6 +164,14 @@ def update_document(update: UpdateDocuments, document_id: str, jwtToken: dict = 
         )
     except SemanticSearchError:
         pass
+    try:
+        refresh_document_edges(
+            db=db,
+            document_id=str(document.id),
+            user_id=str(userInfo.id),
+        )
+    except Exception:
+        db.rollback()
 
     return ApiResponse(
         success=True,
@@ -199,6 +208,14 @@ def delete_document(document_id: str, jwtToken: dict = Depends(jwtAuth), db: Ses
         delete_semantic_documents(document_ids=[str(document.id)], user_id=str(userInfo.id))
     except SemanticSearchError:
         pass
+    try:
+        delete_document_edges(
+            db=db,
+            document_id=str(document.id),
+            user_id=str(userInfo.id),
+        )
+    except Exception:
+        db.rollback()
 
     return ApiResponse(
         success=True,

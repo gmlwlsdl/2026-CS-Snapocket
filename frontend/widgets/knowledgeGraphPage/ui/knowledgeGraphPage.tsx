@@ -8,7 +8,7 @@ import type {
   GraphEdge,
 } from '../knowledgeGraph.type'
 import {
-  getNodes,
+  getGraph,
   getGraphSummary,
   type GraphSummaryData,
 } from '@/entities/graph'
@@ -147,49 +147,43 @@ export function KnowledgeGraphPage() {
   useEffect(() => {
     const controller = new AbortController()
 
-    async function loadNodes() {
-      const categoryMap: Record<CategoryFilter, string | undefined> = {
-        all: undefined,
-        lecture: 'lecture',
-        assignment: 'assignment',
-        notice: 'notice',
-        receipt: 'receipt',
-        memo: 'memo',
-      }
-
+    async function loadGraph() {
       try {
-        const apiNodes = await getNodes(categoryMap[activeFilter])
+        const categoryMap: Record<CategoryFilter, string | undefined> = {
+          all: undefined,
+          lecture: 'lecture',
+          assignment: 'assignment',
+          notice: 'notice',
+          receipt: 'receipt',
+          memo: 'memo',
+        }
+        const graphData = await getGraph(categoryMap[activeFilter])
 
         if (!controller.signal.aborted) {
-          const mappedNodes: GraphNode[] = apiNodes.map((n) => ({
+          const mappedNodes: GraphNode[] = graphData.nodes.map((n) => ({
             id: n.id,
             label: n.title,
             x: 0,
             y: 0,
             category: CATEGORY_TO_NODE_CATEGORY[n.category] ?? 'misc',
-            size: n.connectionCount > 2 ? 'primary' : 'secondary',
+            size: n.connectionCount > 0 ? 'primary' : 'secondary',
           }))
 
           setNodes(mappedNodes)
-
-          if (mappedNodes.length > 1) {
-            const mockEdges: GraphEdge[] = mappedNodes
-              .slice(0, -1)
-              .map((n, i) => ({
-                from: n.id,
-                to: mappedNodes[i + 1].id,
-              }))
-            setEdges(mockEdges)
-          } else {
-            setEdges([])
-          }
+          setEdges(
+            graphData.edges.map((edge) => ({
+              from: edge.source,
+              to: edge.target,
+              weight: edge.weight,
+            })),
+          )
         }
       } catch (error) {
         console.error('Failed to load graph data:', error)
       }
     }
 
-    loadNodes()
+    loadGraph()
 
     return () => controller.abort()
   }, [activeFilter])

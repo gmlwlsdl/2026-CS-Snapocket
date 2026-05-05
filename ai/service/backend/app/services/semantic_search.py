@@ -182,6 +182,24 @@ class SemanticSearchService:
         )
         return [vector.tolist() for vector in vectors]
 
+    def encode_texts(self, texts: list[str]) -> list[list[float]]:
+        # Graph hierarchy는 Qdrant 조회가 아니라 chunk coverage 계산에 임베딩만 필요하다.
+        # 따라서 Qdrant가 잠깐 불안정해도 모델이 로드되어 있으면 임베딩을 제공한다.
+        prepared = [_normalize_text(item, self._max_chars) for item in texts]
+        prepared = [item for item in prepared if item]
+        if not prepared:
+            return []
+        if not self._enabled or self._model is None:
+            raise SemanticSearchUnavailable(self._last_error or "semantic embedding model is unavailable")
+        vectors = self._model.encode(
+            prepared,
+            batch_size=max(1, min(16, len(prepared))),
+            normalize_embeddings=True,
+            convert_to_numpy=True,
+            show_progress_bar=False,
+        )
+        return [vector.tolist() for vector in vectors]
+
     def _document_to_point(self, document: SemanticDocument, vector: list[float]) -> qdrant_models.PointStruct:
         # Qdrant point id는 UUID/정수만 허용하므로, user_id+document_id 조합을 안정적인 UUID로 변환한다.
         point_id = str(uuid5(NAMESPACE_URL, f"{document.user_id}:{document.document_id}"))

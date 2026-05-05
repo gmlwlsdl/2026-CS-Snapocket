@@ -51,6 +51,7 @@ export function KnowledgeGraphCanvas({
       .map((e) => ({
         source: e.from,
         target: e.to,
+        weight: e.weight,
       }))
 
     return { nodes, links: filteredLinks }
@@ -148,8 +149,14 @@ export function KnowledgeGraphCanvas({
         graphData={graphData}
         nodeCanvasObject={drawNode}
         nodeLabel="label"
-        linkColor={() => 'rgba(129,236,255,0.12)'}
-        linkWidth={1}
+        linkColor={(link) => {
+          const weight = Math.max(0, Math.min(1, Number((link as { weight?: number }).weight ?? 0)))
+          return `rgba(129,236,255,${0.08 + weight * 0.28})`
+        }}
+        linkWidth={(link) => {
+          const weight = Math.max(0, Math.min(1, Number((link as { weight?: number }).weight ?? 0)))
+          return 0.8 + weight * 2.2
+        }}
         backgroundColor="transparent"
         onNodeClick={(node: NodeObject<GraphNode>) => {
           router.push(`/analysis/${node.id}`)

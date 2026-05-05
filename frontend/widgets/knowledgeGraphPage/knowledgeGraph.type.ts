@@ -14,6 +14,7 @@ export interface GraphNode {
 export interface GraphEdge {
   from: string;
   to: string;
+  weight: number;
 }
 
 export type CategoryFilter = "all" | "lecture" | "assignment" | "notice" | "receipt" | "memo";

@@ -200,6 +200,10 @@ def search_semantic_documents(*, query: str, user_id: str, limit: int = 10) -> l
     return items if isinstance(items, list) else []
 
 
+def request_graph_links(payload: dict) -> dict:
+    return _unwrap_ok_response(_request_json(path="/v1/graph/link", method="POST", payload=payload))
+
+
 def list_semantic_documents(*, user_id: str) -> list[dict]:
     payload = {"user_id": user_id}
     data = _unwrap_ok_response(_request_json(path="/v1/search/index-state", method="POST", payload=payload))

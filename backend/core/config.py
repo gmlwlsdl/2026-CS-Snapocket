@@ -20,6 +20,12 @@ AI_SERVER_URL = os.getenv("AI_SERVER_URL", "").strip()
 AI_SERVER_API_KEY = os.getenv("AI_SERVER_API_KEY", os.getenv("AIOPS_API_KEY", "")).strip()
 AI_SERVER_TIMEOUT_S = float(os.getenv("AI_SERVER_TIMEOUT_S", "60"))
 
+# Backend only controls graph rebuild fan-out. Semantic hierarchy scoring runs in
+# the AI service where embedding search and VLM-adjacent workloads live.
+GRAPH_MAX_TOP_K = int(os.getenv("GRAPH_MAX_TOP_K", "8"))
+GRAPH_MAX_EDGES_PER_DOC = int(os.getenv("GRAPH_MAX_EDGES_PER_DOC", "3"))
+GRAPH_RUN_WHEN_VLM_IDLE = os.getenv("GRAPH_RUN_WHEN_VLM_IDLE", "true").strip().lower() == "true"
+
 # 키 누락 방지
 if not SECRET_KEY:
     raise ValueError("환경 변수에 SECRET_KEY가 설정되지 않았습니다!")

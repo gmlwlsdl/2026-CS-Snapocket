@@ -42,6 +42,12 @@ def ensure_documents_schema_compatibility():
         if not has_doc_id_unique:
             conn.execute(text("CREATE UNIQUE INDEX uq_documents_doc_id ON documents (doc_id)"))
 
+
+def ensure_graph_edges_schema_compatibility():
+    from models.graph_edge import GraphEdge
+
+    GraphEdge.__table__.create(bind=engine, checkfirst=True)
+
 def get_db():
     db = SessionLocal()
     try:

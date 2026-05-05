@@ -16,7 +16,7 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.api import backend_integration
-from app.api.v1 import infer, jobs, models, semantic, servers, system
+from app.api.v1 import graph, infer, jobs, models, semantic, servers, system
 from app.core.logging import configure_logging
 from app.ops.routes import router as ops_router
 from app.services.state import build_app_state
@@ -114,6 +114,7 @@ app.include_router(jobs.router)
 app.include_router(models.router)
 # 백엔드 검색 연동용 semantic search API
 app.include_router(semantic.router)
+app.include_router(graph.router)
 app.include_router(servers.router)
 app.include_router(backend_integration.router)
 app.include_router(ops_router)

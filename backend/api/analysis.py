@@ -14,6 +14,7 @@ from models.analysis_job import AnalysisJob
 from models.document import Document
 from models.user import User
 from services.ai_client import AIClientError, map_analysis_result, request_analysis
+from services.graph_builder import refresh_document_edges
 from services.semantic_search import (
     SemanticSearchError,
     serialize_document_for_index,
@@ -115,6 +116,14 @@ def _run_analysis_job(job_id: int, document_id: int):
             )
         except SemanticSearchError:
             pass
+        try:
+            refresh_document_edges(
+                db=db,
+                document_id=str(document.id),
+                user_id=str(document.user_id),
+            )
+        except Exception:
+            db.rollback()
     except AIClientError as exc:
         # 예상 가능한 AI 통신/응답 오류
         db.rollback()
@@ -446,6 +455,14 @@ def save_analysis(
         )
     except SemanticSearchError:
         pass
+    try:
+        refresh_document_edges(
+            db=db,
+            document_id=str(document.id),
+            user_id=str(user_info.id),
+        )
+    except Exception:
+        db.rollback()
 
     return ApiResponse(
         success=True,
