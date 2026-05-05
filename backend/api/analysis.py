@@ -93,9 +93,16 @@ def _run_analysis_job(job_id: int, document_id: int):
         if not resolved_path:
             raise AIClientError("문서 파일을 찾을 수 없습니다.")
 
+        if not document.doc_id:
+            document.doc_id = uuid.uuid4().hex
+            db.commit()
+
+        backend_doc_id = str(document.doc_id)
+
         # AI 서버 분석 요청 및 응답 도메인 매핑
-        payload = request_analysis(file_path=resolved_path, doc_id=str(document.doc_id))
-        mapped = map_analysis_result(payload, fallback_doc_id=str(document.doc_id))
+        payload = request_analysis(file_path=resolved_path, doc_id=backend_doc_id)
+        mapped = map_analysis_result(payload, fallback_doc_id=backend_doc_id)
+        mapped["doc_id"] = backend_doc_id
 
         # 성공 상태 반영
         job.status = "analyzed"
@@ -104,7 +111,7 @@ def _run_analysis_job(job_id: int, document_id: int):
         job.finished_at = datetime.now()
 
         document.status = "analyzed"
-        document.doc_id = str(mapped.get("doc_id") or document.doc_id)
+        document.doc_id = backend_doc_id
         document.raw_text = str(mapped.get("raw_text") or "")
         db.commit()
         db.refresh(document)

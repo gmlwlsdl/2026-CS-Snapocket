@@ -552,18 +552,23 @@ class InferencePipeline:
             vlm_ocr_verify=bool(vlm_ocr_verify),
         )
 
+        resolved_doc_id = doc_id or str(uuid4())
+
         # 1) 입력 바이트+scope 기준 캐시 조회
         if self.cache:
             cached = self.cache.get(file_bytes, scope=cache_scope)
             if cached:
-                logger.info("[cache_hit] file=%s doc_id=%s", filename, cached.get("doc_id", "?"))
+                cached_payload = dict(cached)
+                cached_payload["doc_id"] = resolved_doc_id
+                cached_domain = cached_payload.get("domain")
+                if isinstance(cached_domain, dict):
+                    cached_payload["domain"] = {**cached_domain, "req_id": resolved_doc_id}
+                logger.info("[cache_hit] file=%s doc_id=%s", filename, resolved_doc_id)
                 if self.metrics:
                     self.metrics.inc("cache_hit_total")
-                return InferResult(**cached)
+                return InferResult(**cached_payload)
             if self.metrics:
                 self.metrics.inc("cache_miss_total")
-
-        resolved_doc_id = doc_id or str(uuid4())
 
         logger.info(
             "[infer_start] file=%s size=%dB engine=%s doc_id=%s",

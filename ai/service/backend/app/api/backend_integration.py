@@ -33,6 +33,33 @@ def _legacy_error(*, status_code: int, error_code: str, message: str):
     )
 
 
+def _enforce_response_doc_id(response_data: dict, expected_doc_id: str | None):
+    expected = str(expected_doc_id or "").strip()
+    if not expected:
+        return None
+
+    actual = str(response_data.get("doc_id") or "").strip()
+    domain = response_data.get("domain") if isinstance(response_data.get("domain"), dict) else None
+    domain_req_id = str(domain.get("req_id") or "").strip() if domain else ""
+    if actual and actual != expected:
+        return _legacy_error(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            error_code="DOC_ID_MISMATCH",
+            message="AI response doc_id does not match request doc_id",
+        )
+    if domain_req_id and domain_req_id != expected:
+        return _legacy_error(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            error_code="DOC_ID_MISMATCH",
+            message="AI response domain.req_id does not match request doc_id",
+        )
+
+    response_data["doc_id"] = expected
+    if domain is not None:
+        domain["req_id"] = expected
+    return None
+
+
 @router.post("/analyze", dependencies=[Depends(require_api_key)])
 @router.post("/v1/backend/analyze", dependencies=[Depends(require_api_key)])
 async def analyze_for_backend(
@@ -111,6 +138,10 @@ async def analyze_for_backend(
             error_code="INFER_FAILED",
             message=str(exc),
         )
+
+    mismatch_response = _enforce_response_doc_id(response_data, doc_id)
+    if mismatch_response is not None:
+        return mismatch_response
 
     mapped = map_to_backend_document_schema(
         response_data,
