@@ -72,6 +72,7 @@ class Edge:
     source: str
     target: str
     weight: float
+    edge_type: str
 
 @strawberry.type
 class SearchNode:
@@ -196,6 +197,7 @@ class Query:
                 source=str(record.source_document_id),
                 target=str(record.target_document_id),
                 weight=float(record.score or 0.0),
+                edge_type=str(record.edge_type or "similar_to"),
             )
             for record in records
         ]

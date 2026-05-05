@@ -13,6 +13,7 @@ export interface ApiEdge {
   source: string;
   target: string;
   weight: number;
+  edgeType: "parent_of" | "similar_to" | string;
 }
 
 export interface GraphSummaryData {

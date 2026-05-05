@@ -175,6 +175,7 @@ export function KnowledgeGraphPage() {
               from: edge.source,
               to: edge.target,
               weight: edge.weight,
+              type: edge.edgeType === 'parent_of' ? 'parent_of' : 'similar_to',
             })),
           )
         }

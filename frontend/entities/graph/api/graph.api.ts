@@ -53,7 +53,7 @@ export async function getNodes(category?: ApiNodeCategory): Promise<ApiNode[]> {
 export async function getGraph(category?: ApiNodeCategory): Promise<GraphData> {
   const variables = category !== undefined ? { category } : {};
   const data = await graphqlRequest<GraphData>(
-    "query GetGraph($category: String) { nodes(category: $category) { id title category tags createdAt connectionCount } edges(category: $category) { source target weight } }",
+    "query GetGraph($category: String) { nodes(category: $category) { id title category tags createdAt connectionCount } edges(category: $category) { source target weight edgeType } }",
     variables
   );
 

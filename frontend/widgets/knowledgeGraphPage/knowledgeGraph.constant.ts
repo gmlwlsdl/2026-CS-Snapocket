@@ -14,22 +14,22 @@ export const CATEGORY_FILTERS: { id: CategoryFilter; label: string }[] = [
 ];
 
 export const NODE_DOT_SIZE: Record<string, number> = {
-  root: 8,
-  primary: 5,
-  secondary: 3,
+  root: 11,
+  primary: 7,
+  secondary: 4,
 };
 
 export const NODE_COLOR: Record<string, string> = {
-  root: "#81ecff",
-  assignment: "#81ecff",
-  lecture: "#81ecff",
-  notice: "#81ecff",
-  receipt: "#81ecff",
-  memo: "#81ecff",
-  exam: "#81ecff",
-  class: "#81ecff",
-  summary: "#81ecff",
-  misc: "#81ecff",
+  root: "#f1f7ff",
+  assignment: "#e05a67",
+  lecture: "#d7a256",
+  notice: "#8fd26a",
+  receipt: "#7d8791",
+  memo: "#74c3d5",
+  exam: "#f0c35a",
+  class: "#d7a256",
+  summary: "#9ac7ff",
+  misc: "#9aa4af",
 };
 
 export const NODE_DOT_OPACITY: Record<string, number> = {
