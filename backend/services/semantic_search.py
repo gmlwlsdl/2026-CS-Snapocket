@@ -81,6 +81,8 @@ def _request_json(*, path: str, method: str = "GET", payload: dict | list | None
         raise SemanticSearchError(_extract_error_message(detail, fallback)) from exc
     except urlerror.URLError as exc:
         raise SemanticSearchError(f"AI server connection failed: {exc.reason}") from exc
+    except TimeoutError as exc:
+        raise SemanticSearchError(f"AI server request timed out after {AI_SERVER_TIMEOUT_S}s") from exc
 
     try:
         payload = json.loads(raw) if raw else {}
@@ -202,6 +204,10 @@ def search_semantic_documents(*, query: str, user_id: str, limit: int = 10) -> l
 
 def request_graph_links(payload: dict) -> dict:
     return _unwrap_ok_response(_request_json(path="/v1/graph/link", method="POST", payload=payload))
+
+
+def request_graph_links_batch(payload: dict) -> dict:
+    return _unwrap_ok_response(_request_json(path="/v1/graph/link/batch", method="POST", payload=payload))
 
 
 def list_semantic_documents(*, user_id: str) -> list[dict]:

@@ -35,6 +35,7 @@ from app.services.ingestion import ingest_office_document, to_ocr_blocks
 from app.services.image_processor import ImageProcessor
 from app.services.metrics import MetricsStore
 from app.services.asr.qwen_asr_engine import QwenASREngine
+from app.services.ocr.llamacpp_engine import OCR_PROMPT_VERSION
 from app.services.ocr.router import OCREngineRouter
 
 
@@ -451,9 +452,19 @@ class InferencePipeline:
         engine_hint: str | None,
         vlm_ocr_verify: bool,
     ) -> str:
+        engine_config = ""
+        engine = getattr(self.router, "paddle_engine", None)
+        if engine is not None:
+            engine_config = (
+                f"|engine={getattr(engine, 'name', 'unknown')}"
+                f"|model={getattr(engine, 'model', '')}"
+                f"|max_side={getattr(engine, 'max_side_px', '')}"
+                f"|max_tokens={getattr(engine, 'max_tokens', '')}"
+            )
         scope = (
             f"{content_type}|{engine_hint or 'auto'}|"
-            f"embedded={self.prefer_embedded_pdf_text}|vlm_verify={bool(vlm_ocr_verify)}"
+            f"embedded={self.prefer_embedded_pdf_text}|vlm_verify={bool(vlm_ocr_verify)}|"
+            f"ocr_prompt={OCR_PROMPT_VERSION}{engine_config}"
         )
         if is_audio_content_type(content_type):
             engine = self.qwen_asr_engine

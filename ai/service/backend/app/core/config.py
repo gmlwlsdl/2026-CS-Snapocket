@@ -65,7 +65,7 @@ class Settings:
     llm_image_max_side_px: int = int(
         os.getenv("LLM_IMAGE_MAX_SIDE_PX", os.getenv("OLLAMA_IMAGE_MAX_SIDE_PX", "1536"))
     )
-    llm_max_tokens: int = int(os.getenv("LLM_MAX_TOKENS", os.getenv("OLLAMA_MAX_TOKENS", "96")))
+    llm_max_tokens: int = int(os.getenv("LLM_MAX_TOKENS", os.getenv("OLLAMA_MAX_TOKENS", "512")))
     dispatch_upstream_timeout_s: float = float(os.getenv("DISPATCH_UPSTREAM_TIMEOUT_S", "180"))
     qwen_asr_enable: bool = _as_bool(os.getenv("QWEN_ASR_ENABLE"), True)
     qwen_asr_model: str = os.getenv("QWEN_ASR_MODEL", "Qwen/Qwen3-ASR-1.7B")
@@ -124,7 +124,7 @@ class Settings:
     semantic_search_enable: bool = _as_bool(os.getenv("SEMANTIC_SEARCH_ENABLE"), True)
     semantic_embedding_model: str = os.getenv("SEMANTIC_EMBEDDING_MODEL", "dragonkue/BGE-m3-ko")
     semantic_qdrant_url: str = os.getenv("SEMANTIC_QDRANT_URL", "http://qdrant:6333")
-    semantic_qdrant_collection: str = os.getenv("SEMANTIC_QDRANT_COLLECTION", "documents")
+    semantic_qdrant_collection: str = os.getenv("SEMANTIC_QDRANT_COLLECTION", "documents_v2")
     semantic_qdrant_timeout_s: float = float(os.getenv("SEMANTIC_QDRANT_TIMEOUT_S", "10"))
     semantic_raw_text_max_chars: int = int(os.getenv("SEMANTIC_RAW_TEXT_MAX_CHARS", "12000"))
     # Graph hierarchy scoring belongs to the AI service because it consumes
@@ -137,6 +137,7 @@ class Settings:
     graph_min_generality_delta: float = float(os.getenv("GRAPH_MIN_GENERALITY_DELTA", "0.015"))
     graph_min_parent_generality: float = float(os.getenv("GRAPH_MIN_PARENT_GENERALITY", "0.46"))
     graph_min_parent_topic_alignment: float = float(os.getenv("GRAPH_MIN_PARENT_TOPIC_ALIGNMENT", "0.59"))
+    graph_ambiguous_parent_margin: float = float(os.getenv("GRAPH_AMBIGUOUS_PARENT_MARGIN", "0.045"))
 
     @property
     def allowed_upload_types(self) -> set[str]:
@@ -189,7 +190,7 @@ def load_settings() -> Settings:
         llm_image_max_side_px=int(
             os.getenv("LLM_IMAGE_MAX_SIDE_PX", os.getenv("OLLAMA_IMAGE_MAX_SIDE_PX", "1536"))
         ),
-        llm_max_tokens=int(os.getenv("LLM_MAX_TOKENS", os.getenv("OLLAMA_MAX_TOKENS", "96"))),
+        llm_max_tokens=int(os.getenv("LLM_MAX_TOKENS", os.getenv("OLLAMA_MAX_TOKENS", "512"))),
         dispatch_upstream_timeout_s=float(os.getenv("DISPATCH_UPSTREAM_TIMEOUT_S", "180")),
         qwen_asr_enable=_as_bool(os.getenv("QWEN_ASR_ENABLE"), True),
         qwen_asr_model=os.getenv("QWEN_ASR_MODEL", "Qwen/Qwen3-ASR-1.7B"),
@@ -238,7 +239,7 @@ def load_settings() -> Settings:
         semantic_search_enable=_as_bool(os.getenv("SEMANTIC_SEARCH_ENABLE"), True),
         semantic_embedding_model=os.getenv("SEMANTIC_EMBEDDING_MODEL", "dragonkue/BGE-m3-ko"),
         semantic_qdrant_url=os.getenv("SEMANTIC_QDRANT_URL", "http://qdrant:6333"),
-        semantic_qdrant_collection=os.getenv("SEMANTIC_QDRANT_COLLECTION", "documents"),
+        semantic_qdrant_collection=os.getenv("SEMANTIC_QDRANT_COLLECTION", "documents_v2"),
         semantic_qdrant_timeout_s=float(os.getenv("SEMANTIC_QDRANT_TIMEOUT_S", "10")),
         semantic_raw_text_max_chars=int(os.getenv("SEMANTIC_RAW_TEXT_MAX_CHARS", "12000")),
         graph_max_top_k=int(os.getenv("GRAPH_MAX_TOP_K", "8")),
@@ -249,4 +250,5 @@ def load_settings() -> Settings:
         graph_min_generality_delta=float(os.getenv("GRAPH_MIN_GENERALITY_DELTA", "0.015")),
         graph_min_parent_generality=float(os.getenv("GRAPH_MIN_PARENT_GENERALITY", "0.46")),
         graph_min_parent_topic_alignment=float(os.getenv("GRAPH_MIN_PARENT_TOPIC_ALIGNMENT", "0.59")),
+        graph_ambiguous_parent_margin=float(os.getenv("GRAPH_AMBIGUOUS_PARENT_MARGIN", "0.045")),
     )

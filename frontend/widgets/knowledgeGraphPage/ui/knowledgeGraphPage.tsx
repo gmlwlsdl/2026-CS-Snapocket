@@ -167,6 +167,7 @@ export function KnowledgeGraphPage() {
             y: 0,
             category: CATEGORY_TO_NODE_CATEGORY[n.category] ?? 'misc',
             size: n.connectionCount > 0 ? 'primary' : 'secondary',
+            connectionCount: n.connectionCount,
           }))
 
           setNodes(mappedNodes)
@@ -175,7 +176,11 @@ export function KnowledgeGraphPage() {
               from: edge.source,
               to: edge.target,
               weight: edge.weight,
-              type: edge.edgeType === 'parent_of' ? 'parent_of' : 'similar_to',
+              type: edge.edgeType === 'parent_of'
+                ? 'parent_of'
+                : edge.edgeType === 'related_to'
+                  ? 'related_to'
+                  : 'similar_to',
             })),
           )
         }

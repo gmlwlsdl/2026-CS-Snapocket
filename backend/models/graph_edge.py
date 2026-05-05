@@ -14,6 +14,11 @@ class GraphEdge(Base):
             "edge_type",
             name="uq_graph_edges_user_source_target_type",
         ),
+        UniqueConstraint(
+            "user_id",
+            "parent_slot_key",
+            name="uq_graph_edges_user_parent_slot",
+        ),
         Index("ix_graph_edges_user_status", "user_id", "status"),
         Index("ix_graph_edges_source_document_id", "source_document_id"),
         Index("ix_graph_edges_target_document_id", "target_document_id"),
@@ -24,6 +29,7 @@ class GraphEdge(Base):
     source_document_id = Column(CHAR(36), ForeignKey("documents.id"), nullable=False)
     target_document_id = Column(CHAR(36), ForeignKey("documents.id"), nullable=False)
     edge_type = Column(String(32), nullable=False, default="similar_to")
+    parent_slot_key = Column(CHAR(36), nullable=True)
     score = Column(Float, nullable=False)
     reason_json = Column(Text, nullable=False, default="{}")
     status = Column(String(16), nullable=False, default="active")

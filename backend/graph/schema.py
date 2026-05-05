@@ -15,7 +15,7 @@ from models.tag import Tag
 from sqlalchemy import func, or_, and_, union_all
 from sqlalchemy.orm import aliased, joinedload
 from api.apiResponse import ApiResponse
-from services.graph_builder import refresh_document_edges
+from services.graph_builder import rebuild_user_graph_edges
 
 router = APIRouter(prefix="/graph", tags=["graph"])
 
@@ -300,59 +300,18 @@ def rebuild_graph(jwtToken: dict = Depends(jwtAuth), db: Session = Depends(get_d
     if not userInfo:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Unauthorized")
 
-    document_ids = [
-        str(document_id)
-        for (document_id,) in (
-            db.query(Document.id)
-            .filter(
-                Document.user_id == userInfo.id,
-                Document.deleted_at.is_(None),
-            )
-            .all()
-        )
-    ]
-
-    created = 0
-    deleted = 0
-    updated = 0
-    skipped = 0
-    rebuilt_edge_keys: set[tuple[str, str, str]] = set()
-    for document_id in document_ids:
-        result = refresh_document_edges(
-            db=db,
-            document_id=document_id,
-            user_id=str(userInfo.id),
-            delete_existing=False,
-        )
-        created += int(result.get("created", 0))
-        deleted += int(result.get("deleted", 0))
-        updated += int(result.get("updated", 0))
-        rebuilt_edge_keys.update(
-            tuple(item)
-            for item in result.get("edge_keys", [])
-            if isinstance(item, tuple) and len(item) == 3
-        )
-        skipped += int(result.get("skipped", 0))
-        if result.get("skipped"):
-            break
-
-    if skipped == 0:
-        stale_edges = db.query(GraphEdge).filter(GraphEdge.user_id == str(userInfo.id)).all()
-        for edge in stale_edges:
-            key = (str(edge.source_document_id), str(edge.target_document_id), str(edge.edge_type))
-            if key not in rebuilt_edge_keys:
-                db.delete(edge)
-                deleted += 1
-        db.commit()
+    result = rebuild_user_graph_edges(db=db, user_id=str(userInfo.id))
 
     return ApiResponse(
         success=True,
         message="그래프 재계산 완료",
         data={
-            "document_count": len(document_ids),
-            "created": created,
-            "updated": updated,
-            "deleted": deleted,
-            "skipped": skipped,
+            "document_count": int(result.get("document_count", 0) or 0),
+            "created": int(result.get("created", 0) or 0),
+            "updated": int(result.get("updated", 0) or 0),
+            "deleted": int(result.get("deleted", 0) or 0),
+            "skipped": int(result.get("skipped", 0) or 0),
+            "parent_edges": int(result.get("parent_edges", 0) or 0),
+            "auxiliary_edges": int(result.get("auxiliary_edges", 0) or 0),
         },
     )

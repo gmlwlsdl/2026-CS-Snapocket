@@ -1,7 +1,7 @@
-import React, { useCallback, useMemo, useRef } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import ForceGraph2D, { type ForceGraphMethods, type NodeObject } from 'react-force-graph-2d'
-import type { GraphNode, GraphEdge, GraphEdgeType } from '../knowledgeGraph.type'
+import type { GraphNode, GraphEdge, GraphEdgeType, NodeSize } from '../knowledgeGraph.type'
 import {
   NODE_COLOR,
   NODE_DOT_SIZE,
@@ -29,11 +29,40 @@ type ClusterMember = {
   parentId?: string
 }
 
-const ORPHAN_RING_RADIUS = 420
+const ORPHAN_RING_RADIUS = 620
 const CLUSTER_RING_RADIUS = 280
 const CHILD_RING_BASE = 74
 const GRANDCHILD_RING_BASE = 48
 const SEARCH_GLOW_FLOOR = 0.18
+const FORCE_LINK_DISTANCE = {
+  parentMin: 82,
+  parentMax: 138,
+  similarMin: 68,
+  similarMax: 230,
+  relatedMin: 96,
+  relatedMax: 270,
+}
+const FORCE_LINK_STRENGTH = {
+  parentBase: 0.1,
+  semanticBase: 0.026,
+}
+
+type D3LinkForce = {
+  distance?: (distance: number | ((link: GraphLink) => number)) => D3LinkForce
+  strength?: (strength: number | ((link: GraphLink) => number)) => D3LinkForce
+  iterations?: (iterations: number) => D3LinkForce
+}
+
+type D3ChargeForce = {
+  strength?: (strength: number | ((node: NodeObject<GraphNode>) => number)) => D3ChargeForce
+  distanceMin?: (distance: number) => D3ChargeForce
+  distanceMax?: (distance: number) => D3ChargeForce
+  theta?: (theta: number) => D3ChargeForce
+}
+
+type D3CenterForce = {
+  strength?: (strength: number) => D3CenterForce
+}
 
 function clamp01(value: number) {
   return Math.max(0, Math.min(1, value))
@@ -50,6 +79,39 @@ function getVisualMatchStrength(score: number) {
 
   const lifted = smoothstep((raw - SEARCH_GLOW_FLOOR) / (1 - SEARCH_GLOW_FLOOR))
   return clamp01(raw * 0.16 + lifted * 0.84)
+}
+
+function getSimilarityTension(weight: number) {
+  return smoothstep(clamp01(weight))
+}
+
+function getWeightedLinkDistance(link: Partial<GraphLink>) {
+  const tension = getSimilarityTension(Number(link.weight ?? 0))
+  if (link.type === 'parent_of') {
+    return FORCE_LINK_DISTANCE.parentMax
+      - (FORCE_LINK_DISTANCE.parentMax - FORCE_LINK_DISTANCE.parentMin) * tension
+  }
+  if (link.type === 'similar_to') {
+    return FORCE_LINK_DISTANCE.similarMax
+      - (FORCE_LINK_DISTANCE.similarMax - FORCE_LINK_DISTANCE.similarMin) * tension
+  }
+  return FORCE_LINK_DISTANCE.relatedMax
+    - (FORCE_LINK_DISTANCE.relatedMax - FORCE_LINK_DISTANCE.relatedMin) * tension
+}
+
+function getWeightedLinkStrength(link: Partial<GraphLink>) {
+  const tension = getSimilarityTension(Number(link.weight ?? 0))
+  if (link.type === 'parent_of') {
+    return FORCE_LINK_STRENGTH.parentBase + tension * 0.18
+  }
+  return FORCE_LINK_STRENGTH.semanticBase + tension * 0.07
+}
+
+function getNodeRepelStrength(node: NodeObject<GraphNode>) {
+  const sizeRepel = node.size === 'root' ? 760 : node.size === 'primary' ? 520 : 360
+  const depthRelief = Math.min(120, Math.max(0, Number(node.depth ?? 2)) * 36)
+  const orphanBoost = Number(node.connectionCount ?? 0) <= 0 ? 180 : 0
+  return -(sizeRepel + orphanBoost - depthRelief)
 }
 
 function hashString(value: string) {
@@ -70,6 +132,45 @@ function uniqueByNodePair(edges: GraphEdge[]) {
   })
 }
 
+function getGraphStats(nodes: GraphNode[], links: GraphLink[]) {
+  const degreeById = new Map(nodes.map((node) => [node.id, 0]))
+  const weightedDegreeById = new Map(nodes.map((node) => [node.id, 0]))
+  const childCountById = new Map(nodes.map((node) => [node.id, 0]))
+
+  links.forEach((link) => {
+    const weight = clamp01(Number(link.weight ?? 0))
+    degreeById.set(link.source, (degreeById.get(link.source) ?? 0) + 1)
+    degreeById.set(link.target, (degreeById.get(link.target) ?? 0) + 1)
+    weightedDegreeById.set(link.source, (weightedDegreeById.get(link.source) ?? 0) + weight)
+    weightedDegreeById.set(link.target, (weightedDegreeById.get(link.target) ?? 0) + weight)
+    if (link.type === 'parent_of') {
+      childCountById.set(link.source, (childCountById.get(link.source) ?? 0) + 1)
+    }
+  })
+
+  return { childCountById, degreeById, weightedDegreeById }
+}
+
+function getSemanticNodeSize(
+  node: GraphNode,
+  childCountById: Map<string, number>,
+  degreeById: Map<string, number>,
+  weightedDegreeById: Map<string, number>,
+): NodeSize {
+  const childCount = childCountById.get(node.id) ?? 0
+  const degree = degreeById.get(node.id) ?? 0
+  const weightedDegree = weightedDegreeById.get(node.id) ?? 0
+  const persistedConnections = Number(node.connectionCount ?? 0)
+
+  if (childCount >= 4 || weightedDegree >= 3.2 || persistedConnections >= 18) {
+    return 'root'
+  }
+  if (childCount >= 1 || degree >= 3 || weightedDegree >= 1.6 || persistedConnections >= 8) {
+    return 'primary'
+  }
+  return 'secondary'
+}
+
 function selectVisibleLinks(nodes: GraphNode[], edges: GraphEdge[]) {
   const nodeIds = new Set(nodes.map((node) => node.id))
   const validEdges = uniqueByNodePair(
@@ -84,29 +185,9 @@ function selectVisibleLinks(nodes: GraphNode[], edges: GraphEdge[]) {
       type: edge.type,
     }))
 
-  const parentIncidentIds = new Set<string>()
-  parentLinks.forEach((edge) => {
-    parentIncidentIds.add(edge.source)
-    parentIncidentIds.add(edge.target)
-  })
-
-  const similarUseCount = new Map<string, number>()
-  const sparseSimilarLinks = validEdges
-    .filter((edge) => edge.type === 'similar_to' && edge.weight >= 0.72)
+  const sparseAuxiliaryLinks = validEdges
+    .filter((edge) => edge.type !== 'parent_of' && edge.weight >= 0.64)
     .sort((a, b) => b.weight - a.weight)
-    .filter((edge) => {
-      // Similarity links are useful inside otherwise orphaned islands, but they
-      // should not bridge semantic branches into a hairball.
-      if (parentIncidentIds.has(edge.from) || parentIncidentIds.has(edge.to)) {
-        return false
-      }
-      const fromCount = similarUseCount.get(edge.from) ?? 0
-      const toCount = similarUseCount.get(edge.to) ?? 0
-      if (fromCount >= 1 || toCount >= 1) return false
-      similarUseCount.set(edge.from, fromCount + 1)
-      similarUseCount.set(edge.to, toCount + 1)
-      return true
-    })
     .map((edge) => ({
       source: edge.from,
       target: edge.to,
@@ -114,11 +195,12 @@ function selectVisibleLinks(nodes: GraphNode[], edges: GraphEdge[]) {
       type: edge.type,
     }))
 
-  return [...parentLinks, ...sparseSimilarLinks]
+  return [...parentLinks, ...sparseAuxiliaryLinks]
 }
 
 function computeHierarchyLayout(nodes: GraphNode[], links: GraphLink[]) {
   const nodesById = new Map(nodes.map((node) => [node.id, node]))
+  const { childCountById, degreeById, weightedDegreeById } = getGraphStats(nodes, links)
   const childrenByParent = new Map<string, string[]>()
   const incomingParentCount = new Map<string, number>()
   const parentLinks = links.filter((link) => link.type === 'parent_of')
@@ -179,9 +261,7 @@ function computeHierarchyLayout(nodes: GraphNode[], links: GraphLink[]) {
       ...root,
       x: cx,
       y: cy,
-      fx: cx,
-      fy: cy,
-      size: 'root',
+      size: getSemanticNodeSize(root, childCountById, degreeById, weightedDegreeById),
       depth: 0,
       clusterId: root.id,
     })
@@ -198,9 +278,7 @@ function computeHierarchyLayout(nodes: GraphNode[], links: GraphLink[]) {
         ...node,
         x,
         y,
-        fx: x,
-        fy: y,
-        size: 'primary',
+        size: getSemanticNodeSize(node, childCountById, degreeById, weightedDegreeById),
         depth: 1,
         clusterId: root.id,
       })
@@ -219,9 +297,7 @@ function computeHierarchyLayout(nodes: GraphNode[], links: GraphLink[]) {
           ...grandchildNode,
           x: gx,
           y: gy,
-          fx: gx,
-          fy: gy,
-          size: 'secondary',
+          size: getSemanticNodeSize(grandchildNode, childCountById, degreeById, weightedDegreeById),
           depth: grandchild.depth,
           clusterId: root.id,
         })
@@ -247,9 +323,7 @@ function computeHierarchyLayout(nodes: GraphNode[], links: GraphLink[]) {
         ...node,
         x,
         y,
-        fx: x,
-        fy: y,
-        size: 'secondary',
+        size: getSemanticNodeSize(node, childCountById, degreeById, weightedDegreeById),
         depth: 3,
         clusterId: groupId,
       })
@@ -292,22 +366,45 @@ export function KnowledgeGraphCanvas({
     return { nodes: layoutNodes, links: visibleLinks }
   }, [nodes, edges])
 
+  useEffect(() => {
+    const graph = graphRef?.current
+    if (!graph) return
+
+    const linkForce = graph.d3Force('link') as D3LinkForce | undefined
+    linkForce
+      ?.distance?.((link) => getWeightedLinkDistance(link))
+      ?.strength?.((link) => getWeightedLinkStrength(link))
+      ?.iterations?.(2)
+
+    const chargeForce = graph.d3Force('charge') as D3ChargeForce | undefined
+    chargeForce
+      ?.strength?.((node) => getNodeRepelStrength(node))
+      ?.distanceMin?.(36)
+      ?.distanceMax?.(780)
+      ?.theta?.(0.82)
+
+    const centerForce = graph.d3Force('center') as D3CenterForce | undefined
+    centerForce?.strength?.(0.055)
+
+    graph.d3ReheatSimulation()
+  }, [graphData, graphRef])
+
   const getNodeOpacity = useCallback(
     (visualStrength: number) => {
-      if (!searchTerm) return 1
-      if (visualStrength <= 0) return 0.14
-      return 0.2 + visualStrength * 0.8
+      if (!searchTerm) return 0.82
+      if (visualStrength <= 0) return 0.1
+      return 0.16 + visualStrength * 0.66
     },
     [searchTerm],
   )
 
   const getGlowRadius = useCallback((baseRadius: number, visualStrength: number, globalScale: number) => {
-    return baseRadius * ((4 + visualStrength * 14) * Math.pow(globalScale, -0.3))
+    return baseRadius * ((3 + visualStrength * 8) * Math.pow(globalScale, -0.24))
   }, [])
 
   const drawNode = useCallback((node: NodeObject<GraphNode>, ctx: CanvasRenderingContext2D, globalScale: number) => {
     const strength = getMatchStrength(node)
-    const visualStrength = searchTerm ? getVisualMatchStrength(strength) : 1
+    const visualStrength = searchTerm ? getVisualMatchStrength(strength) : 0.72
     const matched = visualStrength > 0
     // 검색 점수는 soft-knee 곡선으로 시각화한다. 낮은 유사도도 완전히
     // 사라지지는 않지만, 상위 결과와 같은 halo 체급으로 보이지 않게 한다.
@@ -325,10 +422,10 @@ export function KnowledgeGraphCanvas({
         node.x, node.y, glowRadius,
       )
 
-      gradient.addColorStop(0, `rgba(255, 255, 255, ${0.18 + visualStrength * 0.82})`)
-      gradient.addColorStop(0.12, `rgba(241, 247, 255, ${0.16 + visualStrength * 0.62})`)
-      gradient.addColorStop(0.3, `rgba(116, 195, 213, ${0.04 + visualStrength * 0.26})`)
-      gradient.addColorStop(0.6, `rgba(116, 195, 213, ${0.01 + visualStrength * 0.06})`)
+      gradient.addColorStop(0, `rgba(255, 255, 255, ${0.1 + visualStrength * 0.38})`)
+      gradient.addColorStop(0.14, `rgba(241, 247, 255, ${0.08 + visualStrength * 0.24})`)
+      gradient.addColorStop(0.34, `rgba(116, 195, 213, ${0.025 + visualStrength * 0.1})`)
+      gradient.addColorStop(0.68, `rgba(116, 195, 213, ${0.005 + visualStrength * 0.026})`)
       gradient.addColorStop(1, 'rgba(116, 195, 213, 0)')
 
       ctx.beginPath()
@@ -338,7 +435,7 @@ export function KnowledgeGraphCanvas({
       ctx.fill()
 
       ctx.beginPath()
-      ctx.arc(node.x, node.y, baseR + visualStrength * (2 / globalScale), 0, 2 * Math.PI, false)
+      ctx.arc(node.x, node.y, baseR + visualStrength * (0.9 / globalScale), 0, 2 * Math.PI, false)
       ctx.fillStyle = color
       ctx.globalAlpha = opacity
       ctx.fill()
@@ -379,7 +476,7 @@ export function KnowledgeGraphCanvas({
         className="pointer-events-none absolute inset-0 z-0"
         style={{
           background:
-            'radial-gradient(ellipse 60% 60% at 50% 50%, rgba(23,26,29,0.8) 0%, transparent 100%)',
+            'radial-gradient(ellipse 58% 58% at 50% 50%, rgba(18,22,25,0.48) 0%, transparent 100%)',
         }}
       />
 
@@ -391,24 +488,32 @@ export function KnowledgeGraphCanvas({
         linkColor={(link) => {
           const typedLink = link as { weight?: number; type?: GraphEdgeType }
           const weight = clamp01(Number(typedLink.weight ?? 0))
+          const tension = smoothstep(Math.max(0, weight - 0.52) / 0.48)
           if (typedLink.type === 'parent_of') {
-            return `rgba(198,208,222,${0.24 + weight * 0.34})`
+            return `rgba(212,224,238,${0.18 + tension * 0.40})`
           }
-          return `rgba(116,195,213,${0.05 + weight * 0.1})`
+          return `rgba(132,216,236,${0.055 + tension * 0.22})`
         }}
         linkWidth={(link) => {
           const typedLink = link as { weight?: number; type?: GraphEdgeType }
           const weight = clamp01(Number(typedLink.weight ?? 0))
-          return typedLink.type === 'parent_of' ? 1.4 + weight * 2.4 : 0.5 + weight * 0.8
+          const tension = smoothstep(Math.max(0, weight - 0.52) / 0.48)
+          return typedLink.type === 'parent_of' ? 1.1 + tension * 2.3 : 0.52 + tension * 1
         }}
-        linkLineDash={(link) => ((link as { type?: GraphEdgeType }).type === 'similar_to' ? [4, 6] : [])}
+        linkLineDash={(link) => ((link as { type?: GraphEdgeType }).type === 'parent_of' ? [] : [4, 6])}
         backgroundColor="transparent"
         onNodeClick={(node: NodeObject<GraphNode>) => {
           router.push(`/analysis/${node.id}`)
         }}
-        cooldownTicks={1}
-        d3AlphaDecay={0.4}
-        d3VelocityDecay={0.8}
+        onNodeDragEnd={(node: NodeObject<GraphNode>) => {
+          node.fx = undefined
+          node.fy = undefined
+          graphRef?.current?.d3ReheatSimulation()
+        }}
+        warmupTicks={60}
+        cooldownTicks={260}
+        d3AlphaDecay={0.026}
+        d3VelocityDecay={0.42}
       />
     </div>
   )
