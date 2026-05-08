@@ -31,7 +31,7 @@ def getTasks(year: int, month: int, category: str | None = None, jwtToken: dict 
 
     query = db.query(Document).filter(
         Document.user_id == userInfo.id,
-        Document.deleted_at == None,
+        Document.deleted_at.is_(None),
         extract('year', Document.created_at) == year,
         extract('month', Document.created_at) == month
     )
@@ -61,7 +61,7 @@ def getTask(date: str, category: str | None = None, jwtToken: dict = Depends(jwt
 
     query = db.query(Document).filter(
         Document.user_id == userInfo.id,
-        Document.deleted_at == None,
+        Document.deleted_at.is_(None),
         func.date(Document.created_at) == date 
     )
 

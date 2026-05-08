@@ -56,9 +56,9 @@ def jwtRefreshAuth(credentials: HTTPAuthorizationCredentials = Depends(security)
     try:
         payload = verifyToken(token, expectedType="refresh")
         return payload
-    except ValueError as e:
+    except (JWTError, ValueError):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=f"유효하지 않거나 만료된 Refresh 토큰입니다. 재로그인이 필요합니다.",
+            detail="유효하지 않거나 만료된 Refresh 토큰입니다. 재로그인이 필요합니다.",
             headers={"WWW-Authenticate": "Bearer"},
         )
