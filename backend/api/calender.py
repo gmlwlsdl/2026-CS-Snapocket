@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, status, Depends
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 import uuid
 from sqlalchemy.sql import func
@@ -15,12 +15,12 @@ from api.apiResponse import ApiResponse
 router = APIRouter(prefix="/calendar", tags=["calendar"])
 
 class MonthlyTask(BaseModel):
-    id : uuid
+    id : uuid.UUID
     title : str
     category : str
     file_type : str
 
-class DailyTask(BaseModel, MonthlyTask):
+class DailyTask(MonthlyTask):
     deadline : datetime | None = None
 
 @router.get("/", response_model=ApiResponse[dict[str, list[MonthlyTask]]])
