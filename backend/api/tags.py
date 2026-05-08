@@ -128,7 +128,7 @@ def changeTags(document_id: str, tags: list[str], jwtToken: dict = Depends(jwtAu
         data=tagData
     )
 
-@router.delete("/documents/{document_id}/tags/{tag_id}")
+@router.delete("/documents/{document_id}/tags/{tag_id}", response_model=ApiResponse[None])
 def deleteTag(document_id: str, tag: str, jwtToken: dict = Depends(jwtAuth), db: Session = Depends(get_db)):
 
     deletedCount = db.query(DocumentTag).filter(DocumentTag.document_id == document_id, DocumentTag.tag_id == tag).delete()
@@ -144,4 +144,8 @@ def deleteTag(document_id: str, tag: str, jwtToken: dict = Depends(jwtAuth), db:
             }
         )
 
-    return {"success": True}
+    return ApiResponse(
+        success=True,
+        message="태그 삭제 성공",
+        data=None
+    )
