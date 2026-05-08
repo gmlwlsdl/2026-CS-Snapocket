@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from api import auth, analysis, documents, upload, tags, search
+from api import auth, analysis, documents, upload, tags, search, calender
 from core.database import ensure_documents_schema_compatibility
 from graph.schema import data, router
 from graph.context import getContext
@@ -24,7 +24,7 @@ app.add_middleware(
 
 app.include_router(auth.router)
 app.include_router(router)
-
+app.include_router(calender.router)
 app.include_router(documents.router)
 app.include_router(tags.router)
 app.include_router(upload.router)
