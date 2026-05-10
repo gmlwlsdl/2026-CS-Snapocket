@@ -13,7 +13,7 @@ async def getContext(request: Request, db: Session = Depends(get_db)):
     token = authHeader.split(" ")[1]
     
     try:
-        user_info = verifyToken(token)
+        user_info = verifyToken(token, expectedType="access")
     except Exception:
         return {"user": None, "request": request, "db": db}
         
