@@ -26,6 +26,9 @@ PARENT_MIN_TOPIC_ALIGNMENT = 0.58
 PARENT_MIN_ENTAILMENT_LIKE_SCORE = 0.32
 PARENT_MIN_DIRECTNESS = 0.025
 PARENT_MAX_NEGATIVE_EVIDENCE = 0.24
+PARENT_AMBIGUOUS_DIRECTNESS = 0.035
+PARENT_AMBIGUOUS_TOPIC_ALIGNMENT = 0.62
+PARENT_AMBIGUOUS_COVERAGE = 0.38
 
 def _serialize_datetime(value: datetime | None) -> str:
     return value.isoformat() if value else ""
@@ -217,17 +220,34 @@ def _to_related_from_rejected_parent(
 def _passes_conservative_parent_constraints(candidate: dict[str, Any]) -> tuple[bool, str]:
     reason = candidate.get("reason") if isinstance(candidate.get("reason"), dict) else {}
     score = float(candidate.get("score") or 0.0)
+    directness = float(reason.get("directness") or 0.0)
+    topic_alignment = float(reason.get("topic_alignment") or 0.0)
+    coverage_evidence = max(
+        float(reason.get("coverage") or 0.0),
+        float(reason.get("bridge_alignment") or 0.0) * 0.82,
+    )
+    generality_delta = float(reason.get("generality_delta") or 0.0)
+    ambiguous = bool(reason.get("ambiguity"))
+    ambiguity_supported = (
+        not ambiguous
+        or directness >= PARENT_AMBIGUOUS_DIRECTNESS
+        or (
+            topic_alignment >= PARENT_AMBIGUOUS_TOPIC_ALIGNMENT
+            and coverage_evidence >= PARENT_AMBIGUOUS_COVERAGE
+            and generality_delta >= PARENT_MIN_GENERALITY_DELTA
+        )
+    )
     checks = {
         "score": score >= PARENT_MIN_SCORE,
-        "coverage": float(reason.get("coverage") or 0.0) >= PARENT_MIN_COVERAGE,
+        "coverage": coverage_evidence >= PARENT_MIN_COVERAGE,
         "source_generality": float(reason.get("generality") or 0.0) >= PARENT_MIN_SOURCE_GENERALITY,
-        "generality_delta": float(reason.get("generality_delta") or 0.0) >= PARENT_MIN_GENERALITY_DELTA,
-        "topic_alignment": float(reason.get("topic_alignment") or 0.0) >= PARENT_MIN_TOPIC_ALIGNMENT,
+        "generality_delta": generality_delta >= PARENT_MIN_GENERALITY_DELTA,
+        "topic_alignment": topic_alignment >= PARENT_MIN_TOPIC_ALIGNMENT,
         "entailment_like_score": float(reason.get("entailment_like_score") or 0.0)
         >= PARENT_MIN_ENTAILMENT_LIKE_SCORE,
-        "directness": float(reason.get("directness") or 0.0) >= PARENT_MIN_DIRECTNESS,
+        "directness": directness >= PARENT_MIN_DIRECTNESS,
         "negative_evidence": float(reason.get("negative_evidence") or 0.0) <= PARENT_MAX_NEGATIVE_EVIDENCE,
-        "not_ambiguous": not bool(reason.get("ambiguity")),
+        "ambiguity_supported": ambiguity_supported,
     }
     failed = [name for name, passed in checks.items() if not passed]
     if failed:

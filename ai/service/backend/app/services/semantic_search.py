@@ -20,6 +20,7 @@ from uuid import NAMESPACE_URL, uuid5
 
 from qdrant_client import QdrantClient
 from qdrant_client.http import models as qdrant_models
+from sentence_transformers import CrossEncoder
 from sentence_transformers import SentenceTransformer
 
 from app.core.config import Settings
@@ -219,13 +220,17 @@ class SemanticSearchService:
         self._settings = settings
         self._enabled = bool(settings.semantic_search_enable)
         self._model_ref = self._resolve_model_ref(settings.semantic_embedding_model)
+        self._reranker_ref = self._resolve_model_ref(settings.semantic_reranker_model)
         self._collection_name = settings.semantic_qdrant_collection
         self._qdrant_url = settings.semantic_qdrant_url
         self._max_chars = max(256, int(settings.semantic_raw_text_max_chars))
+        self._reranker_max_chars = max(256, int(settings.semantic_reranker_max_chars))
         self._model: SentenceTransformer | None = None
+        self._reranker: CrossEncoder | None = None
         self._client: QdrantClient | None = None
         self._embedding_dim: int | None = None
         self._last_error: str | None = None
+        self._reranker_error: str | None = None
 
         if self._enabled:
             try:
@@ -257,6 +262,10 @@ class SemanticSearchService:
             "available": self.available(),
             "schema_version": _SCHEMA_VERSION,
             "model_ref": self._model_ref,
+            "reranker_enabled": bool(self._settings.semantic_reranker_enable),
+            "reranker_available": self._reranker is not None,
+            "reranker_model_ref": self._reranker_ref,
+            "reranker_error": self._reranker_error,
             "collection": self._collection_name,
             "qdrant_url": self._qdrant_url,
             "embedding_dim": self._embedding_dim,
@@ -285,8 +294,8 @@ class SemanticSearchService:
             ai_root = cwd if (cwd / "model").is_dir() else resolved_file.parents[2]
 
         local_candidates = [
-            ai_root / "model" / "BGE-m3-ko",
             ai_root / "model" / token,
+            ai_root / "model" / "BGE-m3-ko",
         ]
         for candidate in local_candidates:
             if candidate.is_dir() and (candidate / "config.json").exists():
@@ -304,6 +313,14 @@ class SemanticSearchService:
         # probe 벡터 1개를 만들어 모델의 실제 출력 차원을 확인한다.
         probe = self._model.encode(["semantic-search-probe"], normalize_embeddings=True)
         self._embedding_dim = len(probe[0])
+        if self._settings.semantic_reranker_enable:
+            try:
+                self._reranker = CrossEncoder(self._reranker_ref, max_length=512)
+                self._reranker_error = None
+            except Exception as exc:
+                self._reranker = None
+                self._reranker_error = str(exc)
+                logger.exception("Semantic reranker initialization failed: %s", exc)
         self._ensure_collection()
         self._last_error = None
 
@@ -366,17 +383,27 @@ class SemanticSearchService:
         model = self._model
         return getattr(model, "tokenizer", None) if model is not None else None
 
-    def chunk_text(self, text: str, *, max_chunks: int, max_chars: int | None = None) -> list[str]:
+    def chunk_text(
+        self,
+        text: str,
+        *,
+        max_chunks: int,
+        max_chars: int | None = None,
+        target_tokens: int | None = None,
+        overlap_tokens: int | None = None,
+    ) -> list[str]:
         """Expose model-token chunking to graph scoring without duplicating rules."""
 
         normalized = _normalize_text(text, max_chars or self._max_chars)
         if not normalized:
             return []
+        token_budget = max(32, int(target_tokens or _CHUNK_TARGET_TOKENS))
+        token_overlap = max(0, min(int(overlap_tokens if overlap_tokens is not None else _CHUNK_OVERLAP_TOKENS), token_budget - 1))
         windows = _split_model_token_windows_with_offsets(
             normalized,
             tokenizer=self._tokenizer(),
-            target_tokens=_CHUNK_TARGET_TOKENS,
-            overlap_tokens=_CHUNK_OVERLAP_TOKENS,
+            target_tokens=token_budget,
+            overlap_tokens=token_overlap,
         )
         if not windows:
             windows = _split_fixed_windows_with_offsets(
@@ -433,6 +460,45 @@ class SemanticSearchService:
                 weights[token_id] = (1.0 + math.log(float(term_frequency))) * idf
             vectors.append(weights)
         return vectors
+
+    def rerank_pairs(self, pairs: list[tuple[str, str]]) -> list[float | None]:
+        if not pairs:
+            return []
+        if self._reranker is None:
+            return [None for _pair in pairs]
+
+        prepared = [
+            (
+                _normalize_text(source, self._reranker_max_chars),
+                _normalize_text(target, self._reranker_max_chars),
+            )
+            for source, target in pairs
+        ]
+        valid_refs = [
+            (index, source, target)
+            for index, (source, target) in enumerate(prepared)
+            if source and target
+        ]
+        scores: list[float | None] = [None for _pair in pairs]
+        if not valid_refs:
+            return scores
+
+        try:
+            raw_scores = self._reranker.predict(
+                [(source, target) for _index, source, target in valid_refs],
+                batch_size=max(1, min(8, len(valid_refs))),
+                show_progress_bar=False,
+            )
+        except Exception as exc:
+            self._reranker_error = str(exc)
+            logger.exception("Semantic reranker scoring failed: %s", exc)
+            return scores
+
+        for (index, _source, _target), score in zip(valid_refs, raw_scores):
+            value = float(score[0] if hasattr(score, "__len__") and not isinstance(score, (str, bytes)) else score)
+            value = max(-60.0, min(60.0, value))
+            scores[index] = round(1.0 / (1.0 + math.exp(-value)), 4)
+        return scores
 
     def encode_texts(self, texts: list[str]) -> list[list[float]]:
         # Graph hierarchy는 Qdrant 조회가 아니라 chunk coverage 계산에 임베딩만 필요하다.

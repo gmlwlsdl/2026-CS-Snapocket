@@ -127,17 +127,21 @@ class Settings:
     semantic_qdrant_collection: str = os.getenv("SEMANTIC_QDRANT_COLLECTION", "documents_v2")
     semantic_qdrant_timeout_s: float = float(os.getenv("SEMANTIC_QDRANT_TIMEOUT_S", "10"))
     semantic_raw_text_max_chars: int = int(os.getenv("SEMANTIC_RAW_TEXT_MAX_CHARS", "12000"))
+    semantic_reranker_enable: bool = _as_bool(os.getenv("SEMANTIC_RERANKER_ENABLE"), False)
+    semantic_reranker_model: str = os.getenv("SEMANTIC_RERANKER_MODEL", "dragonkue/bge-reranker-v2-m3-ko")
+    semantic_reranker_max_chars: int = int(os.getenv("SEMANTIC_RERANKER_MAX_CHARS", "1200"))
     # Graph hierarchy scoring belongs to the AI service because it consumes
     # semantic search and shared local AI resources.
     graph_max_top_k: int = int(os.getenv("GRAPH_MAX_TOP_K", "8"))
     graph_max_edges_per_doc: int = int(os.getenv("GRAPH_MAX_EDGES_PER_DOC", "3"))
-    graph_min_parent_score: float = float(os.getenv("GRAPH_MIN_PARENT_SCORE", "0.33"))
+    graph_min_parent_score: float = float(os.getenv("GRAPH_MIN_PARENT_SCORE", "0.29"))
     graph_min_similar_score: float = float(os.getenv("GRAPH_MIN_SIMILAR_SCORE", "0.55"))
     graph_parent_margin: float = float(os.getenv("GRAPH_PARENT_MARGIN", "0.02"))
     graph_min_generality_delta: float = float(os.getenv("GRAPH_MIN_GENERALITY_DELTA", "0.015"))
     graph_min_parent_generality: float = float(os.getenv("GRAPH_MIN_PARENT_GENERALITY", "0.46"))
-    graph_min_parent_topic_alignment: float = float(os.getenv("GRAPH_MIN_PARENT_TOPIC_ALIGNMENT", "0.59"))
-    graph_ambiguous_parent_margin: float = float(os.getenv("GRAPH_AMBIGUOUS_PARENT_MARGIN", "0.045"))
+    graph_min_parent_topic_alignment: float = float(os.getenv("GRAPH_MIN_PARENT_TOPIC_ALIGNMENT", "0.58"))
+    graph_ambiguous_parent_margin: float = float(os.getenv("GRAPH_AMBIGUOUS_PARENT_MARGIN", "0.035"))
+    graph_max_rerank_candidates: int = int(os.getenv("GRAPH_MAX_RERANK_CANDIDATES", "12"))
 
     @property
     def allowed_upload_types(self) -> set[str]:
@@ -242,13 +246,17 @@ def load_settings() -> Settings:
         semantic_qdrant_collection=os.getenv("SEMANTIC_QDRANT_COLLECTION", "documents_v2"),
         semantic_qdrant_timeout_s=float(os.getenv("SEMANTIC_QDRANT_TIMEOUT_S", "10")),
         semantic_raw_text_max_chars=int(os.getenv("SEMANTIC_RAW_TEXT_MAX_CHARS", "12000")),
+        semantic_reranker_enable=_as_bool(os.getenv("SEMANTIC_RERANKER_ENABLE"), False),
+        semantic_reranker_model=os.getenv("SEMANTIC_RERANKER_MODEL", "dragonkue/bge-reranker-v2-m3-ko"),
+        semantic_reranker_max_chars=int(os.getenv("SEMANTIC_RERANKER_MAX_CHARS", "1200")),
         graph_max_top_k=int(os.getenv("GRAPH_MAX_TOP_K", "8")),
         graph_max_edges_per_doc=int(os.getenv("GRAPH_MAX_EDGES_PER_DOC", "3")),
-        graph_min_parent_score=float(os.getenv("GRAPH_MIN_PARENT_SCORE", "0.33")),
+        graph_min_parent_score=float(os.getenv("GRAPH_MIN_PARENT_SCORE", "0.29")),
         graph_min_similar_score=float(os.getenv("GRAPH_MIN_SIMILAR_SCORE", "0.55")),
         graph_parent_margin=float(os.getenv("GRAPH_PARENT_MARGIN", "0.02")),
         graph_min_generality_delta=float(os.getenv("GRAPH_MIN_GENERALITY_DELTA", "0.015")),
         graph_min_parent_generality=float(os.getenv("GRAPH_MIN_PARENT_GENERALITY", "0.46")),
-        graph_min_parent_topic_alignment=float(os.getenv("GRAPH_MIN_PARENT_TOPIC_ALIGNMENT", "0.59")),
-        graph_ambiguous_parent_margin=float(os.getenv("GRAPH_AMBIGUOUS_PARENT_MARGIN", "0.045")),
+        graph_min_parent_topic_alignment=float(os.getenv("GRAPH_MIN_PARENT_TOPIC_ALIGNMENT", "0.58")),
+        graph_ambiguous_parent_margin=float(os.getenv("GRAPH_AMBIGUOUS_PARENT_MARGIN", "0.035")),
+        graph_max_rerank_candidates=int(os.getenv("GRAPH_MAX_RERANK_CANDIDATES", "12")),
     )

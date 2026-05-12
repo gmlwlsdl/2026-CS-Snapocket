@@ -28,14 +28,17 @@ class GraphDocument:
 class GraphLinkSettings:
     max_top_k: int = 8
     max_edges_per_doc: int = 3
-    min_parent_score: float = 0.33
+    min_parent_score: float = 0.29
     min_similar_score: float = 0.55
     parent_margin: float = 0.02
     min_generality_delta: float = 0.015
     min_parent_generality: float = 0.46
-    min_parent_topic_alignment: float = 0.59
-    ambiguous_parent_margin: float = 0.045
-    max_chunks_per_doc: int = 12
+    min_parent_topic_alignment: float = 0.58
+    ambiguous_parent_margin: float = 0.035
+    max_chunks_per_doc: int = 24
+    max_rerank_candidates: int = 12
+    graph_chunk_target_tokens: int = 128
+    graph_chunk_overlap_tokens: int = 32
     chunk_target_chars: int = 420
     chunk_overlap_chars: int = 80
 
@@ -47,6 +50,7 @@ class EmbeddedGraphDocument:
     vectors: tuple[tuple[float, ...], ...]
     context_vector: tuple[float, ...] = ()
     sparse_vector: dict[int, float] | None = None
+    centrality: float = 0.5
     generality: float = 0.5
 
 
@@ -275,6 +279,7 @@ def _hybrid_topic_alignment(
     source: EmbeddedGraphDocument,
     target: EmbeddedGraphDocument,
     semantic_similarity: float | None,
+    rerank_score: float | None = None,
 ) -> tuple[float, dict[str, Any]]:
     dense_alignment = _topic_alignment(source, target, semantic_similarity)
     chunk_reason = _best_chunk_alignment(source, target)
@@ -283,11 +288,16 @@ def _hybrid_topic_alignment(
     )
     sparse_alignment = _sparse_cosine_similarity(source.sparse_vector, target.sparse_vector)
     sparse_topic_alignment = min(1.0, sparse_alignment * 1.35)
+    rerank_topic_alignment = float(rerank_score) if rerank_score is not None else 0.0
+    # Cross-encoder scores are useful ranking evidence, but not calibrated
+    # probabilities. Keep graph edge thresholds anchored to embedding evidence
+    # so an overconfident reranker cannot make unrelated documents look close.
     topic_alignment = round(max(dense_alignment, chunk_alignment, sparse_topic_alignment), 4)
     return topic_alignment, {
         "dense_topic_alignment": dense_alignment,
         "sparse_topic_alignment": round(sparse_topic_alignment, 4),
         "sparse_raw_alignment": round(sparse_alignment, 4),
+        "rerank_score": round(rerank_topic_alignment, 4) if rerank_score is not None else None,
         "topic_alignment": topic_alignment,
         **chunk_reason,
     }
@@ -297,41 +307,58 @@ def _parent_score(
     parent: EmbeddedGraphDocument,
     child: EmbeddedGraphDocument,
     topic_alignment: float,
+    parent_rerank_score: float | None = None,
 ) -> tuple[float, dict[str, Any]]:
     coverage, breadth, matches = _chunk_coverage(parent, child)
+    bridge_alignment = max((float(match.get("score") or 0.0) for match in matches), default=0.0)
     specificity_delta = _scope_delta(parent, child)
-    generality_delta = round(max(0.0, parent.generality - child.generality), 4)
+    anchor_generality_delta = round(max(0.0, parent.generality - child.generality), 4)
+    centrality_delta = round(max(0.0, parent.centrality - child.centrality), 4)
+    generality_delta = round(max(anchor_generality_delta, centrality_delta), 4)
+    parent_rerank_raw = float(parent_rerank_score) if parent_rerank_score is not None else None
+    rerank_evidence = max(0.0, ((parent_rerank_raw - 0.5) * 2.0)) if parent_rerank_raw is not None else 0.0
     entailment_like_score = round(
         (0.54 * coverage)
-        + (0.24 * topic_alignment)
-        + (0.12 * breadth)
+        + (0.18 * topic_alignment)
+        + (0.06 * rerank_evidence)
+        + (0.08 * breadth)
+        + (0.04 * bridge_alignment)
         + (0.06 * max(0.0, specificity_delta))
         + (0.04 * generality_delta),
         4,
     )
     negative_evidence = round(
-        max(0.0, 0.58 - topic_alignment)
-        + max(0.0, 0.48 - coverage)
+        max(0.0, 0.58 - max(topic_alignment, rerank_evidence))
+        + max(0.0, 0.48 - max(coverage, bridge_alignment * 0.82))
         + max(0.0, 0.02 - generality_delta),
         4,
     )
     score = round(
         (0.42 * coverage)
         + (0.10 * specificity_delta)
-        + (0.18 * topic_alignment)
+        + (0.13 * topic_alignment)
+        + (0.05 * rerank_evidence)
         + (0.06 * breadth)
+        + (0.06 * bridge_alignment)
         + (0.24 * generality_delta),
         4,
     )
     return score, {
         "coverage": coverage,
+        "bridge_alignment": round(bridge_alignment, 4),
         "breadth": breadth,
         "scope_delta": specificity_delta,
         "specificity_delta": specificity_delta,
         "generality": parent.generality,
         "child_generality": child.generality,
+        "centrality": parent.centrality,
+        "child_centrality": child.centrality,
+        "anchor_generality_delta": anchor_generality_delta,
+        "centrality_delta": centrality_delta,
         "generality_delta": generality_delta,
         "topic_alignment": topic_alignment,
+        "parent_rerank_score": round(parent_rerank_raw, 4) if parent_rerank_raw is not None else None,
+        "parent_rerank_evidence": round(rerank_evidence, 4) if parent_rerank_raw is not None else None,
         "entailment_like_score": entailment_like_score,
         "negative_evidence": negative_evidence,
         "matched_chunks": matches,
@@ -343,10 +370,27 @@ def score_relationship(
     target: EmbeddedGraphDocument,
     semantic_similarity: float | None,
     settings: GraphLinkSettings,
+    reranker_scores: dict[str, float | None] | None = None,
 ) -> dict[str, Any]:
-    topic_alignment, topic_reason = _hybrid_topic_alignment(source, target, semantic_similarity)
-    source_parent_score, source_reason = _parent_score(source, target, topic_alignment)
-    target_parent_score, target_reason = _parent_score(target, source, topic_alignment)
+    reranker_scores = reranker_scores or {}
+    topic_alignment, topic_reason = _hybrid_topic_alignment(
+        source,
+        target,
+        semantic_similarity,
+        rerank_score=reranker_scores.get("related"),
+    )
+    source_parent_score, source_reason = _parent_score(
+        source,
+        target,
+        topic_alignment,
+        parent_rerank_score=reranker_scores.get("source_parent"),
+    )
+    target_parent_score, target_reason = _parent_score(
+        target,
+        source,
+        topic_alignment,
+        parent_rerank_score=reranker_scores.get("target_parent"),
+    )
     margin = abs(source_parent_score - target_parent_score)
 
     source_generality_delta = float(source_reason.get("generality_delta") or 0.0)
@@ -373,8 +417,9 @@ def score_relationship(
         and target_negative_evidence <= 0.30
     )
 
-    source_directness = round(source_parent_score - target_parent_score, 4)
-    target_directness = round(target_parent_score - source_parent_score, 4)
+    directional_prior = source_generality_delta - target_generality_delta
+    source_directness = round((source_parent_score - target_parent_score) + (0.35 * directional_prior), 4)
+    target_directness = round((target_parent_score - source_parent_score) - (0.35 * directional_prior), 4)
     ambiguous = margin < settings.ambiguous_parent_margin
 
     if (
@@ -489,6 +534,7 @@ def build_links(
     candidate_documents: list[EmbeddedGraphDocument],
     semantic_scores_by_id: dict[str, float],
     settings: GraphLinkSettings,
+    reranker_scores_by_id: dict[str, dict[str, float | None]] | None = None,
 ) -> list[dict[str, Any]]:
     if not source_document.vectors:
         return []
@@ -500,7 +546,13 @@ def build_links(
         limit=settings.max_top_k,
     )
     scored = [
-        score_relationship(source_document, candidate, semantic_score, settings)
+        score_relationship(
+            source_document,
+            candidate,
+            semantic_score,
+            settings,
+            reranker_scores=(reranker_scores_by_id or {}).get(candidate.document.document_id),
+        )
         for candidate, semantic_score in ranked_candidates
     ]
     parent_floor = max(0.22, settings.min_parent_score * 0.65)
@@ -516,6 +568,7 @@ def build_links(
     ]
     selected_parent_candidates.sort(key=lambda item: float(item["score"]), reverse=True)
     selected_related_candidates.sort(key=lambda item: float(item["score"]), reverse=True)
+
     selected = [
         *selected_parent_candidates[: settings.max_edges_per_doc],
         *selected_related_candidates[: max(settings.max_edges_per_doc, 8)],
