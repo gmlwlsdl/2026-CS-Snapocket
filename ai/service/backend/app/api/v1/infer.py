@@ -82,6 +82,33 @@ def _release_engine_gate(state: AppState, engine: str) -> None:
     gate.release(engine)
 
 
+def _enforce_response_doc_id(response_data: dict, expected_doc_id: str | None) -> dict:
+    expected = str(expected_doc_id or "").strip()
+    if not expected:
+        return response_data
+
+    actual = str(response_data.get("doc_id") or "").strip()
+    domain = response_data.get("domain") if isinstance(response_data.get("domain"), dict) else None
+    domain_req_id = str(domain.get("req_id") or "").strip() if domain else ""
+    if actual and actual != expected:
+        raise api_error(
+            status.HTTP_502_BAD_GATEWAY,
+            "DOC_ID_MISMATCH",
+            "AI response doc_id does not match request doc_id",
+        )
+    if domain_req_id and domain_req_id != expected:
+        raise api_error(
+            status.HTTP_502_BAD_GATEWAY,
+            "DOC_ID_MISMATCH",
+            "AI response domain.req_id does not match request doc_id",
+        )
+
+    response_data["doc_id"] = expected
+    if domain is not None:
+        domain["req_id"] = expected
+    return response_data
+
+
 @router.post(
     "/infer",
     dependencies=[Depends(require_api_key)],
@@ -191,6 +218,7 @@ async def infer(
         if active_server.kind == ServerKind.local and gate_acquired:
             _release_engine_gate(state, resolved_engine)
 
+    response_data = _enforce_response_doc_id(response_data, doc_id)
     state.metrics.inc("infer_success_total")
     engine_used = str(response_data.get("engine_used") or "")
     latency_ms = int(response_data.get("latency_ms", 0) or 0)

@@ -1,7 +1,10 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from api import auth, analysis, documents, upload, tags, search, calender
-from core.database import ensure_documents_schema_compatibility
+from core.database import (
+    ensure_documents_schema_compatibility,
+    ensure_graph_edges_schema_compatibility,
+)
 from graph.schema import data, router
 from graph.context import getContext
 from graph.qlRouter import CustomGraphQLRouter
@@ -13,6 +16,7 @@ app = FastAPI(title="Snapocket API", version="0.1.0")
 @app.on_event("startup")
 def startup():
     ensure_documents_schema_compatibility()
+    ensure_graph_edges_schema_compatibility()
 
 app.add_middleware(
     CORSMiddleware,

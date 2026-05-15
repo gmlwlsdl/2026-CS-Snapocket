@@ -14,6 +14,12 @@ from models.analysis_job import AnalysisJob
 from models.document import Document
 from models.user import User
 from services.ai_client import AIClientError, map_analysis_result, request_analysis
+from services.graph_builder import refresh_document_edges
+from services.semantic_search import (
+    SemanticSearchError,
+    serialize_document_for_index,
+    sync_semantic_documents,
+)
 
 # 분석 API 라우터 (/analysis/*)
 router = APIRouter(prefix="/analysis", tags=["analysis"])
@@ -87,9 +93,16 @@ def _run_analysis_job(job_id: int, document_id: int):
         if not resolved_path:
             raise AIClientError("문서 파일을 찾을 수 없습니다.")
 
+        if not document.doc_id:
+            document.doc_id = uuid.uuid4().hex
+            db.commit()
+
+        backend_doc_id = str(document.doc_id)
+
         # AI 서버 분석 요청 및 응답 도메인 매핑
-        payload = request_analysis(file_path=resolved_path, doc_id=str(document.doc_id))
-        mapped = map_analysis_result(payload, fallback_doc_id=str(document.doc_id))
+        payload = request_analysis(file_path=resolved_path, doc_id=backend_doc_id)
+        mapped = map_analysis_result(payload, fallback_doc_id=backend_doc_id)
+        mapped["doc_id"] = backend_doc_id
 
         # 성공 상태 반영
         job.status = "analyzed"
@@ -98,9 +111,26 @@ def _run_analysis_job(job_id: int, document_id: int):
         job.finished_at = datetime.now()
 
         document.status = "analyzed"
-        document.doc_id = str(mapped.get("doc_id") or document.doc_id)
+        document.doc_id = backend_doc_id
         document.raw_text = str(mapped.get("raw_text") or "")
         db.commit()
+        db.refresh(document)
+        try:
+            sync_semantic_documents(
+                user_id=str(document.user_id),
+                documents=[serialize_document_for_index(document, user_id=str(document.user_id))],
+                deleted_document_ids=[],
+            )
+        except SemanticSearchError:
+            pass
+        try:
+            refresh_document_edges(
+                db=db,
+                document_id=str(document.id),
+                user_id=str(document.user_id),
+            )
+        except Exception:
+            db.rollback()
     except AIClientError as exc:
         # 예상 가능한 AI 통신/응답 오류
         db.rollback()
@@ -424,6 +454,23 @@ def save_analysis(
         latest_job.raw_result = updated_result
 
     db.commit()
+    db.refresh(document)
+    try:
+        sync_semantic_documents(
+            user_id=str(user_info.id),
+            documents=[serialize_document_for_index(document, user_id=str(user_info.id))],
+            deleted_document_ids=[],
+        )
+    except SemanticSearchError:
+        pass
+    try:
+        refresh_document_edges(
+            db=db,
+            document_id=str(document.id),
+            user_id=str(user_info.id),
+        )
+    except Exception:
+        db.rollback()
 
     return ApiResponse(
         success=True,

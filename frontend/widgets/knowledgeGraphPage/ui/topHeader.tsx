@@ -11,6 +11,7 @@ interface TopHeaderProps {
 }
 
 export function TopHeader({ activeFilter, onFilterChange, summaryData }: TopHeaderProps) {
+  const documentCount = summaryData?.document_count ?? summaryData?.documents_count ?? 0;
 
   return (
     <header
@@ -80,9 +81,21 @@ export function TopHeader({ activeFilter, onFilterChange, summaryData }: TopHead
           </span>
         </div>
         <div className="flex flex-col items-end border-l border-snap-border/10 pl-6">
+          <span className="text-[10px] uppercase tracking-[1px] text-snap-muted">Docs</span>
+          <span className="text-[14px] font-bold text-snap-white">
+            {documentCount}
+          </span>
+        </div>
+        <div className="flex flex-col items-end border-l border-snap-border/10 pl-6">
           <span className="text-[10px] uppercase tracking-[1px] text-snap-muted">Tags</span>
           <span className="text-[14px] font-bold text-snap-white">
             {summaryData?.tag_count ?? 0}
+          </span>
+        </div>
+        <div className="flex flex-col items-end border-l border-snap-border/10 pl-6">
+          <span className="text-[10px] uppercase tracking-[1px] text-snap-muted">Edges</span>
+          <span className="text-[14px] font-bold text-snap-white">
+            {summaryData?.edge_count ?? 0}
           </span>
         </div>
       </div>

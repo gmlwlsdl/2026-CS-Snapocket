@@ -1,4 +1,10 @@
-"""설정과 서비스 객체를 조합해 앱 상태(AppState)를 구성하는 루트 모듈."""
+"""이 파일은 AI 서버의 전역 상태(AppState)를 조립한다.
+
+- 설정 로드
+- OCR/ASR/큐/저장소 초기화
+- semantic search 서비스 주입
+- 앱 시작 시 필요한 의존성 연결
+"""
 
 from __future__ import annotations
 
@@ -25,6 +31,7 @@ from app.services.persistence import PersistenceStore
 from app.services.pipeline import InferencePipeline
 from app.services.redis_queue import RedisJobManager
 from app.services.security_scan import MalwareScanner
+from app.services.semantic_search import SemanticSearchService
 from app.services.secret_cipher import SecretCipher
 from app.services.server_registry import ServerRegistry
 
@@ -48,6 +55,8 @@ class AppState:
     engine_gate: EngineRequestGate | None = None
     server_registry: ServerRegistry | None = None
     dispatch: DispatchService | None = None
+    # 백엔드 검색 요청을 처리할 semantic search 서비스
+    semantic_search: SemanticSearchService | None = None
 
 
 def _is_valid_qwen_asr_dir(path: Path) -> bool:
@@ -238,6 +247,8 @@ def build_app_state() -> AppState:
             interval_s=settings.model_probe_interval_s,
         )
         model_prober.start()
+    # semantic search는 앱 시작 시 함께 초기화해 readiness/status에서 바로 상태를 확인할 수 있게 한다.
+    semantic_search = SemanticSearchService(settings)
 
     return AppState(
         settings=settings,
@@ -255,4 +266,5 @@ def build_app_state() -> AppState:
         engine_gate=EngineRequestGate(),
         server_registry=server_registry,
         dispatch=dispatch,
+        semantic_search=semantic_search,
     )

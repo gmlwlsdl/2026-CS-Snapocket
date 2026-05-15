@@ -1,2 +1,7 @@
-export type { SearchItem, SearchParams } from './model/types'
-export { searchDocuments } from './api/search.api'
+export type {
+  SearchItem,
+  SearchParams,
+  SearchQueryResponse,
+  SearchStatus,
+} from './model/types'
+export { getSearchStatus, queryDocuments, searchDocuments } from './api/search.api'

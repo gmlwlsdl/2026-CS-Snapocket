@@ -29,6 +29,7 @@ _PROFILE_PROMPTS: dict[str, str] = {
         "Preserve line breaks. Return plain text only without explanation."
     ),
 }
+OCR_PROMPT_VERSION = "ocr-v2-full-text"
 _STOP_TOKENS = ["</s>", "<|end_of_sentence|>"]
 
 
@@ -108,6 +109,7 @@ class LlamaCppVisionEngine(OCREngine):
                 "temperature": self.temperature,
                 "max_side_px": self.max_side_px,
                 "max_tokens": self.max_tokens,
+                "prompt_version": OCR_PROMPT_VERSION,
                 "generation_warm": self._generation_warm,
                 "inflight": bool(self._active_inference is not None and not self._active_inference.done()),
             }

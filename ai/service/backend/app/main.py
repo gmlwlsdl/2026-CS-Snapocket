@@ -1,4 +1,9 @@
-"""FastAPI application entrypoint and global middleware/handlers."""
+"""이 파일은 AI 서버 FastAPI 앱의 진입점이다.
+
+- 공통 미들웨어/예외 처리 등록
+- 앱 시작/종료 시 전역 상태 초기화
+- semantic search 라우터 포함
+"""
 
 from __future__ import annotations
 
@@ -11,7 +16,7 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.api import backend_integration
-from app.api.v1 import infer, jobs, models, servers, system
+from app.api.v1 import graph, infer, jobs, models, semantic, servers, system
 from app.core.logging import configure_logging
 from app.ops.routes import router as ops_router
 from app.services.state import build_app_state
@@ -87,6 +92,7 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
 
 @app.on_event("startup")
 def startup_event() -> None:
+    # AppState 안에서 semantic search 서비스도 함께 초기화된다.
     app.state.container = build_app_state()
 
 
@@ -106,6 +112,9 @@ app.include_router(system.router)
 app.include_router(infer.router)
 app.include_router(jobs.router)
 app.include_router(models.router)
+# 백엔드 검색 연동용 semantic search API
+app.include_router(semantic.router)
+app.include_router(graph.router)
 app.include_router(servers.router)
 app.include_router(backend_integration.router)
 app.include_router(ops_router)

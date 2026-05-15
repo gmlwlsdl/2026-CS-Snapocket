@@ -1,4 +1,10 @@
-"""환경변수 기반 런타임 설정 로더."""
+"""이 파일은 AI 서버 런타임 설정을 환경변수에서 읽어온다.
+
+- 기존 OCR/ASR 설정
+- semantic search on/off
+- 임베딩 모델 경로
+- Qdrant 연결 정보
+"""
 
 from __future__ import annotations
 
@@ -7,6 +13,7 @@ from dataclasses import dataclass
 
 
 def _as_bool(value: str | None, default: bool = False) -> bool:
+    # 다양한 형식의 환경변수 값을 bool로 통일한다.
     if value is None:
         return default
     return value.strip().lower() in {"1", "true", "yes", "on"}
@@ -58,7 +65,7 @@ class Settings:
     llm_image_max_side_px: int = int(
         os.getenv("LLM_IMAGE_MAX_SIDE_PX", os.getenv("OLLAMA_IMAGE_MAX_SIDE_PX", "1536"))
     )
-    llm_max_tokens: int = int(os.getenv("LLM_MAX_TOKENS", os.getenv("OLLAMA_MAX_TOKENS", "96")))
+    llm_max_tokens: int = int(os.getenv("LLM_MAX_TOKENS", os.getenv("OLLAMA_MAX_TOKENS", "512")))
     dispatch_upstream_timeout_s: float = float(os.getenv("DISPATCH_UPSTREAM_TIMEOUT_S", "180"))
     qwen_asr_enable: bool = _as_bool(os.getenv("QWEN_ASR_ENABLE"), True)
     qwen_asr_model: str = os.getenv("QWEN_ASR_MODEL", "Qwen/Qwen3-ASR-1.7B")
@@ -113,6 +120,28 @@ class Settings:
     malware_scan_enable: bool = _as_bool(os.getenv("MALWARE_SCAN_ENABLE"), False)
     malware_scan_command: str = os.getenv("MALWARE_SCAN_COMMAND", "").strip()
     malware_scan_timeout_s: float = float(os.getenv("MALWARE_SCAN_TIMEOUT_S", "5"))
+    # 아래 설정들은 semantic search 전용이다.
+    semantic_search_enable: bool = _as_bool(os.getenv("SEMANTIC_SEARCH_ENABLE"), True)
+    semantic_embedding_model: str = os.getenv("SEMANTIC_EMBEDDING_MODEL", "dragonkue/BGE-m3-ko")
+    semantic_qdrant_url: str = os.getenv("SEMANTIC_QDRANT_URL", "http://qdrant:6333")
+    semantic_qdrant_collection: str = os.getenv("SEMANTIC_QDRANT_COLLECTION", "documents_v2")
+    semantic_qdrant_timeout_s: float = float(os.getenv("SEMANTIC_QDRANT_TIMEOUT_S", "10"))
+    semantic_raw_text_max_chars: int = int(os.getenv("SEMANTIC_RAW_TEXT_MAX_CHARS", "12000"))
+    semantic_reranker_enable: bool = _as_bool(os.getenv("SEMANTIC_RERANKER_ENABLE"), False)
+    semantic_reranker_model: str = os.getenv("SEMANTIC_RERANKER_MODEL", "dragonkue/bge-reranker-v2-m3-ko")
+    semantic_reranker_max_chars: int = int(os.getenv("SEMANTIC_RERANKER_MAX_CHARS", "1200"))
+    # Graph hierarchy scoring belongs to the AI service because it consumes
+    # semantic search and shared local AI resources.
+    graph_max_top_k: int = int(os.getenv("GRAPH_MAX_TOP_K", "8"))
+    graph_max_edges_per_doc: int = int(os.getenv("GRAPH_MAX_EDGES_PER_DOC", "3"))
+    graph_min_parent_score: float = float(os.getenv("GRAPH_MIN_PARENT_SCORE", "0.29"))
+    graph_min_similar_score: float = float(os.getenv("GRAPH_MIN_SIMILAR_SCORE", "0.55"))
+    graph_parent_margin: float = float(os.getenv("GRAPH_PARENT_MARGIN", "0.02"))
+    graph_min_generality_delta: float = float(os.getenv("GRAPH_MIN_GENERALITY_DELTA", "0.015"))
+    graph_min_parent_generality: float = float(os.getenv("GRAPH_MIN_PARENT_GENERALITY", "0.46"))
+    graph_min_parent_topic_alignment: float = float(os.getenv("GRAPH_MIN_PARENT_TOPIC_ALIGNMENT", "0.58"))
+    graph_ambiguous_parent_margin: float = float(os.getenv("GRAPH_AMBIGUOUS_PARENT_MARGIN", "0.035"))
+    graph_max_rerank_candidates: int = int(os.getenv("GRAPH_MAX_RERANK_CANDIDATES", "12"))
 
     @property
     def allowed_upload_types(self) -> set[str]:
@@ -165,7 +194,7 @@ def load_settings() -> Settings:
         llm_image_max_side_px=int(
             os.getenv("LLM_IMAGE_MAX_SIDE_PX", os.getenv("OLLAMA_IMAGE_MAX_SIDE_PX", "1536"))
         ),
-        llm_max_tokens=int(os.getenv("LLM_MAX_TOKENS", os.getenv("OLLAMA_MAX_TOKENS", "96"))),
+        llm_max_tokens=int(os.getenv("LLM_MAX_TOKENS", os.getenv("OLLAMA_MAX_TOKENS", "512"))),
         dispatch_upstream_timeout_s=float(os.getenv("DISPATCH_UPSTREAM_TIMEOUT_S", "180")),
         qwen_asr_enable=_as_bool(os.getenv("QWEN_ASR_ENABLE"), True),
         qwen_asr_model=os.getenv("QWEN_ASR_MODEL", "Qwen/Qwen3-ASR-1.7B"),
@@ -211,4 +240,23 @@ def load_settings() -> Settings:
         malware_scan_enable=_as_bool(os.getenv("MALWARE_SCAN_ENABLE"), False),
         malware_scan_command=os.getenv("MALWARE_SCAN_COMMAND", "").strip(),
         malware_scan_timeout_s=float(os.getenv("MALWARE_SCAN_TIMEOUT_S", "5")),
+        semantic_search_enable=_as_bool(os.getenv("SEMANTIC_SEARCH_ENABLE"), True),
+        semantic_embedding_model=os.getenv("SEMANTIC_EMBEDDING_MODEL", "dragonkue/BGE-m3-ko"),
+        semantic_qdrant_url=os.getenv("SEMANTIC_QDRANT_URL", "http://qdrant:6333"),
+        semantic_qdrant_collection=os.getenv("SEMANTIC_QDRANT_COLLECTION", "documents_v2"),
+        semantic_qdrant_timeout_s=float(os.getenv("SEMANTIC_QDRANT_TIMEOUT_S", "10")),
+        semantic_raw_text_max_chars=int(os.getenv("SEMANTIC_RAW_TEXT_MAX_CHARS", "12000")),
+        semantic_reranker_enable=_as_bool(os.getenv("SEMANTIC_RERANKER_ENABLE"), False),
+        semantic_reranker_model=os.getenv("SEMANTIC_RERANKER_MODEL", "dragonkue/bge-reranker-v2-m3-ko"),
+        semantic_reranker_max_chars=int(os.getenv("SEMANTIC_RERANKER_MAX_CHARS", "1200")),
+        graph_max_top_k=int(os.getenv("GRAPH_MAX_TOP_K", "8")),
+        graph_max_edges_per_doc=int(os.getenv("GRAPH_MAX_EDGES_PER_DOC", "3")),
+        graph_min_parent_score=float(os.getenv("GRAPH_MIN_PARENT_SCORE", "0.29")),
+        graph_min_similar_score=float(os.getenv("GRAPH_MIN_SIMILAR_SCORE", "0.55")),
+        graph_parent_margin=float(os.getenv("GRAPH_PARENT_MARGIN", "0.02")),
+        graph_min_generality_delta=float(os.getenv("GRAPH_MIN_GENERALITY_DELTA", "0.015")),
+        graph_min_parent_generality=float(os.getenv("GRAPH_MIN_PARENT_GENERALITY", "0.46")),
+        graph_min_parent_topic_alignment=float(os.getenv("GRAPH_MIN_PARENT_TOPIC_ALIGNMENT", "0.58")),
+        graph_ambiguous_parent_margin=float(os.getenv("GRAPH_AMBIGUOUS_PARENT_MARGIN", "0.035")),
+        graph_max_rerank_candidates=int(os.getenv("GRAPH_MAX_RERANK_CANDIDATES", "12")),
     )
