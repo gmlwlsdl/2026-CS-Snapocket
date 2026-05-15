@@ -30,6 +30,7 @@ class ConfirmAnalysisRequest(BaseModel):
     title: str
     category: str
     capture_date: datetime
+    deadline: datetime | None = None
     summary: str
     tags: list[str]
 
@@ -365,14 +366,17 @@ def result_analysis(
         success=True,
         message="분석 결과 조회 성공",
         data={
+            "id": str(document.id),
             "title": result.get("title") or document.title or "",
             "category": result.get("category") or document.category or "",
-            "capture_date": result.get("capture_date"),
+            "capture_date": result.get("capture_date") or (document.capture_date.isoformat() if document.capture_date else None),
             "summary": result.get("summary") or document.summary or "",
             "tags": [str(tag) for tag in tags],
             "raw_text": result.get("raw_text") or document.raw_text or "",
             "key_concepts": [str(item) for item in key_concepts],
-            "deadline": result.get("deadline"),
+            "deadline": result.get("deadline") or (document.deadline.isoformat() if document.deadline else None),
+            "file_type": document.file_type,
+            "file_url": document.file_url,
         },
     )
 
@@ -432,10 +436,10 @@ def save_analysis(
     document.title = confirm.title
     document.category = confirm.category
     document.capture_date = confirm.capture_date.date()
+    document.deadline = confirm.deadline
     document.summary = confirm.summary
     document.raw_text = str(latest_result.get("raw_text") or document.raw_text or "")
     document.status = "analyzed"
-    document.deadline = latest_result.get("deadline")
 
     # 최신 Job의 raw_result도 저장 데이터 기준으로 동기화
     if latest_job:
@@ -446,6 +450,7 @@ def save_analysis(
                 "title": confirm.title,
                 "category": confirm.category,
                 "capture_date": confirm.capture_date.isoformat(),
+                "deadline": confirm.deadline.isoformat() if confirm.deadline else None,
                 "summary": confirm.summary,
                 "tags": confirm.tags,
                 "raw_text": document.raw_text,

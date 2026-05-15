@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 from collections import Counter
+from datetime import date
 from pathlib import Path
 import re
-from typing import Sequence
+from typing import Any, Sequence
 
 from app.schemas.infer import DomainPayload
 from app.services.nlp.korean_extractor import KoreanExtractor, classify_doc_type_enhanced
@@ -48,6 +49,57 @@ _TAG_STOPWORDS: set[str] = {
     "확인",
     "요청",
 }
+
+
+def _normalize_optional_date(value: Any) -> str | None:
+    if value is None:
+        return None
+    if isinstance(value, date):
+        return value.isoformat()
+
+    token = str(value or "").strip()
+    if not token:
+        return None
+
+    normalized = (
+        token.replace("년", "-")
+        .replace("월", "-")
+        .replace("일", "")
+        .replace(".", "-")
+        .replace("/", "-")
+    )
+    match = re.search(r"(\d{4})\D+(\d{1,2})\D+(\d{1,2})", normalized)
+    if not match:
+        return None
+    year, month, day = (int(match.group(1)), int(match.group(2)), int(match.group(3)))
+    try:
+        return date(year, month, day).isoformat()
+    except ValueError:
+        return None
+
+
+def _normalize_tags(value: Any, limit: int = 10) -> list[str]:
+    if isinstance(value, str):
+        raw_items = re.split(r"[,#\n]+", value)
+    elif isinstance(value, Sequence) and not isinstance(value, (bytes, bytearray)):
+        raw_items = [str(item) for item in value]
+    else:
+        raw_items = []
+
+    normalized: list[str] = []
+    seen: set[str] = set()
+    for item in raw_items:
+        tag = str(item or "").strip().lstrip("#").strip()
+        if not tag:
+            continue
+        key = _normalize_token(tag)
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        normalized.append(tag[:40])
+        if len(normalized) >= limit:
+            break
+    return normalized
 
 
 def _normalize_token(value: str) -> str:
@@ -199,4 +251,42 @@ def build_domain_payload(
         summary=summary,
         raw_text=cleaned_text,
         tag=tags,
+    )
+
+
+def build_domain_payload_from_structured(
+    *,
+    req_id: str,
+    payload: dict[str, Any] | None,
+    fallback_text: str = "",
+    title_hint: str | None = None,
+    categories: Sequence[str] | None = None,
+) -> DomainPayload:
+    data = payload if isinstance(payload, dict) else {}
+    raw_text = str(data.get("raw_text") or fallback_text or "").strip()
+    fallback = build_domain_payload(
+        req_id=req_id,
+        text=raw_text,
+        title_hint=title_hint,
+        categories=categories,
+    )
+    allowed_categories = [str(c).strip() for c in (categories or []) if str(c).strip()]
+
+    title = str(data.get("title") or "").strip()[:120] or fallback.title
+    category = str(data.get("category") or "").strip() or fallback.category
+    if allowed_categories and category not in allowed_categories:
+        category = _select_category(raw_text, allowed_categories, fallback.tag)
+
+    summary = str(data.get("summary") or "").strip()[:500] or fallback.summary
+    tags = _normalize_tags(data.get("tags") or data.get("tag")) or fallback.tag
+
+    return DomainPayload(
+        req_id=str(req_id or "").strip() or "unknown",
+        title=title,
+        category=category,
+        summary=summary,
+        raw_text=raw_text,
+        tag=tags,
+        capture_date=_normalize_optional_date(data.get("capture_date")),
+        deadline=_normalize_optional_date(data.get("deadline")),
     )

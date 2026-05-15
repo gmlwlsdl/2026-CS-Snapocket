@@ -23,7 +23,7 @@ from pypdf import PdfReader
 
 from app.schemas.infer import InferPage, InferResult, OCRBlock
 from app.services.cache import ResultCache
-from app.services.domain_transformer import build_domain_payload
+from app.services.domain_transformer import build_domain_payload, build_domain_payload_from_structured
 from app.services.file_types import (
     is_audio_content_type,
     is_image_content_type,
@@ -91,6 +91,14 @@ class InferencePipeline:
         if not normalized:
             return ["unknown"]
         return list(dict.fromkeys(normalized))
+
+    @staticmethod
+    def _first_structured_payload(blocks: list[OCRBlock]) -> dict | None:
+        for block in blocks:
+            payload = getattr(block, "structured_payload", None)
+            if isinstance(payload, dict):
+                return payload
+        return None
 
     @classmethod
     def _normalize_text(cls, text: str) -> str:
@@ -690,12 +698,25 @@ class InferencePipeline:
 
         transform_started = time.perf_counter()
         normalized_raw_text = corrected_text or raw_text
-        domain = build_domain_payload(
-            req_id=doc_id,
-            text=normalized_raw_text,
-            title_hint=filename,
-            categories=self._load_categories(),
-        )
+        categories = self._load_categories()
+        structured_payload = self._first_structured_payload(blocks)
+        if structured_payload:
+            domain = build_domain_payload_from_structured(
+                req_id=doc_id,
+                payload=structured_payload,
+                fallback_text=normalized_raw_text,
+                title_hint=filename,
+                categories=categories,
+            )
+            normalized_raw_text = domain.raw_text or normalized_raw_text
+            corrected_text = normalized_raw_text
+        else:
+            domain = build_domain_payload(
+                req_id=doc_id,
+                text=normalized_raw_text,
+                title_hint=filename,
+                categories=categories,
+            )
         transform_ms = int((time.perf_counter() - transform_started) * 1000)
         latency_ms = int((time.perf_counter() - started) * 1000)
         pages = self._page_summaries(blocks, page_count=page_count)
@@ -1069,6 +1090,7 @@ class InferencePipeline:
                                 col_idx=getattr(item, "col_idx", None) or col_idx,
                                 rowspan=getattr(item, "rowspan", None) or 1,
                                 colspan=getattr(item, "colspan", None) or 1,
+                                structured_payload=getattr(item, "structured_payload", None),
                             )
                         )
                 continue
@@ -1091,6 +1113,7 @@ class InferencePipeline:
                     col_idx=getattr(item, "col_idx", None),
                     rowspan=getattr(item, "rowspan", None),
                     colspan=getattr(item, "colspan", None),
+                    structured_payload=getattr(item, "structured_payload", None),
                 )
             )
         ocr_ms = int((time.perf_counter() - ocr_started) * 1000)
