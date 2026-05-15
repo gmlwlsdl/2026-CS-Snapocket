@@ -22,6 +22,7 @@ class Document(Base):
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
     deleted_at = Column(DateTime, nullable=True)
+    deadline = Column(DateTime, nullable=True)
 
     tag_objects = relationship("Tag", secondary="document_tags", back_populates="documents")
 

@@ -1,10 +1,10 @@
 from fastapi import APIRouter, BackgroundTasks, HTTPException, status, Depends
 from pydantic import BaseModel, ConfigDict
 import uuid
-from core.security import createAccessToken #, createRefreshToken
+from core.security import createAccessToken, createRefreshToken
 from sqlalchemy.orm import Session
 from core.database import get_db
-from core.security import jwtAuth
+from core.security import jwtAuth, jwtRefreshAuth
 from models.user import User
 from api.apiResponse import ApiResponse
 from services.semantic_search import reconcile_semantic_replica_for_user
@@ -106,6 +106,7 @@ def login(login : UserCreate, background_tasks: BackgroundTasks, db: Session = D
 
     # JWT 토큰 생성
     accessToken = createAccessToken(data={"sub": login.email})
+    refreshToken = createRefreshToken(data={"sub": login.email})
 
     # 로그인 이후에는 백그라운드에서 1회 레플리카 정합성만 점검한다.
     background_tasks.add_task(reconcile_semantic_replica_for_user, user_id=str(userInfo.id))
@@ -115,7 +116,8 @@ def login(login : UserCreate, background_tasks: BackgroundTasks, db: Session = D
         message="로그인을 성공했습니다!",
         data={
             "access_token": accessToken,
-            "token_type": "bearer"
+            "refresh_token": refreshToken,
+            "token_type": "Bearer"
         }
     )
 
@@ -140,7 +142,28 @@ def logout(jwtToken: dict = Depends(jwtAuth)):
         data={}
     )
 
+@router.get("/refresh", response_model=ApiResponse[dict])
+def refresh(jwtToken: dict = Depends(jwtRefreshAuth)):
+
+    userName = jwtToken.get("sub")
+
+    newAccessToken = createAccessToken(data={"sub": userName})
+
+    return ApiResponse(
+        success=True,
+        message="토큰 재발급 성공",
+        data={
+            "access_token": newAccessToken,
+            "token_type": "Bearer"
+        }
+    )
+
 @router.post("/test")
 def test(login : UserCreate):
     # jwt발급 테스트
-    return createAccessToken(data={"sub": login.email})
+    accessToken = createAccessToken(data={"sub": login.email})
+    refreshToken = createRefreshToken(data={"sub": login.email})
+    return {
+        "access_token": accessToken,
+        "refresh_token": refreshToken
+    }

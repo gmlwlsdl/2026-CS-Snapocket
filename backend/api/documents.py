@@ -22,7 +22,7 @@ router = APIRouter(prefix="/documents", tags=["documents"])
 class UpdateDocuments(BaseModel):
     title: str | None = None
     category: str | None = None
-    captureDate: datetime | None = None
+    capture_date: datetime | None = None
     summary: str | None = None
     raw_text: str | None = None
 
