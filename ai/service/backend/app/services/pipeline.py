@@ -315,6 +315,15 @@ class InferencePipeline:
             return engine_hint
         return "unknown"
 
+    def _selected_engine_expects_raw_document_image(self, engine_hint: str | None) -> bool:
+        engine = getattr(self.router, "paddle_engine", None)
+        if engine is None:
+            return False
+        hint = str(engine_hint or "auto").strip().lower()
+        if hint not in {"", "auto", "paddle"}:
+            return False
+        return bool(getattr(engine, "expects_raw_document_image", False))
+
     @staticmethod
     def _source_loc(page_no: int, bbox: list[float] | None) -> str:
         if bbox and len(bbox) >= 4:
@@ -465,9 +474,11 @@ class InferencePipeline:
         if engine is not None:
             engine_config = (
                 f"|engine={getattr(engine, 'name', 'unknown')}"
+                f"|runtime={getattr(engine, 'availability_detail', lambda: {})().get('backend', '')}"
                 f"|model={getattr(engine, 'model', '')}"
                 f"|max_side={getattr(engine, 'max_side_px', '')}"
                 f"|max_tokens={getattr(engine, 'max_tokens', '')}"
+                f"|parser_version={getattr(engine, 'availability_detail', lambda: {})().get('prompt_version', '')}"
             )
         scope = (
             f"{content_type}|{engine_hint or 'auto'}|"
@@ -657,7 +668,10 @@ class InferencePipeline:
             missing_regions = list(page_stats.get("missing_regions", []) or [])
         elif is_image_content_type(content_type):
             pre_started = time.perf_counter()
-            processed = self.preprocessor.preprocess(file_bytes)
+            if self._selected_engine_expects_raw_document_image(engine_hint):
+                processed = file_bytes
+            else:
+                processed = self.preprocessor.preprocess(file_bytes)
             preprocessing_ms = int((time.perf_counter() - pre_started) * 1000)
             blocks, ocr_ms, ocr_verify_ms = await self._infer_image_with_routing(
                 image_bytes=processed,
@@ -842,7 +856,10 @@ class InferencePipeline:
         async def _process_one(page_no: int, img_bytes: bytes) -> tuple[list[OCRBlock], int, int, int]:
             async with self._semaphore:
                 pre_started = time.perf_counter()
-                processed = self.preprocessor.preprocess(img_bytes)
+                if self._selected_engine_expects_raw_document_image(engine_hint):
+                    processed = img_bytes
+                else:
+                    processed = self.preprocessor.preprocess(img_bytes)
                 pre_ms = int((time.perf_counter() - pre_started) * 1000)
                 blocks, page_ocr_ms, page_verify_ms = await self._infer_image_with_routing(
                     image_bytes=processed,

@@ -52,6 +52,25 @@ class Settings:
 
     default_engine: str = os.getenv("DEFAULT_ENGINE", "paddle")
     paddle_enable: bool = _as_bool(os.getenv("PADDLE_ENABLE"), True)
+    paddle_runtime: str = os.getenv("PADDLE_RUNTIME", "doc-parser")
+    paddle_doc_parser_pipeline_version: str = os.getenv("PADDLE_DOC_PARSER_PIPELINE_VERSION", "v1.5")
+    paddle_doc_parser_device: str = os.getenv("PADDLE_DOC_PARSER_DEVICE", "")
+    paddle_doc_parser_engine: str = os.getenv("PADDLE_DOC_PARSER_ENGINE", "")
+    paddle_doc_parser_use_doc_preprocessor: bool = _as_bool(
+        os.getenv("PADDLE_DOC_PARSER_USE_DOC_PREPROCESSOR"), True
+    )
+    paddle_doc_parser_use_layout_detection: bool = _as_bool(
+        os.getenv("PADDLE_DOC_PARSER_USE_LAYOUT_DETECTION"), True
+    )
+    paddle_doc_parser_use_chart_recognition: bool = _as_bool(
+        os.getenv("PADDLE_DOC_PARSER_USE_CHART_RECOGNITION"), False
+    )
+    paddle_doc_parser_use_seal_recognition: bool = _as_bool(
+        os.getenv("PADDLE_DOC_PARSER_USE_SEAL_RECOGNITION"), False
+    )
+    paddle_doc_parser_use_ocr_for_image_block: bool = _as_bool(
+        os.getenv("PADDLE_DOC_PARSER_USE_OCR_FOR_IMAGE_BLOCK"), True
+    )
 
     llm_base_url: str = os.getenv("LLM_BASE_URL", os.getenv("OLLAMA_BASE_URL", "http://llama-server:8080"))
     llm_model_paddle: str = os.getenv(
@@ -182,6 +201,25 @@ def load_settings() -> Settings:
         allow_zrok_server_endpoints=_as_bool(os.getenv("ALLOW_ZROK_SERVER_ENDPOINTS"), True),
         default_engine=os.getenv("DEFAULT_ENGINE", "paddle"),
         paddle_enable=_as_bool(os.getenv("PADDLE_ENABLE"), True),
+        paddle_runtime=os.getenv("PADDLE_RUNTIME", "doc-parser"),
+        paddle_doc_parser_pipeline_version=os.getenv("PADDLE_DOC_PARSER_PIPELINE_VERSION", "v1.5"),
+        paddle_doc_parser_device=os.getenv("PADDLE_DOC_PARSER_DEVICE", ""),
+        paddle_doc_parser_engine=os.getenv("PADDLE_DOC_PARSER_ENGINE", ""),
+        paddle_doc_parser_use_doc_preprocessor=_as_bool(
+            os.getenv("PADDLE_DOC_PARSER_USE_DOC_PREPROCESSOR"), True
+        ),
+        paddle_doc_parser_use_layout_detection=_as_bool(
+            os.getenv("PADDLE_DOC_PARSER_USE_LAYOUT_DETECTION"), True
+        ),
+        paddle_doc_parser_use_chart_recognition=_as_bool(
+            os.getenv("PADDLE_DOC_PARSER_USE_CHART_RECOGNITION"), False
+        ),
+        paddle_doc_parser_use_seal_recognition=_as_bool(
+            os.getenv("PADDLE_DOC_PARSER_USE_SEAL_RECOGNITION"), False
+        ),
+        paddle_doc_parser_use_ocr_for_image_block=_as_bool(
+            os.getenv("PADDLE_DOC_PARSER_USE_OCR_FOR_IMAGE_BLOCK"), True
+        ),
         llm_base_url=os.getenv("LLM_BASE_URL", os.getenv("OLLAMA_BASE_URL", "http://llama-server:8080")),
         llm_model_paddle=os.getenv(
             "LLM_MODEL_PADDLE", os.getenv("OLLAMA_MODEL_PADDLE", "PaddleOCR-VL-1.5-BF16.gguf")

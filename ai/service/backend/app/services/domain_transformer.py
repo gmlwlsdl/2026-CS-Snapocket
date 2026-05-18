@@ -251,6 +251,7 @@ def build_domain_payload(
         summary=summary,
         raw_text=cleaned_text,
         tag=tags,
+        key_concepts=tags[:10],
     )
 
 
@@ -279,6 +280,7 @@ def build_domain_payload_from_structured(
 
     summary = str(data.get("summary") or "").strip()[:500] or fallback.summary
     tags = _normalize_tags(data.get("tags") or data.get("tag")) or fallback.tag
+    key_concepts = _normalize_tags(data.get("key_concepts") or data.get("concepts")) or tags[:10]
 
     return DomainPayload(
         req_id=str(req_id or "").strip() or "unknown",
@@ -287,6 +289,7 @@ def build_domain_payload_from_structured(
         summary=summary,
         raw_text=raw_text,
         tag=tags,
+        key_concepts=key_concepts,
         capture_date=_normalize_optional_date(data.get("capture_date")),
         deadline=_normalize_optional_date(data.get("deadline")),
     )

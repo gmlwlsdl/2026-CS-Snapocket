@@ -29,11 +29,12 @@ _PROFILE_PROMPTS: dict[str, str] = {
         "The JSON shape must be exactly: "
         "{\"raw_text\": string, \"title\": string, \"category\": string, "
         "\"capture_date\": \"YYYY-MM-DD\" or null, \"deadline\": \"YYYY-MM-DD\" or null, "
-        "\"summary\": string, \"tags\": string[]}. "
+        "\"summary\": string, \"tags\": string[], \"key_concepts\": string[]}. "
         "raw_text must preserve all visible text and line breaks. "
         "title must be a concise Korean document title. "
         "summary must be 1-2 concise Korean sentences. "
         "tags must be 3-7 short Korean concepts without #. "
+        "key_concepts must be 3-10 important searchable concepts from the document body. "
         "deadline means a payment due date, submission deadline, expiration date, application closing date, "
         "or similar explicit future/limit date. Do not invent dates. "
         "Use null for unknown dates. Return JSON only without markdown or explanation."
@@ -395,6 +396,14 @@ class LlamaCppVisionEngine(OCREngine):
         else:
             tags = []
 
+        concepts_value = parsed.get("key_concepts") or parsed.get("concepts") or []
+        if isinstance(concepts_value, str):
+            key_concepts = [token.strip().lstrip("#") for token in re.split(r"[,#\n]+", concepts_value) if token.strip()]
+        elif isinstance(concepts_value, list):
+            key_concepts = [str(token).strip().lstrip("#") for token in concepts_value if str(token).strip()]
+        else:
+            key_concepts = []
+
         return {
             "raw_text": raw_text,
             "title": str(parsed.get("title") or "").strip(),
@@ -403,6 +412,7 @@ class LlamaCppVisionEngine(OCREngine):
             "deadline": parsed.get("deadline"),
             "summary": str(parsed.get("summary") or "").strip(),
             "tags": tags,
+            "key_concepts": key_concepts,
         }
 
     def _infer_with_openai(

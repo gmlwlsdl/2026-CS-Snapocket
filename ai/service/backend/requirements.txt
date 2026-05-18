@@ -9,6 +9,8 @@ SQLAlchemy==2.0.43
 opencv-python-headless==4.10.0.84
 pillow==11.3.0
 scipy==1.14.1
+paddlepaddle==3.2.1
+paddleocr[doc-parser]==3.5.0
 kiwipiepy==0.19.1
 langdetect==1.0.9
 cachetools==5.5.0

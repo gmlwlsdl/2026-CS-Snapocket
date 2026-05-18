@@ -48,6 +48,7 @@ class DomainPayload(BaseModel):
     summary: str
     raw_text: str
     tag: list[str] = Field(default_factory=list)
+    key_concepts: list[str] = Field(default_factory=list)
     capture_date: str | None = None
     deadline: str | None = None
 
