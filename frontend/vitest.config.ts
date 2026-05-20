@@ -47,8 +47,19 @@ export default defineConfig({
         '**/*.test.{ts,tsx}',
         '**/index.ts',
         '**/types.ts',
+        '**/*.type.ts',       // 타입 정의 파일 — 로직 없음
+        '**/*.constant.ts',   // 상수 파일 — 로직 없음
         '**/mock/**',
+        // canvas·폴링·동적 import에 의존하는 widget 페이지 — jsdom에서 단위 테스트 불가
+        'widgets/*/ui/*.tsx',
       ],
+      thresholds: {
+        // 임계값 미달 시 npm run test:coverage가 non-zero로 종료 → CI 실패
+        // 신규 파일 추가 시 테스트 없이 머지되면 수치가 내려가 여기서 잡힘
+        lines: 70,
+        functions: 75,
+        branches: 85,
+      },
     },
   },
   resolve: {
