@@ -133,11 +133,26 @@ export const handlers = [
 
   // ─── Search ─────────────────────────────────────────────────────────────────
 
+  http.get('http://localhost/api/search', ({ request }) => {
+    const url = new URL(request.url)
+    const keyword = url.searchParams.get('keyword') ?? ''
+    return HttpResponse.json({
+      success: true,
+      message: 'OK',
+      data: {
+        items: keyword
+          ? [{ id: 'doc-1', title: `Search: ${keyword}`, category: 'lecture', summary: '', tags: [] }]
+          : [],
+      },
+    })
+  }),
+
   http.get('http://localhost/api/search/query', () => {
     return HttpResponse.json({
       success: true,
       message: 'OK',
       data: {
+        mode_requested: 'auto',
         mode_used: 'text',
         ai_available: false,
         items: [],
@@ -149,18 +164,53 @@ export const handlers = [
     return HttpResponse.json({
       success: true,
       message: 'OK',
-      data: { ai_available: false },
+      data: { ai_available: true, ai_live: true, reason: 'model ready' },
     })
   }),
 
   // ─── Graph (GraphQL) ────────────────────────────────────────────────────────
 
-  http.post('http://localhost/api/graphql', () => {
+  http.post('http://localhost/api/graphql', async ({ request }) => {
+    const body = await request.json() as { query: string; variables?: Record<string, unknown> }
+    const query = body.query ?? ''
+
+    if (query.includes('SearchNodes')) {
+      const q = (body.variables?.q as string) ?? ''
+      return HttpResponse.json({
+        data: {
+          searchNodes: q
+            ? [{ id: 'node-1', title: `Result for ${q}`, category: 'lecture', highlight: q }]
+            : [],
+        },
+      })
+    }
+
+    if (query.includes('GetGraph')) {
+      return HttpResponse.json({
+        data: {
+          nodes: [{ id: 'n1', title: '노드1', category: body.variables?.category ?? 'lecture', tags: [], createdAt: '2026-01-01T00:00:00Z', connectionCount: 0 }],
+          edges: [{ source: 'n1', target: 'n2', weight: 1, edgeType: 'related_to' }],
+        },
+      })
+    }
+
+    // GetNodes (default)
     return HttpResponse.json({
       data: {
-        nodes: [],
-        edges: [],
-        summary: { total: 0, by_category: {} },
+        nodes: [{ id: 'n1', title: '노드1', category: body.variables?.category ?? 'lecture', tags: [], createdAt: '2026-01-01T00:00:00Z', connectionCount: 2 }],
+      },
+    })
+  }),
+
+  http.get('http://localhost/api/graph/summary', () => {
+    return HttpResponse.json({
+      success: true,
+      message: 'OK',
+      data: {
+        node_count: 5,
+        document_count: 3,
+        tag_count: 8,
+        edge_count: 4,
       },
     })
   }),
