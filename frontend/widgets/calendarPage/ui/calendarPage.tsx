@@ -1,41 +1,34 @@
 'use client'
 
-import { useState, useRef, useCallback } from 'react'
+import { useState, useRef, useCallback, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import { SidebarNav } from '@/shared/ui'
 import { UploadModal } from '@/features/upload'
 import { t as translate } from '@/shared/lib/i18n'
+import {
+  fetchCalendarMonth,
+  fetchCalendarDay,
+  type CalendarDates,
+  type CalendarDayItem,
+} from '@/entities/calendar'
 
 const WEEKDAYS = ['월', '화', '수', '목', '금', '토', '일']
 
 const MONTH_NAMES = [
-  '1월',
-  '2월',
-  '3월',
-  '4월',
-  '5월',
-  '6월',
-  '7월',
-  '8월',
-  '9월',
-  '10월',
-  '11월',
-  '12월',
+  '1월', '2월', '3월', '4월', '5월', '6월',
+  '7월', '8월', '9월', '10월', '11월', '12월',
 ]
 
-// TODO: [Mock] fetchCalendarMonth({ year, month }) 응답(CalendarDates)으로 교체.
-//   year/month state 변경 시마다 fetchCalendarMonth 재호출 → dates 상태로 관리.
-//   category 필터 칩이 생기면 category 파라미터도 함께 전달.
-/** 월별 Mock 이벤트 — key: "YYYY-MM-DD" */
-const MOCK_EVENTS: Record<string, { label: string; color: string }[]> = {
-  '2026-04-15': [{ label: 'document 1', color: '#ac89ff' }],
-  '2026-04-16': [{ label: 'Active', color: '#81ecff' }],
-  '2026-04-17': [{ label: 'document 2', color: '#fab0ff' }],
-  '2026-04-18': [{ label: 'Lab Report', color: '#ac89ff' }],
-  '2026-04-19': [{ label: 'Lecture Note', color: '#81ecff' }],
-  '2026-04-20': [
-    { label: 'Assignment', color: '#81ecff' },
-    { label: 'Summary', color: '#fab0ff' },
-  ],
+const CATEGORY_COLOR: Record<string, string> = {
+  lecture: '#ac89ff',
+  assignment: '#81ecff',
+  notice: '#fab0ff',
+  receipt: '#ffd27f',
+  memo: '#7ff0bb',
+}
+
+function getCategoryColor(category: string): string {
+  return CATEGORY_COLOR[category] ?? '#aaabaf'
 }
 
 function daysInMonth(year: number, month: number) {
@@ -91,17 +84,33 @@ function toKey(date: Date) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
 }
 
+function formatDateLabel(dateStr: string) {
+  const [year, month, day] = dateStr.split('-')
+  return `${year}년 ${Number(month)}월 ${Number(day)}일`
+}
+
 export function CalendarPage() {
+  const router = useRouter()
   const today = new Date()
   const [year, setYear] = useState(today.getFullYear())
   const [month, setMonth] = useState(today.getMonth())
   const [search, setSearch] = useState('')
+  const [calendarDates, setCalendarDates] = useState<CalendarDates>({})
+  const [selectedDate, setSelectedDate] = useState<string | null>(null)
+  const [dayItems, setDayItems] = useState<CalendarDayItem[]>([])
+  const [dayPanelOpen, setDayPanelOpen] = useState(false)
   const [modalOpen, setModalOpen] = useState(false)
   const [uploadToast, setUploadToast] = useState<{
     visible: boolean
     fileName: string
   }>({ visible: false, fileName: '' })
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => {
+    fetchCalendarMonth({ year, month: month + 1 })
+      .then(setCalendarDates)
+      .catch((err) => console.error('Failed to load calendar:', err))
+  }, [year, month])
 
   const cells = buildGrid(year, month)
   const rows: (typeof cells)[] = []
@@ -132,18 +141,40 @@ export function CalendarPage() {
     d.getMonth() === today.getMonth() &&
     d.getFullYear() === today.getFullYear()
 
-  // TODO: [Mock] MOCK_EVENTS 대신 fetchCalendarMonth 결과 dates[toKey(d)] 사용
-  const getEvents = (d: Date) => MOCK_EVENTS[toKey(d)] ?? []
+  const getEvents = (d: Date) => {
+    const items = calendarDates[toKey(d)] ?? []
+    return items.map((item) => ({
+      id: item.id,
+      label: item.title,
+      color: getCategoryColor(item.category),
+    }))
+  }
 
-  // TODO: [API] 날짜 셀 클릭 시 fetchCalendarDay({ date: toKey(d) }) 호출 → 하루치 문서 목록 사이드패널/모달 표시
-  // TODO: [API] 검색어 입력 시 searchDocuments({ keyword: search }) 호출 후 결과 날짜 하이라이트.
-  //   현재는 로컬 MOCK_EVENTS 라벨 대상으로만 필터링하므로 실제 검색과 동작이 다름.
   const matchesSearch = (d: Date) => {
     if (!search.trim()) return true
     return getEvents(d).some((e) =>
       e.label.toLowerCase().includes(search.toLowerCase()),
     )
   }
+
+  const handleDayClick = useCallback(async (date: Date) => {
+    const dateStr = toKey(date)
+    setSelectedDate(dateStr)
+    setDayItems([])
+    setDayPanelOpen(true)
+    try {
+      const items = await fetchCalendarDay({ date: dateStr })
+      setDayItems(items)
+    } catch (err) {
+      console.error('Failed to load day items:', err)
+    }
+  }, [])
+
+  const handleDayPanelClose = useCallback(() => {
+    setDayPanelOpen(false)
+    setSelectedDate(null)
+    setDayItems([])
+  }, [])
 
   // TODO: [API] uploadDocument(file) 호출 후 반환된 document_id로 /analysis/{id} 이동.
   //   현재는 토스트만 표시하고 실제 업로드 없이 종료됨.
@@ -311,16 +342,26 @@ export function CalendarPage() {
                   const todayCell = isToday(cell.date)
                   const events = getEvents(cell.date)
                   const highlighted = search ? matchesSearch(cell.date) : true
+                  const dateKey = toKey(cell.date)
+                  const isSelected = selectedDate === dateKey
 
                   return (
                     <div
                       key={colIdx}
-                      className="relative flex flex-col overflow-hidden transition-colors"
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => handleDayClick(cell.date)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') handleDayClick(cell.date)
+                      }}
+                      className="relative flex flex-col overflow-hidden transition-colors cursor-pointer hover:bg-white/2"
                       style={{
                         borderRight: '1px solid rgba(255,255,255,0.03)',
-                        background: todayCell
-                          ? 'rgba(129,236,255,0.03)'
-                          : 'transparent',
+                        background: isSelected
+                          ? 'rgba(129,236,255,0.06)'
+                          : todayCell
+                            ? 'rgba(129,236,255,0.03)'
+                            : 'transparent',
                         opacity: search && !highlighted ? 0.25 : 1,
                       }}
                     >
@@ -378,6 +419,113 @@ export function CalendarPage() {
           </div>
         </div>
       </main>
+
+      {/* ── 일별 문서 패널 ────────────────────────── */}
+      {dayPanelOpen && (
+        <>
+          <div
+            className="fixed inset-0 z-10"
+            onClick={handleDayPanelClose}
+          />
+          <aside
+            className="fixed right-0 top-0 z-20 flex h-full flex-col overflow-hidden"
+            style={{
+              width: 320,
+              background: '#111417',
+              borderLeft: '1px solid rgba(255,255,255,0.07)',
+            }}
+          >
+            <div
+              className="flex shrink-0 items-center justify-between px-6"
+              style={{
+                height: 64,
+                borderBottom: '1px solid rgba(255,255,255,0.05)',
+              }}
+            >
+              <span
+                className="font-inter font-semibold text-xs tracking-widest"
+                style={{ color: '#81ecff' }}
+              >
+                {selectedDate ? formatDateLabel(selectedDate) : ''}
+              </span>
+              <button
+                onClick={handleDayPanelClose}
+                className="flex h-7 w-7 items-center justify-center rounded transition-opacity hover:opacity-70"
+                aria-label="닫기"
+              >
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                  <path
+                    d="M1 1L11 11M11 1L1 11"
+                    stroke="#747579"
+                    strokeWidth="1.5"
+                    strokeLinecap="round"
+                  />
+                </svg>
+              </button>
+            </div>
+
+            <div className="flex flex-1 flex-col gap-2 overflow-y-auto p-4">
+              {dayItems.length === 0 ? (
+                <div
+                  className="flex flex-1 items-center justify-center font-inter text-xs"
+                  style={{ color: '#747579' }}
+                >
+                  문서 없음
+                </div>
+              ) : (
+                dayItems.map((item) => (
+                  <button
+                    key={item.id}
+                    onClick={() => router.push(`/analysis/${item.id}`)}
+                    className="flex flex-col gap-1.5 rounded-lg px-4 py-3 text-left transition-colors hover:bg-white/4"
+                    style={{ background: 'rgba(255,255,255,0.02)' }}
+                  >
+                    <span
+                      className="font-inter text-xs font-medium leading-snug"
+                      style={{ color: '#f9f9fd' }}
+                    >
+                      {item.title}
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <span
+                        className="rounded-full px-2 py-0.5 font-inter text-[9px] font-semibold uppercase tracking-widest"
+                        style={{
+                          background: `${getCategoryColor(item.category)}18`,
+                          color: getCategoryColor(item.category),
+                        }}
+                      >
+                        {item.category}
+                      </span>
+                      {item.deadline && (
+                        <span
+                          className="font-inter text-[9px]"
+                          style={{ color: '#747579' }}
+                        >
+                          {item.deadline.slice(0, 10)}
+                        </span>
+                      )}
+                    </div>
+                  </button>
+                ))
+              )}
+            </div>
+          </aside>
+        </>
+      )}
+
+      {/* ── 업로드 토스트 ────────────────────────── */}
+      {uploadToast.visible && (
+        <div
+          className="fixed bottom-6 left-1/2 -translate-x-1/2 rounded-full px-5 py-2.5 font-inter text-xs font-medium"
+          style={{
+            background: '#1a1d21',
+            border: '1px solid rgba(255,255,255,0.08)',
+            color: '#aaabaf',
+          }}
+        >
+          {uploadToast.fileName} 업로드 중…
+        </div>
+      )}
 
       <UploadModal
         open={modalOpen}

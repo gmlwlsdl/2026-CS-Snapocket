@@ -132,42 +132,11 @@ function uniqueByNodePair(edges: GraphEdge[]) {
   })
 }
 
-function getGraphStats(nodes: GraphNode[], links: GraphLink[]) {
-  const degreeById = new Map(nodes.map((node) => [node.id, 0]))
-  const weightedDegreeById = new Map(nodes.map((node) => [node.id, 0]))
-  const childCountById = new Map(nodes.map((node) => [node.id, 0]))
 
-  links.forEach((link) => {
-    const weight = clamp01(Number(link.weight ?? 0))
-    degreeById.set(link.source, (degreeById.get(link.source) ?? 0) + 1)
-    degreeById.set(link.target, (degreeById.get(link.target) ?? 0) + 1)
-    weightedDegreeById.set(link.source, (weightedDegreeById.get(link.source) ?? 0) + weight)
-    weightedDegreeById.set(link.target, (weightedDegreeById.get(link.target) ?? 0) + weight)
-    if (link.type === 'parent_of') {
-      childCountById.set(link.source, (childCountById.get(link.source) ?? 0) + 1)
-    }
-  })
-
-  return { childCountById, degreeById, weightedDegreeById }
-}
-
-function getSemanticNodeSize(
-  node: GraphNode,
-  childCountById: Map<string, number>,
-  degreeById: Map<string, number>,
-  weightedDegreeById: Map<string, number>,
-): NodeSize {
-  const childCount = childCountById.get(node.id) ?? 0
-  const degree = degreeById.get(node.id) ?? 0
-  const weightedDegree = weightedDegreeById.get(node.id) ?? 0
-  const persistedConnections = Number(node.connectionCount ?? 0)
-
-  if (childCount >= 4 || weightedDegree >= 3.2 || persistedConnections >= 18) {
-    return 'root'
-  }
-  if (childCount >= 1 || degree >= 3 || weightedDegree >= 1.6 || persistedConnections >= 8) {
-    return 'primary'
-  }
+function getSemanticNodeSize(node: GraphNode): NodeSize {
+  const count = Number(node.connectionCount ?? 0)
+  if (count >= 18) return 'root'
+  if (count >= 3) return 'primary'
   return 'secondary'
 }
 
@@ -200,7 +169,6 @@ function selectVisibleLinks(nodes: GraphNode[], edges: GraphEdge[]) {
 
 function computeHierarchyLayout(nodes: GraphNode[], links: GraphLink[]) {
   const nodesById = new Map(nodes.map((node) => [node.id, node]))
-  const { childCountById, degreeById, weightedDegreeById } = getGraphStats(nodes, links)
   const childrenByParent = new Map<string, string[]>()
   const incomingParentCount = new Map<string, number>()
   const parentLinks = links.filter((link) => link.type === 'parent_of')
@@ -261,7 +229,7 @@ function computeHierarchyLayout(nodes: GraphNode[], links: GraphLink[]) {
       ...root,
       x: cx,
       y: cy,
-      size: getSemanticNodeSize(root, childCountById, degreeById, weightedDegreeById),
+      size: getSemanticNodeSize(root),
       depth: 0,
       clusterId: root.id,
     })
@@ -278,7 +246,7 @@ function computeHierarchyLayout(nodes: GraphNode[], links: GraphLink[]) {
         ...node,
         x,
         y,
-        size: getSemanticNodeSize(node, childCountById, degreeById, weightedDegreeById),
+        size: getSemanticNodeSize(node),
         depth: 1,
         clusterId: root.id,
       })
@@ -297,7 +265,7 @@ function computeHierarchyLayout(nodes: GraphNode[], links: GraphLink[]) {
           ...grandchildNode,
           x: gx,
           y: gy,
-          size: getSemanticNodeSize(grandchildNode, childCountById, degreeById, weightedDegreeById),
+          size: getSemanticNodeSize(grandchildNode),
           depth: grandchild.depth,
           clusterId: root.id,
         })
@@ -323,7 +291,7 @@ function computeHierarchyLayout(nodes: GraphNode[], links: GraphLink[]) {
         ...node,
         x,
         y,
-        size: getSemanticNodeSize(node, childCountById, degreeById, weightedDegreeById),
+        size: getSemanticNodeSize(node),
         depth: 3,
         clusterId: groupId,
       })
