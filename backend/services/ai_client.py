@@ -160,6 +160,12 @@ def request_analysis(*, file_path: str, doc_id: str) -> dict:
 def map_analysis_result(payload: dict, *, fallback_doc_id: str) -> dict:
     data = payload if isinstance(payload, dict) else {}
     domain = data.get("domain") if isinstance(data.get("domain"), dict) else {}
+    backend_doc_id = str(fallback_doc_id or "").strip()
+    ai_reported_doc_id = str(data.get("doc_id") or domain.get("req_id") or "").strip()
+    if ai_reported_doc_id and backend_doc_id and ai_reported_doc_id != backend_doc_id:
+        raise AIClientError(
+            "AI 응답 doc_id가 요청 doc_id와 일치하지 않습니다."
+        )
 
     raw_text = (
         data.get("raw_text")
@@ -168,7 +174,7 @@ def map_analysis_result(payload: dict, *, fallback_doc_id: str) -> dict:
         or ""
     )
     mapped = {
-        "doc_id": str(data.get("doc_id") or domain.get("req_id") or fallback_doc_id),
+        "doc_id": backend_doc_id,
         "title": str(domain.get("title") or data.get("title") or ""),
         "category": str(domain.get("category") or data.get("category") or "unknown"),
         "capture_date": data.get("capture_date") or domain.get("capture_date"),

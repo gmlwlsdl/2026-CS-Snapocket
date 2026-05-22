@@ -8,10 +8,10 @@ export async function fetchCalendarMonth(params: CalendarMonthParams): Promise<C
     month: String(params.month),
   })
   if (params.category) query.set('category', params.category)
-  const res = await apiClient<{ dates: CalendarDates }>(`/calendar?${query.toString()}`, {
+  const res = await apiClient<CalendarDates>(`/calendar?${query.toString()}`, {
     requireAuth: true,
   })
-  return res.data.dates
+  return res.data
 }
 
 /** GET /calendar/day — 일별 문서 조회 (날짜 클릭 시 상세 목록) */

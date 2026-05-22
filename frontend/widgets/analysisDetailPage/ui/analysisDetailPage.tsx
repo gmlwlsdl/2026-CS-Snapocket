@@ -719,7 +719,7 @@ export function AnalysisDetailPage() {
             </div>
           )}
 
-          {/* Raw Text (추후 표시 예정)
+          {/* Raw Text */}
           <div className="flex flex-col gap-2">
             <span className="text-[10px] font-normal tracking-[2px] text-snap-muted leading-[15px]">
               {translate('rawText', 'ko')}
@@ -730,7 +730,7 @@ export function AnalysisDetailPage() {
               className="w-full h-[180px] resize-none rounded-xl px-6 py-6 outline-none bg-snap-input/50 text-[14px] font-normal leading-[22px] text-snap-muted/60 border border-snap-border/5"
               placeholder={isProcessing ? 'Extracting text…' : 'No text available'}
             />
-          </div> */}
+          </div>
 
           {/* Knowledge Tags */}
           <div className="flex flex-col gap-2">

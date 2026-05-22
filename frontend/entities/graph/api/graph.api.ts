@@ -1,5 +1,6 @@
 import { BASE_URL, ApiError, apiClient, getAccessToken } from "@/shared/api";
 import type {
+  GraphData,
   ApiNode,
   ApiNodeCategory,
   GraphSummaryData,
@@ -47,6 +48,16 @@ export async function getNodes(category?: ApiNodeCategory): Promise<ApiNode[]> {
   );
 
   return data.nodes;
+}
+
+export async function getGraph(category?: ApiNodeCategory): Promise<GraphData> {
+  const variables = category !== undefined ? { category } : {};
+  const data = await graphqlRequest<GraphData>(
+    "query GetGraph($category: String) { nodes(category: $category) { id title category tags createdAt connectionCount } edges(category: $category) { source target weight edgeType } }",
+    variables
+  );
+
+  return data;
 }
 
 export async function searchNodes(q: string): Promise<SearchNodeResult[]> {

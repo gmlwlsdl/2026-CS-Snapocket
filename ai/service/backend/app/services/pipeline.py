@@ -35,6 +35,7 @@ from app.services.ingestion import ingest_office_document, to_ocr_blocks
 from app.services.image_processor import ImageProcessor
 from app.services.metrics import MetricsStore
 from app.services.asr.qwen_asr_engine import QwenASREngine
+from app.services.ocr.llamacpp_engine import OCR_PROMPT_VERSION
 from app.services.ocr.router import OCREngineRouter
 
 
@@ -451,9 +452,19 @@ class InferencePipeline:
         engine_hint: str | None,
         vlm_ocr_verify: bool,
     ) -> str:
+        engine_config = ""
+        engine = getattr(self.router, "paddle_engine", None)
+        if engine is not None:
+            engine_config = (
+                f"|engine={getattr(engine, 'name', 'unknown')}"
+                f"|model={getattr(engine, 'model', '')}"
+                f"|max_side={getattr(engine, 'max_side_px', '')}"
+                f"|max_tokens={getattr(engine, 'max_tokens', '')}"
+            )
         scope = (
             f"{content_type}|{engine_hint or 'auto'}|"
-            f"embedded={self.prefer_embedded_pdf_text}|vlm_verify={bool(vlm_ocr_verify)}"
+            f"embedded={self.prefer_embedded_pdf_text}|vlm_verify={bool(vlm_ocr_verify)}|"
+            f"ocr_prompt={OCR_PROMPT_VERSION}{engine_config}"
         )
         if is_audio_content_type(content_type):
             engine = self.qwen_asr_engine
@@ -552,18 +563,23 @@ class InferencePipeline:
             vlm_ocr_verify=bool(vlm_ocr_verify),
         )
 
+        resolved_doc_id = doc_id or str(uuid4())
+
         # 1) 입력 바이트+scope 기준 캐시 조회
         if self.cache:
             cached = self.cache.get(file_bytes, scope=cache_scope)
             if cached:
-                logger.info("[cache_hit] file=%s doc_id=%s", filename, cached.get("doc_id", "?"))
+                cached_payload = dict(cached)
+                cached_payload["doc_id"] = resolved_doc_id
+                cached_domain = cached_payload.get("domain")
+                if isinstance(cached_domain, dict):
+                    cached_payload["domain"] = {**cached_domain, "req_id": resolved_doc_id}
+                logger.info("[cache_hit] file=%s doc_id=%s", filename, resolved_doc_id)
                 if self.metrics:
                     self.metrics.inc("cache_hit_total")
-                return InferResult(**cached)
+                return InferResult(**cached_payload)
             if self.metrics:
                 self.metrics.inc("cache_miss_total")
-
-        resolved_doc_id = doc_id or str(uuid4())
 
         logger.info(
             "[infer_start] file=%s size=%dB engine=%s doc_id=%s",

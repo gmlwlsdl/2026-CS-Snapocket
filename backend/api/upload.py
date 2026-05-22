@@ -1,13 +1,14 @@
 import os
 import uuid
 from datetime import datetime
-from fastapi import APIRouter, UploadFile, status, File, Form, Depends
+from fastapi import APIRouter, UploadFile, status, File, Form, Depends, BackgroundTasks
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 from core.security import jwtAuth
 from core.database import get_db
 from models.user import User
 from models.document import Document
+from models.analysis_job import AnalysisJob
 from api.apiResponse import ApiResponse
 
 router = APIRouter(prefix="/documents/upload", tags=["upload"])
@@ -30,6 +31,7 @@ FILE_TYPE_MAP = {
 
 @router.post("", status_code = status.HTTP_201_CREATED, response_model=ApiResponse[dict])
 async def upload_file(
+    background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     autoAnalyze: bool = Form(True),
     jwtToken: dict = Depends(jwtAuth),
@@ -57,7 +59,7 @@ async def upload_file(
             },
         )
     
-    documentId = uuid.uuid4()
+    documentId = str(uuid.uuid4())
     
     userName = jwtToken.get("sub")
     userInfo = db.query(User).filter(User.email == userName).first()
@@ -82,7 +84,7 @@ async def upload_file(
         stored_filename=unique_name,
         file_path=file_path,
         file_type=file_type,
-        doc_id=None,
+        doc_id=uuid.uuid4().hex,
         title=file.filename,
         summary="업로드된 문서",
         raw_text=None,
@@ -92,6 +94,20 @@ async def upload_file(
     db.add(new_document)
     db.commit()
     db.refresh(new_document)
+
+    if autoAnalyze:
+        from api.analysis import _run_analysis_job
+
+        analysis_job = AnalysisJob(
+            document_id=new_document.id,
+            status="processing",
+            raw_result={"doc_id": new_document.doc_id},
+            created_at=datetime.now(),
+        )
+        db.add(analysis_job)
+        db.commit()
+        db.refresh(analysis_job)
+        background_tasks.add_task(_run_analysis_job, analysis_job.id, new_document.id)
 
     return ApiResponse(
         success=True,

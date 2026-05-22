@@ -14,3 +14,6 @@ langdetect==1.0.9
 cachetools==5.5.0
 cryptography==46.0.2
 qwen-asr
+qdrant-client==1.15.1
+sentence-transformers==5.1.2
+huggingface-hub==0.35.3

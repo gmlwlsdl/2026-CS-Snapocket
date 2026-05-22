@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, status, Depends
+from fastapi import APIRouter, BackgroundTasks, HTTPException, status, Depends
 from pydantic import BaseModel, ConfigDict
 import uuid
 from core.security import createAccessToken, createRefreshToken
@@ -7,6 +7,7 @@ from core.database import get_db
 from core.security import jwtAuth, jwtRefreshAuth
 from models.user import User
 from api.apiResponse import ApiResponse
+from services.semantic_search import reconcile_semantic_replica_for_user
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -73,7 +74,7 @@ def sighup(user : UserCreate, db: Session = Depends(get_db)):
 # 로그인
 # 로그인 정보를 받아 유저db와 비교 후 JWT토큰 발행
 @router.post("/login", response_model=ApiResponse[dict])
-def login(login : UserCreate, db: Session = Depends(get_db)):
+def login(login : UserCreate, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
 
     # db와 로그인 정보 비교
     userInfo = db.query(User).filter(User.email == login.email).first()
@@ -106,6 +107,9 @@ def login(login : UserCreate, db: Session = Depends(get_db)):
     # JWT 토큰 생성
     accessToken = createAccessToken(data={"sub": login.email})
     refreshToken = createRefreshToken(data={"sub": login.email})
+
+    # 로그인 이후에는 백그라운드에서 1회 레플리카 정합성만 점검한다.
+    background_tasks.add_task(reconcile_semantic_replica_for_user, user_id=str(userInfo.id))
 
     return ApiResponse(
         success=True,

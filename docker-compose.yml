@@ -1,4 +1,13 @@
 services:
+  qdrant:
+    image: qdrant/qdrant:v1.15.4
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    volumes:
+      - qdrant_storage:/qdrant/storage
+    restart: unless-stopped
+
   app:
     image: gmlwls/snapocket:latest
     ports:
@@ -36,6 +45,9 @@ services:
       dockerfile: Dockerfile.dev
     ports:
       - "8000:8000"
+    environment:
+      AI_SERVER_URL: ${AI_SERVER_URL:-http://ai-dev:8080/v1/infer}
+      AI_SERVER_API_KEY: ${AI_SERVER_API_KEY:-${AIOPS_API_KEY:-}}
     volumes:
       - ./backend:/app
     networks:
@@ -107,12 +119,20 @@ services:
       LLM_IMAGE_MAX_SIDE_PX: ${AI_LLAMACPP_IMAGE_MAX_SIDE_PX:-1024}
       LLM_MAX_TOKENS: ${AI_LLAMACPP_MAX_TOKENS:-96}
       PLAYGROUND_TIMEOUT_S: ${AI_PLAYGROUND_TIMEOUT_S:-120}
+      SEMANTIC_SEARCH_ENABLE: ${SEMANTIC_SEARCH_ENABLE:-1}
+      SEMANTIC_EMBEDDING_MODEL: ${SEMANTIC_EMBEDDING_MODEL:-/app/model/BGE-m3-ko}
+      SEMANTIC_QDRANT_URL: ${SEMANTIC_QDRANT_URL:-http://qdrant:6333}
+      SEMANTIC_QDRANT_COLLECTION: ${SEMANTIC_QDRANT_COLLECTION:-documents}
+      SEMANTIC_QDRANT_TIMEOUT_S: ${SEMANTIC_QDRANT_TIMEOUT_S:-10}
+      SEMANTIC_RAW_TEXT_MAX_CHARS: ${SEMANTIC_RAW_TEXT_MAX_CHARS:-12000}
     ports:
       - "${AI_AIOPS_LOCAL_BIND_IP:-127.0.0.1}:${AI_AIOPS_LOCAL_PORT:-18081}:8080"
     depends_on:
       - llama-server
+      - qdrant
     volumes:
       - ./ai/data:/app/data
+      - ./ai/model:/app/model:ro
     networks:
       - default
       - shared_snapocket
@@ -121,3 +141,6 @@ services:
 networks:
   shared_snapocket:
     name: ${AI_AIOPS_SHARED_NETWORK:-snapocket-shared-net}
+
+volumes:
+  qdrant_storage:

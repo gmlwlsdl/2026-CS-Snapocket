@@ -1,0 +1,22 @@
+{
+  "queries": [
+    {
+      "query": "neural network learning model",
+      "relevant_document_ids": ["example-document-id"]
+    }
+  ],
+  "graph": {
+    "parent_pairs": [
+      {
+        "parent": "example-parent-document-id",
+        "child": "example-child-document-id"
+      }
+    ],
+    "negative_pairs": [
+      {
+        "source": "unrelated-document-a",
+        "target": "unrelated-document-b"
+      }
+    ]
+  }
+}
