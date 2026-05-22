@@ -27,6 +27,7 @@ export interface ConfirmPayload {
   capture_date: string
   summary: string
   tags: string[]
+  deadline?: string | null
 }
 
 /** POST /analysis/{id}/start → data */
