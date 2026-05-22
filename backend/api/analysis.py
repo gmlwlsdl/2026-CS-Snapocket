@@ -26,6 +26,7 @@ class ConfirmAnalysisRequest(BaseModel):
     capture_date: datetime
     summary: str
     tags: list[str]
+    deadline: datetime | None = None
 
 
 def _resolve_document_file_path(file_path: str) -> str:
@@ -405,7 +406,7 @@ def save_analysis(
     document.summary = confirm.summary
     document.raw_text = str(latest_result.get("raw_text") or document.raw_text or "")
     document.status = "analyzed"
-    document.deadline = latest_result.get("deadline")
+    document.deadline = confirm.deadline or latest_result.get("deadline")
 
     # 최신 Job의 raw_result도 저장 데이터 기준으로 동기화
     if latest_job:
