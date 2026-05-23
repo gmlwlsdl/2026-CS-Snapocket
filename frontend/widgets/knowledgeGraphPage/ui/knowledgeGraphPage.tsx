@@ -308,6 +308,25 @@ export function KnowledgeGraphPage() {
         onClose={() => setModalOpen(false)}
         onUpload={handleUpload}
       />
+
+      <style>{`
+        @media (max-width: 768px) {
+          main {
+            margin-left: 0 !important;
+          }
+          aside {
+            display: none !important;
+          }
+          /* 모바일에서 AI 입력바를 화면에 맞게 반응형 정렬 */
+          .absolute.bottom-8 {
+            left: 16px !important;
+            right: 16px !important;
+            transform: none !important;
+            width: auto !important;
+            max-width: none !important;
+          }
+        }
+      `}</style>
     </div>
   )
 }
