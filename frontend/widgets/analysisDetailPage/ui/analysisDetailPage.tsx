@@ -18,6 +18,7 @@ import {
 import { t as translate } from '@/shared/lib/i18n'
 import type { DocumentStatus } from '@/entities/document'
 import { ApiError } from '@/shared/api'
+import { useToast } from '@/shared/ui'
 
 // ── 로컬 타입 ────────────────────────────────────────────────────────────────
 
@@ -80,6 +81,7 @@ export function AnalysisDetailPage() {
   const { id } = useParams<{ id: string }>()
   const router = useRouter()
   const searchParams = useSearchParams()
+  const { toast } = useToast()
   const mode = searchParams.get('mode') // 'result' or null
 
   const [pageStatus, setPageStatus] = useState<PageStatus>('loading')
@@ -276,7 +278,7 @@ export function AnalysisDetailPage() {
       await retryAnalysis(id)
       startPolling()
     } catch (e) {
-      setErrorMsg(e instanceof ApiError ? e.message : '재분석 요청 실패')
+      toast.error(e, '재분석 요청에 실패했습니다.')
     }
   }
 

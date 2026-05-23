@@ -4,9 +4,12 @@ import { t as translate } from '@/shared/lib/i18n'
 
 export interface ToastItem {
   id: string
-  fileName: string
+  fileName?: string
+  message?: string
   status: 'processing' | 'complete' | 'error'
-  analysisId: string
+  analysisId?: string
+  type?: 'success' | 'error' | 'info'
+  duration?: number
 }
 
 interface ToastStatusProps {
@@ -29,7 +32,7 @@ export function ToastStatus({
   if (visible.length === 0) return null
 
   return (
-    <div className="absolute bottom-8 right-6 z-10 flex flex-col gap-2 w-[280px]">
+    <div className="absolute bottom-8 right-6 z-50 flex flex-col gap-2 w-[280px]">
       {visible.map((item) => (
         <ToastCard
           key={item.id}
@@ -55,6 +58,8 @@ function ToastCard({
   const isError = item.status === 'error'
   const isProcessing = item.status === 'processing'
 
+  const hasClickAction = isComplete && !!item.analysisId
+
   const borderColor = isComplete
     ? 'rgba(129,236,255,0.25)'
     : isError
@@ -63,7 +68,7 @@ function ToastCard({
 
   return (
     <div
-      onClick={isComplete ? onClick : undefined}
+      onClick={hasClickAction ? onClick : undefined}
       className="flex flex-col gap-2 px-4 py-3 transition-all"
       style={{
         background: 'rgba(23,26,29,0.95)',
@@ -71,27 +76,27 @@ function ToastCard({
         borderRadius: 12,
         boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
         backdropFilter: 'blur(12px)',
-        cursor: isComplete ? 'pointer' : 'default',
+        cursor: hasClickAction ? 'pointer' : 'default',
       }}
-      role={isComplete ? 'button' : 'status'}
+      role={hasClickAction ? 'button' : 'status'}
       aria-live="polite"
     >
       {/* Row 1: indicator + label + action icon */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex items-start gap-2 mt-0.5">
           {isComplete ? (
             <div
-              className="h-2 w-2 rounded-full"
+              className="h-2 w-2 rounded-full mt-1.5 shrink-0"
               style={{ background: '#81ecff' }}
             />
           ) : isError ? (
             <div
-              className="h-2 w-2 rounded-full"
+              className="h-2 w-2 rounded-full mt-1.5 shrink-0"
               style={{ background: '#ef4444' }}
             />
           ) : (
             <div
-              className="h-2 w-2 rounded-full"
+              className="h-2 w-2 rounded-full mt-1.5 shrink-0"
               style={{
                 background: '#f59e0b',
                 animation: 'toast-pulse 1.4s ease-in-out infinite',
@@ -99,19 +104,21 @@ function ToastCard({
             />
           )}
           <span
-            className="font-inter"
-            style={{ fontSize: 12, fontWeight: 600, color: '#f9f9fd' }}
+            className="font-inter text-left"
+            style={{ fontSize: 12, fontWeight: 600, color: '#f9f9fd', lineHeight: 1.4 }}
           >
-            {isComplete
-              ? translate('analysisComplete', 'ko')
-              : isError
-                ? translate('analysisFailed', 'ko')
-                : translate('analyzing', 'ko')}
+            {item.message
+              ? item.message
+              : isComplete
+                ? translate('analysisComplete', 'ko')
+                : isError
+                  ? translate('analysisFailed', 'ko')
+                  : translate('analyzing', 'ko')}
           </span>
         </div>
 
         {isComplete ? (
-          <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none" className="shrink-0 mt-1">
             <path
               d="M2 6L5 9L10 3"
               stroke="#81ecff"
@@ -121,7 +128,7 @@ function ToastCard({
             />
           </svg>
         ) : isProcessing ? (
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 shrink-0 mt-0.5">
             <div
               className="h-3 w-3 rounded-full border"
               style={{
@@ -135,7 +142,7 @@ function ToastCard({
                 e.stopPropagation()
                 onCancel()
               }}
-              className="flex items-center justify-center"
+              className="flex items-center justify-center cursor-pointer"
               style={{ color: 'rgba(170,171,175,0.6)', lineHeight: 1 }}
               aria-label="취소"
             >
@@ -156,7 +163,7 @@ function ToastCard({
               e.stopPropagation()
               onCancel()
             }}
-            className="flex items-center justify-center  cursor-pointer"
+            className="flex items-center justify-center cursor-pointer shrink-0 mt-1"
             style={{ color: 'rgba(239,68,68,0.7)', lineHeight: 1 }}
             aria-label="닫기"
           >
@@ -173,19 +180,21 @@ function ToastCard({
       </div>
 
       {/* Row 2: file name */}
-      <span
-        className="font-inter truncate"
-        style={{ fontSize: 11, color: '#aaabaf' }}
-        title={item.fileName}
-      >
-        {item.fileName}
-      </span>
+      {item.fileName && (
+        <span
+          className="font-inter truncate text-left"
+          style={{ fontSize: 11, color: '#aaabaf' }}
+          title={item.fileName}
+        >
+          {item.fileName}
+        </span>
+      )}
 
       {/* Click hint for complete */}
-      {isComplete && (
+      {isComplete && !!item.analysisId && (
         <div className="flex flex-col gap-1.5 mt-0.5">
           <span
-            className="font-inter"
+            className="font-inter text-left"
             style={{
               fontSize: 10,
               color: 'rgba(129,236,255,0.5)',
@@ -198,9 +207,9 @@ function ToastCard({
       )}
 
       {/* Error hint */}
-      {isError && (
+      {isError && !!item.fileName && (
         <span
-          className="font-inter"
+          className="font-inter text-left"
           style={{
             fontSize: 10,
             color: 'rgba(239,68,68,0.5)',
