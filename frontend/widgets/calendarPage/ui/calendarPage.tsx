@@ -12,6 +12,15 @@ import {
   type CalendarDayItem,
 } from '@/entities/calendar'
 
+const CATEGORY_FILTERS = [
+  { id: 'all', label: 'All' },
+  { id: 'lecture', label: 'Lecture' },
+  { id: 'assignment', label: 'Assignment' },
+  { id: 'notice', label: 'Notice' },
+  { id: 'receipt', label: 'Receipt' },
+  { id: 'memo', label: 'Memo' },
+] as const
+
 const WEEKDAYS = ['월', '화', '수', '목', '금', '토', '일']
 
 const MONTH_NAMES = [
@@ -95,6 +104,7 @@ export function CalendarPage() {
   const [year, setYear] = useState(today.getFullYear())
   const [month, setMonth] = useState(today.getMonth())
   const [search, setSearch] = useState('')
+  const [activeFilter, setActiveFilter] = useState<'all' | 'lecture' | 'assignment' | 'notice' | 'receipt' | 'memo'>('all')
   const [calendarDates, setCalendarDates] = useState<CalendarDates>({})
   const [selectedDate, setSelectedDate] = useState<string | null>(null)
   const [dayItems, setDayItems] = useState<CalendarDayItem[]>([])
@@ -107,10 +117,14 @@ export function CalendarPage() {
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
-    fetchCalendarMonth({ year, month: month + 1 })
+    fetchCalendarMonth({
+      year,
+      month: month + 1,
+      category: activeFilter === 'all' ? undefined : activeFilter
+    })
       .then(setCalendarDates)
       .catch((err) => console.error('Failed to load calendar:', err))
-  }, [year, month])
+  }, [year, month, activeFilter])
 
   const cells = buildGrid(year, month)
   const rows: (typeof cells)[] = []
@@ -163,12 +177,15 @@ export function CalendarPage() {
     setDayItems([])
     setDayPanelOpen(true)
     try {
-      const items = await fetchCalendarDay({ date: dateStr })
+      const items = await fetchCalendarDay({
+        date: dateStr,
+        category: activeFilter === 'all' ? undefined : activeFilter
+      })
       setDayItems(items)
     } catch (err) {
       console.error('Failed to load day items:', err)
     }
-  }, [])
+  }, [activeFilter])
 
   const handleDayPanelClose = useCallback(() => {
     setDayPanelOpen(false)
@@ -176,15 +193,22 @@ export function CalendarPage() {
     setDayItems([])
   }, [])
 
-  // TODO: [API] uploadDocument(file) 호출 후 반환된 document_id로 /analysis/{id} 이동.
-  //   현재는 토스트만 표시하고 실제 업로드 없이 종료됨.
-  const handleUpload = useCallback((file: File) => {
+  const handleUpload = useCallback(async (file: File) => {
     if (toastTimerRef.current) clearTimeout(toastTimerRef.current)
     setUploadToast({ visible: true, fileName: file.name })
-    toastTimerRef.current = setTimeout(() => {
+ 
+    try {
+      const { uploadDocument } = await import('@/entities/document')
+      const uploadRes = await uploadDocument(file)
+      
       setUploadToast({ visible: false, fileName: '' })
-    }, 3500)
-  }, [])
+      router.push(`/analysis/${uploadRes.document_id}`)
+    } catch (error) {
+      console.error('Upload failed:', error)
+      alert('파일 업로드에 실패했습니다. 다시 시도해 주세요.')
+      setUploadToast({ visible: false, fileName: '' })
+    }
+  }, [router])
 
   return (
     <div
@@ -256,6 +280,40 @@ export function CalendarPage() {
               </button>
             </div>
           </div>
+
+          {/* 카테고리 필터 칩 */}
+          <nav className="flex items-center gap-2" aria-label="Category filters">
+            {CATEGORY_FILTERS.map(({ id, label }) => {
+              const isActive = activeFilter === id;
+              return (
+                <button
+                  key={id}
+                  onClick={() => setActiveFilter(id)}
+                  className="flex items-center px-4 h-[28px] rounded-full font-manrope transition-colors cursor-pointer"
+                  style={
+                    isActive
+                      ? {
+                          background: "#81ecff",
+                          color: "#003840",
+                          fontSize: 12,
+                          fontWeight: 500,
+                          letterSpacing: -0.4,
+                        }
+                      : {
+                          background: "#111417",
+                          border: "1px solid rgba(70,72,75,0.15)",
+                          color: "#aaabaf",
+                          fontSize: 12,
+                          fontWeight: 500,
+                          letterSpacing: -0.4,
+                        }
+                  }
+                >
+                  {label}
+                </button>
+              );
+            })}
+          </nav>
 
           {/* 검색 */}
           <div
