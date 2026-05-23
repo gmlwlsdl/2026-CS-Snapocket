@@ -15,7 +15,7 @@ import {
 import { getSearchStatus, queryDocuments } from '@/entities/search'
 import { CATEGORY_TO_NODE_CATEGORY } from '../knowledgeGraph.utils'
 import dynamic from 'next/dynamic'
-import { SidebarNav, ToastStatus, type ToastItem } from '@/shared/ui'
+import { SidebarNav, useToast } from '@/shared/ui'
 import { UploadModal } from '@/features/upload'
 import { fetchAnalysisStatus } from '@/entities/analysis'
 import { TopHeader } from './topHeader'
@@ -42,14 +42,7 @@ export function KnowledgeGraphPage() {
   const [nodes, setNodes] = useState<GraphNode[]>([])
   const [edges, setEdges] = useState<GraphEdge[]>([])
   const [modalOpen, setModalOpen] = useState(false)
-  const [toastItems, setToastItems] = useState<ToastItem[]>([
-    {
-      id: 'test-error',
-      fileName: 'lecture_note_week12.pdf',
-      status: 'error',
-      analysisId: 'test-error',
-    },
-  ])
+  const { toastItems, showToast, updateToast } = useToast()
   const [summaryData, setSummaryData] = useState<GraphSummaryData>()
 
   const graphRef = useRef<ForceGraphMethods<NodeObject<GraphNode>> | undefined>(
@@ -222,32 +215,18 @@ export function KnowledgeGraphPage() {
         try {
           const { status } = await fetchAnalysisStatus(item.id)
           if (status === 'analyzed') {
-            setToastItems((prev) =>
-              prev.map((i) =>
-                i.id === item.id ? { ...i, status: 'complete' } : i,
-              ),
-            )
+            updateToast(item.id, { status: 'complete' })
           } else if (status === 'failed') {
-            setToastItems((prev) =>
-              prev.map((i) =>
-                i.id === item.id ? { ...i, status: 'error' } : i,
-              ),
-            )
+            updateToast(item.id, { status: 'error' })
           }
         } catch {
-          setToastItems((prev) =>
-            prev.map((i) => (i.id === item.id ? { ...i, status: 'error' } : i)),
-          )
+          updateToast(item.id, { status: 'error' })
         }
       }, 3000),
     )
 
     return () => timers.forEach(clearInterval)
-  }, [toastItems])
-
-  const handleToastCancel = useCallback((item: ToastItem) => {
-    setToastItems((prev) => prev.filter((i) => i.id !== item.id))
-  }, [])
+  }, [toastItems, updateToast])
 
   const handleUpload = useCallback(async (file: File) => {
     const { uploadDocument } = await import('@/entities/document')
@@ -256,28 +235,16 @@ export function KnowledgeGraphPage() {
       const uploadRes = await uploadDocument(file)
       const documentId = uploadRes.document_id
 
-      setToastItems((prev) => [
-        {
-          id: documentId,
-          fileName: file.name,
-          status: 'processing',
-          analysisId: documentId,
-        },
-        ...prev,
-      ])
+      showToast({
+        id: documentId,
+        fileName: file.name,
+        status: 'processing',
+        analysisId: documentId,
+      })
     } catch (error) {
       console.error('Upload failed:', error)
     }
-  }, [])
-
-  const handleToastClick = useCallback(
-    (item: ToastItem) => {
-      if (item.status === 'complete') {
-        router.push(`/analysis/${item.analysisId}?mode=result`)
-      }
-    },
-    [router],
-  )
+  }, [showToast])
 
   const handleSemanticSearch = useCallback(async () => {
     const normalizedKeyword = searchTerm.trim()
@@ -333,11 +300,7 @@ export function KnowledgeGraphPage() {
           onValueChange={setSearchTerm}
           onSubmitSearch={handleSemanticSearch}
         />
-        <ToastStatus
-          items={toastItems}
-          onItemClick={handleToastClick}
-          onCancel={handleToastCancel}
-        />
+
       </main>
 
       <UploadModal
