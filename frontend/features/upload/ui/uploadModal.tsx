@@ -2,6 +2,15 @@
 
 import { useState, useRef, useCallback } from 'react'
 import { t as translate} from '@/shared/lib/i18n'
+import { useToast } from '@/shared/ui'
+
+const ALLOWED_EXTENSIONS = ['pdf', 'jpg', 'jpeg', 'png', 'mp4']
+
+function validateFile(file: File): boolean {
+  const parts = file.name.split('.')
+  const extension = parts.length > 1 ? parts[parts.length - 1].toLowerCase() : ''
+  return ALLOWED_EXTENSIONS.includes(extension)
+}
 
 interface UploadModalProps {
   open: boolean
@@ -13,20 +22,36 @@ export function UploadModal({ open, onClose, onUpload }: UploadModalProps) {
   const [isDragging, setIsDragging] = useState(false)
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const { toast } = useToast()
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault()
     setIsDragging(false)
     const file = e.dataTransfer.files[0]
-    if (file) setSelectedFile(file)
-  }, [])
+    if (file) {
+      if (validateFile(file)) {
+        setSelectedFile(file)
+      } else {
+        toast.error('허용되지 않는 파일 형식입니다. PDF, JPG, JPEG, PNG, MP4 파일만 업로드할 수 있습니다.')
+      }
+    }
+  }, [toast])
 
   const handleFileChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0]
-      if (file) setSelectedFile(file)
+      if (file) {
+        if (validateFile(file)) {
+          setSelectedFile(file)
+        } else {
+          toast.error('허용되지 않는 파일 형식입니다. PDF, JPG, JPEG, PNG, MP4 파일만 업로드할 수 있습니다.')
+          if (fileInputRef.current) {
+            fileInputRef.current.value = ''
+          }
+        }
+      }
     },
-    [],
+    [toast],
   )
 
   // TODO: [API] uploadDocument(file) 호출 후 반환된 document_id를 상위로 전달해야 함.
