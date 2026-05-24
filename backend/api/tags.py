@@ -129,9 +129,9 @@ def changeTags(document_id: str, tags: list[str], jwtToken: dict = Depends(jwtAu
     )
 
 @router.delete("/documents/{document_id}/tags/{tag_id}", response_model=ApiResponse[None])
-def deleteTag(document_id: str, tag: str, jwtToken: dict = Depends(jwtAuth), db: Session = Depends(get_db)):
+def deleteTag(document_id: str, tag_id: str, jwtToken: dict = Depends(jwtAuth), db: Session = Depends(get_db)):
 
-    deletedCount = db.query(DocumentTag).filter(DocumentTag.document_id == document_id, DocumentTag.tag_id == tag).delete()
+    deletedCount = db.query(DocumentTag).filter(DocumentTag.document_id == document_id, DocumentTag.tag_id == tag_id).delete()
     db.commit()
 
     if deletedCount == 0:

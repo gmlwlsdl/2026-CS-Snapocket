@@ -99,7 +99,38 @@ export function TopHeader({ activeFilter, onFilterChange, summaryData }: TopHead
           </span>
         </div>
       </div>
-    </header>
 
+      <style>{`
+        @media (max-width: 768px) {
+          header {
+            left: 0 !important;
+            flex-direction: column !important;
+            height: auto !important;
+            padding: 12px !important;
+            gap: 8px !important;
+            align-items: stretch !important;
+          }
+          header > div:first-child {
+            display: flex !important;
+            justify-content: space-between !important;
+            width: 100% !important;
+          }
+          header nav {
+            overflow-x: auto !important;
+            white-space: nowrap !important;
+            padding-bottom: 4px !important;
+            justify-content: flex-start !important;
+            width: 100% !important;
+            scrollbar-width: none;
+          }
+          header nav::-webkit-scrollbar {
+            display: none;
+          }
+          header > div:last-child {
+            display: none !important; /* 모바일에서 통계 요약은 숨김 처리 */
+          }
+        }
+      `}</style>
+    </header>
   );
 }
