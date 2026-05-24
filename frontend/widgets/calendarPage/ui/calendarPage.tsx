@@ -590,6 +590,51 @@ export function CalendarPage() {
         onClose={() => setModalOpen(false)}
         onUpload={handleUpload}
       />
+
+      <style>{`
+        @media (max-width: 768px) {
+          main {
+            margin-left: 0 !important;
+            padding-left: 12px !important;
+            padding-right: 12px !important;
+          }
+          header {
+            flex-direction: column !important;
+            height: auto !important;
+            padding: 16px 12px !important;
+            gap: 12px !important;
+            align-items: stretch !important;
+          }
+          header > div:first-child {
+            justify-content: space-between !important;
+            width: 100% !important;
+          }
+          header nav {
+            overflow-x: auto !important;
+            white-space: nowrap !important;
+            padding-bottom: 6px !important;
+            justify-content: flex-start !important;
+            width: 100% !important;
+            scrollbar-width: none;
+          }
+          header nav::-webkit-scrollbar {
+            display: none;
+          }
+          header > div:last-child {
+            width: 100% !important;
+          }
+          .grid-cols-7 > div {
+            min-height: 54px !important;
+          }
+          .grid-cols-7 span {
+            padding: 6px 0 0 6px !important;
+            font-size: 11px !important;
+          }
+          aside {
+            display: none !important;
+          }
+        }
+      `}</style>
     </div>
   )
 }

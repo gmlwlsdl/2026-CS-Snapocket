@@ -483,6 +483,25 @@ export function KnowledgeGraphCanvas({
         d3AlphaDecay={0.026}
         d3VelocityDecay={0.42}
       />
+
+      {/* 검색 결과 없음 Zero State UI 오버레이 */}
+      {searchTerm && searchTerm.trim() !== '' && matchedNodeIds && matchedNodeIds.length === 0 && (
+        <div className="absolute z-10 flex flex-col items-center justify-center gap-3 px-6 py-8 rounded-2xl bg-[#171a1d]/90 border border-snap-border/20 backdrop-blur-lg shadow-2xl max-w-sm text-center">
+          <div className="flex items-center justify-center w-12 h-12 rounded-full bg-red-950/20 text-red-400">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="10" />
+              <line x1="12" y1="8" x2="12" y2="12" />
+              <line x1="12" y1="16" x2="12.01" y2="16" />
+            </svg>
+          </div>
+          <span className="font-manrope font-bold text-sm text-snap-white">
+            검색 결과 없음
+          </span>
+          <p className="font-inter text-xs text-snap-muted leading-relaxed">
+            일치하는 문서 노드가 없습니다.<br />다른 검색어를 입력해 보세요.
+          </p>
+        </div>
+      )}
     </div>
   )
 }

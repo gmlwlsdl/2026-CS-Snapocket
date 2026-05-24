@@ -42,23 +42,6 @@ export function LoginForm() {
 
   return (
     <div className="flex flex-col gap-6">
-      {/* TODO: [API] Google OAuth 로그인 — 백엔드 OAuth 엔드포인트(POST /auth/oauth/google 또는 리다이렉트 URL) 연결 필요 */}
-      <button
-        type="button"
-        className="flex items-center justify-center gap-3 w-full h-[54px] rounded-lg bg-snap-social border border-snap-border/20 text-snap-white font-inter text-base font-medium transition-colors hover:bg-[#2a2e33] cursor-pointer"
-      >
-        <img width="20px" height="20px" src="/google.png" alt="Google 로고" />
-        <span>Continue with Google</span>
-      </button>
-
-      <div className="flex items-center gap-3">
-        <div className="flex-1 h-px bg-snap-border/20" />
-        <span className="text-snap-muted/60 font-inter text-[10px] tracking-[1px] whitespace-nowrap">
-          or sign in with email
-        </span>
-        <div className="flex-1 h-px bg-snap-border/20" />
-      </div>
-
       <form onSubmit={handleSubmit} className="flex flex-col gap-4" noValidate>
         <div className="flex flex-col gap-2">
           <label
