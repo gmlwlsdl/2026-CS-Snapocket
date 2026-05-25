@@ -33,6 +33,98 @@ flowchart LR
     Search --> Graph["Graph hierarchy scoring<br/>parent / related candidates"]
 ```
 
+## PaddleOCR-VL Architecture
+
+Snapocket의 OCR은 `PaddleOCRVLDocParserEngine`을 중심으로 동작합니다.
+여기서 중요한 점은 llama.cpp를 직접 OCR 엔진으로만 쓰는 것이 아니라,
+**PaddleOCR-VL 공식 document parser pipeline을 주 파이프라인으로 두고 llama.cpp server를 VLM recognition backend로 붙인 것**입니다.
+
+```mermaid
+flowchart LR
+    File["Image or rendered PDF page"] --> Pipeline["InferencePipeline"]
+    Pipeline --> RawCheck{"Paddle engine expects<br/>raw document image?"}
+    RawCheck -->|yes| Paddle["PaddleOCRVLDocParserEngine"]
+    RawCheck -->|no| Preprocess["ImageProcessor"]
+    Preprocess --> Paddle
+    Paddle --> Parser["PaddleOCRVL<br/>layout + order + block parsing"]
+    Parser --> VLM["llama.cpp server<br/>VLM recognition backend"]
+    Parser --> Blocks["OCREngineResult blocks"]
+    Blocks --> Domain["Domain payload"]
+```
+
+구현 흐름은 다음과 같습니다.
+
+1. `state.py`에서 기본 OCR 엔진으로 `PaddleOCRVLDocParserEngine`을 조립합니다.
+2. `router.py`는 현재 로컬 OCR 경로를 `paddle` 단일 엔진으로 제한합니다.
+3. `paddle_doc_parser_engine.py`는 시작 시 바로 무거운 pipeline을 만들지 않고, 실제 OCR 호출 시 `_ensure_pipeline()`에서 lazy-load합니다.
+4. availability probe는 `paddleocr` 패키지 import와 llama.cpp `/v1/models` 응답을 함께 확인합니다.
+5. `PaddleOCRVL(..., vl_rec_backend="llama-cpp-server", vl_rec_server_url=...)` 형태로 공식 parser pipeline을 생성합니다.
+6. PaddleOCR-VL 결과의 `parsing_res_list`, `blocks`, `layout`, `markdown` 후보를 공통 `OCREngineResult`로 변환합니다.
+7. 첫 block에는 전체 `raw_text`를 담은 `structured_payload`를 붙여 후속 domain 변환에서 활용합니다.
+
+이렇게 구현한 이유는 세 가지입니다.
+
+- **레이아웃 보존**: 문서 OCR은 단순 텍스트 추출보다 표, 제목, footer, reading order가 중요합니다. 그래서 layout detection과 document assembly는 PaddleOCR-VL 공식 parser에 맡깁니다.
+- **런타임 분리**: VLM recognition은 llama.cpp server로 분리해 모델 서버 상태를 별도로 probe하고 교체할 수 있게 했습니다.
+- **안정적인 실패 처리**: OCR 엔진은 `ThreadPoolExecutor(max_workers=1)`로 감싸 한 번에 하나의 heavy inference만 실행하고, 중복 요청은 busy error로 명확히 돌려줍니다.
+
+PDF의 경우에는 먼저 내장 텍스트와 표를 추출합니다.
+디지털 PDF처럼 텍스트가 이미 있는 문서는 OCR을 건너뛰고, 비어 있는 페이지만 이미지로 렌더링해 PaddleOCR-VL 경로로 보냅니다.
+이 방식은 OCR 비용을 줄이면서도 스캔 문서 처리는 유지하기 위한 선택입니다.
+
+## Vector Embedding Flow
+
+Vector embedding은 `SemanticSearchService`가 담당합니다.
+서비스 시작 시 embedding model과 Qdrant client를 초기화하고, 실제 모델 출력 차원을 probe한 뒤 현재 collection의 vector size와 맞는지 확인합니다.
+기본 모델은 `dragonkue/BGE-m3-ko`, 기본 collection은 `documents_v2`입니다.
+
+### Indexing request
+
+백엔드나 외부 시스템이 `/v1/search/upsert` 또는 `/v1/search/sync`로 새 문서 목록을 보내면 아래 순서로 처리됩니다.
+
+```mermaid
+flowchart LR
+    Request["New documents<br/>document_id, user_id, raw_text"] --> Normalize["Normalize text<br/>trim, metadata strip, max chars"]
+    Normalize --> Chunk["Chunk by embedding tokenizer<br/>360 tokens + 48 overlap"]
+    Chunk --> DeleteOld["Delete old chunks<br/>same document_id + user_id"]
+    DeleteOld --> Embed["SentenceTransformer.encode<br/>normalized vectors"]
+    Embed --> Points["Qdrant points<br/>stable UUID + payload"]
+    Points --> Upsert["Qdrant upsert<br/>wait=true"]
+```
+
+핵심은 새 요청이 들어올 때 기존 chunk를 덮어쓰는 방식입니다.
+같은 `document_id`의 이전 point가 남아 있으면 검색 결과가 stale data를 섞을 수 있기 때문에,
+먼저 payload 기준으로 기존 chunk를 삭제하고 새 chunk들을 다시 upsert합니다.
+
+chunking은 문장부호나 특정 언어 규칙에 의존하지 않습니다.
+가능하면 embedding model tokenizer의 offset mapping으로 360 token 단위 chunk를 만들고,
+토크나이저 offset을 사용할 수 없을 때만 fixed character window로 fallback합니다.
+이렇게 한 이유는 한국어, 영어, 혼합 문서가 들어와도 같은 embedding model의 기준으로 검색 단위를 만들기 위해서입니다.
+
+Qdrant point에는 vector뿐 아니라 아래 payload를 함께 저장합니다.
+
+- `user_id`: 사용자별 검색 격리
+- `document_id`: 문서 단위 집계와 삭제
+- `chunk_id`, `chunk_index`: chunk 추적
+- `offset_start`, `offset_end`: 원문 위치 추적
+- `content_hash`: 같은 본문 여부 확인
+- `chunk_text`: 검색 결과 snippet과 graph evidence
+
+### Search request
+
+검색 요청은 `/v1/search/semantic`에서 시작합니다.
+
+1. query를 같은 SentenceTransformer로 embedding합니다.
+2. Qdrant에서 `user_id` filter를 걸어 cosine similarity 검색을 수행합니다.
+3. 요청 limit보다 넓은 후보군을 가져온 뒤, dense score와 reciprocal-rank 신호를 섞어 chunk 점수를 계산합니다.
+4. chunk 결과를 `document_id` 기준으로 다시 묶고, 문서별 가장 강한 evidence chunk를 대표 결과로 반환합니다.
+5. 응답에는 score뿐 아니라 `chunk_id`, `offset`, `snippet`, `retrieval_pipeline`이 포함되어 왜 검색됐는지 추적할 수 있습니다.
+
+Graph API는 이 embedding 계층을 다시 사용합니다.
+`/v1/graph/link`는 먼저 semantic search로 후보 문서를 좁히고,
+source/candidate 문서의 chunk와 context를 다시 embedding해 parent 후보와 related 후보를 점수화합니다.
+그래서 그래프 edge는 파일명이나 태그가 아니라 **raw text chunk evidence**를 기준으로 생성됩니다.
+
 ## Core Code
 
 | File | Role |
