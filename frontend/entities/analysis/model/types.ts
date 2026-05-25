@@ -25,6 +25,7 @@ export interface ConfirmPayload {
   title: string
   category: string
   capture_date: string
+  deadline?: string | null
   summary: string
   tags: string[]
   deadline?: string | null

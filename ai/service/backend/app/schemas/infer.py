@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from enum import Enum
+from typing import Any
 from pydantic import BaseModel, Field
 
 
@@ -37,6 +38,7 @@ class OCRBlock(BaseModel):
     col_idx: int | None = None
     rowspan: int | None = None
     colspan: int | None = None
+    structured_payload: dict[str, Any] | None = None
 
 
 class DomainPayload(BaseModel):
@@ -46,6 +48,9 @@ class DomainPayload(BaseModel):
     summary: str
     raw_text: str
     tag: list[str] = Field(default_factory=list)
+    key_concepts: list[str] = Field(default_factory=list)
+    capture_date: str | None = None
+    deadline: str | None = None
 
 
 class InferPage(BaseModel):

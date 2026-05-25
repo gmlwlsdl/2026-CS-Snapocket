@@ -97,7 +97,7 @@ help:
 .PHONY: env
 env:
 ifeq ($(OS),Windows_NT)
-	@powershell -NoProfile -ExecutionPolicy Bypass -Command "if ([string]::IsNullOrWhiteSpace('$(ROOT_ENV)')) { Write-Host 'ROOT_ENV not set; skip env creation'; exit 0 }; if (Test-Path '$(ROOT_ENV)') { Write-Host '$(ROOT_ENV) already exists'; exit 0 }; $$lines = @('# Root-level env (AI defaults)','AI_AIOPS_PORT=18080','AI_AIOPS_LOCAL_PORT=18081','AI_LLAMA_PORT=18114','AI_LLAMA_LOCAL_PORT=18115','AI_APP_ENV=container','AI_AIOPS_SHARED_NETWORK=snapocket-shared-net','AI_AIOPS_INTERNAL_NETWORK=aiops-net','AI_LLAMA_MODEL_FILE=PaddleOCR-VL-1.5-BF16.gguf','AI_LLAMA_MMPROJ_FILE=mmproj-BF16.gguf','AI_LLAMA_CTX_SIZE=2048','AI_LLAMA_THREADS=8','AI_LLAMA_THREADS_BATCH=8','AI_LLAMA_BATCH_SIZE=1024','AI_LLAMA_UBATCH_SIZE=256','AI_LLAMA_FLASH_ATTN=on','AI_LLAMA_CPUS=6.0','AI_LLAMA_GPU_LAYERS=0','AI_LLAMA_GPU_LAYERS_GPU=99','AI_LLAMACPP_BASE_URL=http://llama-server:8080','AI_LLAMACPP_MODEL_PADDLE=PaddleOCR-VL-1.5-BF16.gguf','AI_LLAMACPP_MODEL_GLM=PaddleOCR-VL-1.5-BF16.gguf','AI_LLAMACPP_REQUEST_TIMEOUT_S=300','AI_LLAMACPP_IMAGE_MAX_SIDE_PX=1024','AI_LLAMACPP_MAX_TOKENS=96','AI_PLAYGROUND_TIMEOUT_S=120'); Set-Content -Path '$(ROOT_ENV)' -Value $$lines -Encoding UTF8; Write-Host '$(ROOT_ENV) created with AI defaults'"
+	@powershell -NoProfile -ExecutionPolicy Bypass -Command "if ([string]::IsNullOrWhiteSpace('$(ROOT_ENV)')) { Write-Host 'ROOT_ENV not set; skip env creation'; exit 0 }; if (Test-Path '$(ROOT_ENV)') { Write-Host '$(ROOT_ENV) already exists'; exit 0 }; $$lines = @('# Root-level env (AI defaults)','AI_AIOPS_PORT=18080','AI_AIOPS_LOCAL_PORT=18081','AI_LLAMA_PORT=18114','AI_LLAMA_LOCAL_PORT=18115','AI_APP_ENV=container','AI_AIOPS_SHARED_NETWORK=snapocket-shared-net','AI_AIOPS_INTERNAL_NETWORK=aiops-net','PADDLE_RUNTIME=doc-parser','PADDLE_DOC_PARSER_PIPELINE_VERSION=v1.5','AI_LLAMA_MODEL_FILE=PaddleOCR-VL-1.5-BF16.gguf','AI_LLAMA_MMPROJ_FILE=mmproj-BF16.gguf','AI_LLAMA_CTX_SIZE=2048','AI_LLAMA_THREADS=8','AI_LLAMA_THREADS_BATCH=8','AI_LLAMA_BATCH_SIZE=1024','AI_LLAMA_UBATCH_SIZE=256','AI_LLAMA_FLASH_ATTN=on','AI_LLAMA_CPUS=6.0','AI_LLAMA_GPU_LAYERS=0','AI_LLAMA_GPU_LAYERS_GPU=99','AI_LLAMACPP_BASE_URL=http://llama-server:8080','AI_LLAMACPP_MODEL_PADDLE=PaddleOCR-VL-1.5-BF16.gguf','AI_LLAMACPP_MODEL_GLM=PaddleOCR-VL-1.5-BF16.gguf','AI_LLAMACPP_REQUEST_TIMEOUT_S=300','AI_LLAMACPP_IMAGE_MAX_SIDE_PX=1024','AI_LLAMACPP_MAX_TOKENS=96','AI_PLAYGROUND_TIMEOUT_S=120'); Set-Content -Path '$(ROOT_ENV)' -Value $$lines -Encoding UTF8; Write-Host '$(ROOT_ENV) created with AI defaults'"
 else
 	@if [ -z "$(ROOT_ENV)" ]; then \
 		echo "ROOT_ENV not set; skip env creation"; \
@@ -113,6 +113,8 @@ else
 			'AI_APP_ENV=container' \
 			'AI_AIOPS_SHARED_NETWORK=snapocket-shared-net' \
 			'AI_AIOPS_INTERNAL_NETWORK=aiops-net' \
+			'PADDLE_RUNTIME=doc-parser' \
+			'PADDLE_DOC_PARSER_PIPELINE_VERSION=v1.5' \
 			'AI_LLAMA_MODEL_FILE=PaddleOCR-VL-1.5-BF16.gguf' \
 			'AI_LLAMA_MMPROJ_FILE=mmproj-BF16.gguf' \
 			'AI_LLAMA_CTX_SIZE=2048' \

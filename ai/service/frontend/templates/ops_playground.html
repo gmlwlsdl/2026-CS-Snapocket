@@ -774,6 +774,9 @@
             <tr><td style="color:var(--muted)">Content Type</td><td id="rs-ctype">—</td></tr>
             <tr><td style="color:var(--muted)">Category</td><td id="rs-category">—</td></tr>
             <tr><td style="color:var(--muted)">Title</td><td id="rs-title">—</td></tr>
+            <tr><td style="color:var(--muted)">Capture Date</td><td id="rs-capture-date">—</td></tr>
+            <tr><td style="color:var(--muted)">Deadline</td><td id="rs-deadline">—</td></tr>
+            <tr><td style="color:var(--muted)">Key Concepts</td><td id="rs-key-concepts">—</td></tr>
             <tr><td style="color:var(--muted)">VLM→OCR Verify</td><td id="rs-verify">—</td></tr>
           </tbody>
         </table>
@@ -1414,6 +1417,11 @@
 
   function renderResults(d) {
     /* Overview stats */
+    var domain = (d && d.domain) ? d.domain : {};
+    var tags = normalizeList(domain.tag || domain.tags || d.tags || d.tag);
+    var keyConcepts = normalizeList(domain.key_concepts || d.key_concepts);
+    var captureDate = d.capture_date || domain.capture_date || '';
+    var deadline = d.deadline || domain.deadline || '';
     var modelUsed = d.model_used || modelMap[d.engine_used] || '';
     document.getElementById('rs-engine').textContent     = d.engine_used ? (d.engine_used + (modelUsed ? ' (' + modelUsed + ')' : '')) : '—';
     document.getElementById('rs-confidence').textContent = d.confidence != null ? (d.confidence * 100).toFixed(1) + '%' : '—';
@@ -1422,8 +1430,11 @@
     document.getElementById('rs-docid').textContent      = d.doc_id || '—';
     document.getElementById('rs-filename').textContent   = d.filename || '—';
     document.getElementById('rs-ctype').textContent      = d.content_type || '—';
-    document.getElementById('rs-category').textContent   = (d.domain && d.domain.category) || '—';
-    document.getElementById('rs-title').textContent      = (d.domain && d.domain.title) || '—';
+    document.getElementById('rs-category').textContent   = domain.category || '—';
+    document.getElementById('rs-title').textContent      = domain.title || '—';
+    document.getElementById('rs-capture-date').textContent = captureDate || '—';
+    document.getElementById('rs-deadline').textContent = deadline || '—';
+    document.getElementById('rs-key-concepts').textContent = keyConcepts.length ? keyConcepts.join(', ') : '—';
     document.getElementById('rs-verify').textContent     = d.vlm_ocr_verify ? 'enabled' : 'disabled';
 
     /* Text */
@@ -1438,15 +1449,27 @@
     /* Domain */
     var domainEl = document.getElementById('rs-domain-content');
     if (d.domain) {
-      var tags = d.domain.tag || [];
+      var backendPayload = {
+        doc_id: d.doc_id || domain.req_id || '',
+        title: domain.title || '',
+        category: domain.category || 'unknown',
+        capture_date: captureDate || null,
+        summary: domain.summary || '',
+        tags: tags,
+        raw_text: d.raw_text || domain.raw_text || d.corrected_text || '',
+        key_concepts: keyConcepts,
+        deadline: deadline || null
+      };
       var html = '';
       html += '<table style="margin-bottom:12px"><tbody>';
-      html += '<tr><td style="color:var(--muted);width:130px">req_id</td><td style="font-family:monospace">' + esc(d.domain.req_id || '—') + '</td></tr>';
-      html += '<tr><td style="color:var(--muted)">title</td><td>' + esc(d.domain.title || '—') + '</td></tr>';
-      html += '<tr><td style="color:var(--muted)">category</td><td>' + esc(d.domain.category || '—') + '</td></tr>';
+      html += '<tr><td style="color:var(--muted);width:130px">req_id</td><td style="font-family:monospace">' + esc(domain.req_id || '—') + '</td></tr>';
+      html += '<tr><td style="color:var(--muted)">title</td><td>' + esc(domain.title || '—') + '</td></tr>';
+      html += '<tr><td style="color:var(--muted)">category</td><td>' + esc(domain.category || '—') + '</td></tr>';
+      html += '<tr><td style="color:var(--muted)">capture_date</td><td>' + esc(captureDate || '—') + '</td></tr>';
+      html += '<tr><td style="color:var(--muted)">deadline</td><td>' + esc(deadline || '—') + '</td></tr>';
       html += '</tbody></table>';
-      if (d.domain.summary) {
-        html += '<div class="result-text-box" style="margin-bottom:14px;font-size:13px;font-family:inherit">' + esc(d.domain.summary) + '</div>';
+      if (domain.summary) {
+        html += '<div class="result-text-box" style="margin-bottom:14px;font-size:13px;font-family:inherit">' + esc(domain.summary) + '</div>';
       }
       if (tags.length > 0) {
         html += '<div class="entity-group" style="margin-bottom:12px">';
@@ -1454,8 +1477,18 @@
         tags.forEach(function(v) { html += '<span class="entity-tag">' + esc(v) + '</span>'; });
         html += '</div>';
       }
-      if (d.domain.raw_text) {
-        html += '<div class="result-text-box" style="max-height:220px">' + esc(d.domain.raw_text) + '</div>';
+      if (keyConcepts.length > 0) {
+        html += '<div class="entity-group" style="margin-bottom:12px">';
+        html += '<div class="entity-group-title">key_concepts</div>';
+        keyConcepts.forEach(function(v) { html += '<span class="entity-tag">' + esc(v) + '</span>'; });
+        html += '</div>';
+      }
+      html += '<div class="entity-group" style="margin-bottom:12px">';
+      html += '<div class="entity-group-title">backend document payload</div>';
+      html += '<pre class="json-viewer" style="max-height:260px;margin:0">' + syntaxHighlight(JSON.stringify(backendPayload, null, 2)) + '</pre>';
+      html += '</div>';
+      if (domain.raw_text) {
+        html += '<div class="result-text-box" style="max-height:220px">' + esc(domain.raw_text) + '</div>';
       }
       domainEl.innerHTML = html;
     } else {
@@ -1492,6 +1525,16 @@
       .replace(/</g,'&lt;')
       .replace(/>/g,'&gt;')
       .replace(/"/g,'&quot;');
+  }
+
+  function normalizeList(value) {
+    if (Array.isArray(value)) {
+      return value.map(function(item) { return String(item || '').trim(); }).filter(Boolean);
+    }
+    if (typeof value === 'string') {
+      return value.split(',').map(function(item) { return item.trim(); }).filter(Boolean);
+    }
+    return [];
   }
 
   /* ── Tabs ── */

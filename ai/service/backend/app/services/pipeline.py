@@ -23,7 +23,7 @@ from pypdf import PdfReader
 
 from app.schemas.infer import InferPage, InferResult, OCRBlock
 from app.services.cache import ResultCache
-from app.services.domain_transformer import build_domain_payload
+from app.services.domain_transformer import build_domain_payload, build_domain_payload_from_structured
 from app.services.file_types import (
     is_audio_content_type,
     is_image_content_type,
@@ -91,6 +91,14 @@ class InferencePipeline:
         if not normalized:
             return ["unknown"]
         return list(dict.fromkeys(normalized))
+
+    @staticmethod
+    def _first_structured_payload(blocks: list[OCRBlock]) -> dict | None:
+        for block in blocks:
+            payload = getattr(block, "structured_payload", None)
+            if isinstance(payload, dict):
+                return payload
+        return None
 
     @classmethod
     def _normalize_text(cls, text: str) -> str:
@@ -307,6 +315,15 @@ class InferencePipeline:
             return engine_hint
         return "unknown"
 
+    def _selected_engine_expects_raw_document_image(self, engine_hint: str | None) -> bool:
+        engine = getattr(self.router, "paddle_engine", None)
+        if engine is None:
+            return False
+        hint = str(engine_hint or "auto").strip().lower()
+        if hint not in {"", "auto", "paddle"}:
+            return False
+        return bool(getattr(engine, "expects_raw_document_image", False))
+
     @staticmethod
     def _source_loc(page_no: int, bbox: list[float] | None) -> str:
         if bbox and len(bbox) >= 4:
@@ -457,9 +474,11 @@ class InferencePipeline:
         if engine is not None:
             engine_config = (
                 f"|engine={getattr(engine, 'name', 'unknown')}"
+                f"|runtime={getattr(engine, 'availability_detail', lambda: {})().get('backend', '')}"
                 f"|model={getattr(engine, 'model', '')}"
                 f"|max_side={getattr(engine, 'max_side_px', '')}"
                 f"|max_tokens={getattr(engine, 'max_tokens', '')}"
+                f"|parser_version={getattr(engine, 'availability_detail', lambda: {})().get('prompt_version', '')}"
             )
         scope = (
             f"{content_type}|{engine_hint or 'auto'}|"
@@ -649,7 +668,10 @@ class InferencePipeline:
             missing_regions = list(page_stats.get("missing_regions", []) or [])
         elif is_image_content_type(content_type):
             pre_started = time.perf_counter()
-            processed = self.preprocessor.preprocess(file_bytes)
+            if self._selected_engine_expects_raw_document_image(engine_hint):
+                processed = file_bytes
+            else:
+                processed = self.preprocessor.preprocess(file_bytes)
             preprocessing_ms = int((time.perf_counter() - pre_started) * 1000)
             blocks, ocr_ms, ocr_verify_ms = await self._infer_image_with_routing(
                 image_bytes=processed,
@@ -690,12 +712,25 @@ class InferencePipeline:
 
         transform_started = time.perf_counter()
         normalized_raw_text = corrected_text or raw_text
-        domain = build_domain_payload(
-            req_id=doc_id,
-            text=normalized_raw_text,
-            title_hint=filename,
-            categories=self._load_categories(),
-        )
+        categories = self._load_categories()
+        structured_payload = self._first_structured_payload(blocks)
+        if structured_payload:
+            domain = build_domain_payload_from_structured(
+                req_id=doc_id,
+                payload=structured_payload,
+                fallback_text=normalized_raw_text,
+                title_hint=filename,
+                categories=categories,
+            )
+            normalized_raw_text = domain.raw_text or normalized_raw_text
+            corrected_text = normalized_raw_text
+        else:
+            domain = build_domain_payload(
+                req_id=doc_id,
+                text=normalized_raw_text,
+                title_hint=filename,
+                categories=categories,
+            )
         transform_ms = int((time.perf_counter() - transform_started) * 1000)
         latency_ms = int((time.perf_counter() - started) * 1000)
         pages = self._page_summaries(blocks, page_count=page_count)
@@ -821,7 +856,10 @@ class InferencePipeline:
         async def _process_one(page_no: int, img_bytes: bytes) -> tuple[list[OCRBlock], int, int, int]:
             async with self._semaphore:
                 pre_started = time.perf_counter()
-                processed = self.preprocessor.preprocess(img_bytes)
+                if self._selected_engine_expects_raw_document_image(engine_hint):
+                    processed = img_bytes
+                else:
+                    processed = self.preprocessor.preprocess(img_bytes)
                 pre_ms = int((time.perf_counter() - pre_started) * 1000)
                 blocks, page_ocr_ms, page_verify_ms = await self._infer_image_with_routing(
                     image_bytes=processed,
@@ -1069,6 +1107,7 @@ class InferencePipeline:
                                 col_idx=getattr(item, "col_idx", None) or col_idx,
                                 rowspan=getattr(item, "rowspan", None) or 1,
                                 colspan=getattr(item, "colspan", None) or 1,
+                                structured_payload=getattr(item, "structured_payload", None),
                             )
                         )
                 continue
@@ -1091,6 +1130,7 @@ class InferencePipeline:
                     col_idx=getattr(item, "col_idx", None),
                     rowspan=getattr(item, "rowspan", None),
                     colspan=getattr(item, "colspan", None),
+                    structured_payload=getattr(item, "structured_payload", None),
                 )
             )
         ocr_ms = int((time.perf_counter() - ocr_started) * 1000)
