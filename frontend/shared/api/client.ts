@@ -27,10 +27,18 @@ export function getAccessToken(): string | null {
 
 export function saveAccessToken(token: string): void {
   localStorage.setItem("access_token", token);
+  if (typeof window !== "undefined") {
+    // 7일간 유지되는 access_token 쿠키 생성
+    document.cookie = `access_token=${token}; path=/; max-age=${60 * 60 * 24 * 7}; SameSite=Lax; Secure`;
+  }
 }
 
 export function clearAccessToken(): void {
   localStorage.removeItem("access_token");
+  if (typeof window !== "undefined") {
+    // access_token 쿠키 즉시 소멸
+    document.cookie = "access_token=; path=/; max-age=0; SameSite=Lax; Secure";
+  }
 }
 
 function redirectToLogin(): never {

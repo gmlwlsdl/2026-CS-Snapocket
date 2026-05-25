@@ -18,6 +18,8 @@ import {
 import { t as translate } from '@/shared/lib/i18n'
 import type { DocumentStatus } from '@/entities/document'
 import { ApiError } from '@/shared/api'
+import { useToast } from '@/shared/ui'
+import { replaceDocumentTags } from '@/entities/tag'
 
 // ── 로컬 타입 ────────────────────────────────────────────────────────────────
 
@@ -31,7 +33,7 @@ type PageStatus =
   | 'discarding'
 
 interface TagItem {
-  id: number
+  id: number | string
   label: string // '#CS-204' 형태
   color: string
 }
@@ -80,6 +82,7 @@ export function AnalysisDetailPage() {
   const { id } = useParams<{ id: string }>()
   const router = useRouter()
   const searchParams = useSearchParams()
+  const { toast } = useToast()
   const mode = searchParams.get('mode') // 'result' or null
 
   const [pageStatus, setPageStatus] = useState<PageStatus>('loading')
@@ -259,6 +262,7 @@ export function AnalysisDetailPage() {
         deadline: form.deadline ? displayToIso(form.deadline) : null,
         summary: form.summary,
         tags: form.tags.map((t) => rawTagName(t.label)),
+        deadline: displayToIso(form.deadline) || null,
       })
       router.push('/')
     } catch (e) {
@@ -276,7 +280,7 @@ export function AnalysisDetailPage() {
       await retryAnalysis(id)
       startPolling()
     } catch (e) {
-      setErrorMsg(e instanceof ApiError ? e.message : '재분석 요청 실패')
+      toast.error(e, '재분석 요청에 실패했습니다.')
     }
   }
 
@@ -293,24 +297,63 @@ export function AnalysisDetailPage() {
     }
   }
 
-  // TODO: [API] 태그 추가 — addDocumentTags(id, { tags: [rawTagName(label)] }) 호출 후 반환된 uuid를 tag.id로 사용.
-  //   현재는 Date.now()를 임시 id로 쓰고 있어 deleteDocumentTag 호출 시 실제 tag uuid를 알 수 없음.
-  function handleAddTag() {
+  async function handleAddTag() {
     const trimmed = newTag.trim()
     if (!trimmed) return
-    const label = trimmed.startsWith('#') ? trimmed : `#${trimmed}`
-    setForm((f) => ({
-      ...f,
-      tags: [...f.tags, { id: Date.now(), label, color: tagColor(label) }],
-    }))
-    setNewTag('')
-    setAddingTag(false)
+    const rawName = rawTagName(trimmed)
+    const label = rawName.startsWith('#') ? rawName : `#${rawName}`
+
+    if (form.tags.some((t) => rawTagName(t.label) === rawName)) {
+      setNewTag('')
+      setAddingTag(false)
+      return
+    }
+
+    const updatedTagLabels = [...form.tags.map((t) => rawTagName(t.label)), rawName]
+
+    try {
+      const savedTags = await replaceDocumentTags(id, { tags: updatedTagLabels })
+      setForm((f) => ({
+        ...f,
+        tags: savedTags.map((t) => ({
+          id: t.id,
+          label: t.name.startsWith('#') ? t.name : `#${t.name}`,
+          color: tagColor(t.name),
+        })),
+      }))
+      toast.success('태그가 추가되었습니다.')
+    } catch (err) {
+      console.error('Failed to add tag:', err)
+      toast.error(err, '태그 추가에 실패했습니다.')
+    } finally {
+      setNewTag('')
+      setAddingTag(false)
+    }
   }
 
-  // TODO: [API] 태그 삭제 — deleteDocumentTag(id, String(tagId)) 호출.
-  //   tag.id가 실제 uuid여야 하므로 위 handleAddTag API 연결 선행 필요.
-  function handleRemoveTag(tagId: number) {
-    setForm((f) => ({ ...f, tags: f.tags.filter((t) => t.id !== tagId) }))
+  async function handleRemoveTag(tagId: number | string) {
+    const tagToRemove = form.tags.find((t) => t.id === tagId)
+    if (!tagToRemove) return
+
+    const remainingTagLabels = form.tags
+      .filter((t) => t.id !== tagId)
+      .map((t) => rawTagName(t.label))
+
+    try {
+      const savedTags = await replaceDocumentTags(id, { tags: remainingTagLabels })
+      setForm((f) => ({
+        ...f,
+        tags: savedTags.map((t) => ({
+          id: t.id,
+          label: t.name.startsWith('#') ? t.name : `#${t.name}`,
+          color: tagColor(t.name),
+        })),
+      }))
+      toast.success('태그가 삭제되었습니다.')
+    } catch (err) {
+      console.error('Failed to delete tag:', err)
+      toast.error(err, '태그 삭제에 실패했습니다.')
+    }
   }
 
   // ── 상태별 overlay 렌더링 ──────────────────────────────────────────────────

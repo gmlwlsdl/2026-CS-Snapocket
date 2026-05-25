@@ -132,42 +132,11 @@ function uniqueByNodePair(edges: GraphEdge[]) {
   })
 }
 
-function getGraphStats(nodes: GraphNode[], links: GraphLink[]) {
-  const degreeById = new Map(nodes.map((node) => [node.id, 0]))
-  const weightedDegreeById = new Map(nodes.map((node) => [node.id, 0]))
-  const childCountById = new Map(nodes.map((node) => [node.id, 0]))
 
-  links.forEach((link) => {
-    const weight = clamp01(Number(link.weight ?? 0))
-    degreeById.set(link.source, (degreeById.get(link.source) ?? 0) + 1)
-    degreeById.set(link.target, (degreeById.get(link.target) ?? 0) + 1)
-    weightedDegreeById.set(link.source, (weightedDegreeById.get(link.source) ?? 0) + weight)
-    weightedDegreeById.set(link.target, (weightedDegreeById.get(link.target) ?? 0) + weight)
-    if (link.type === 'parent_of') {
-      childCountById.set(link.source, (childCountById.get(link.source) ?? 0) + 1)
-    }
-  })
-
-  return { childCountById, degreeById, weightedDegreeById }
-}
-
-function getSemanticNodeSize(
-  node: GraphNode,
-  childCountById: Map<string, number>,
-  degreeById: Map<string, number>,
-  weightedDegreeById: Map<string, number>,
-): NodeSize {
-  const childCount = childCountById.get(node.id) ?? 0
-  const degree = degreeById.get(node.id) ?? 0
-  const weightedDegree = weightedDegreeById.get(node.id) ?? 0
-  const persistedConnections = Number(node.connectionCount ?? 0)
-
-  if (childCount >= 4 || weightedDegree >= 3.2 || persistedConnections >= 18) {
-    return 'root'
-  }
-  if (childCount >= 1 || degree >= 3 || weightedDegree >= 1.6 || persistedConnections >= 8) {
-    return 'primary'
-  }
+function getSemanticNodeSize(node: GraphNode): NodeSize {
+  const count = Number(node.connectionCount ?? 0)
+  if (count >= 18) return 'root'
+  if (count >= 3) return 'primary'
   return 'secondary'
 }
 
@@ -200,7 +169,6 @@ function selectVisibleLinks(nodes: GraphNode[], edges: GraphEdge[]) {
 
 function computeHierarchyLayout(nodes: GraphNode[], links: GraphLink[]) {
   const nodesById = new Map(nodes.map((node) => [node.id, node]))
-  const { childCountById, degreeById, weightedDegreeById } = getGraphStats(nodes, links)
   const childrenByParent = new Map<string, string[]>()
   const incomingParentCount = new Map<string, number>()
   const parentLinks = links.filter((link) => link.type === 'parent_of')
@@ -261,7 +229,7 @@ function computeHierarchyLayout(nodes: GraphNode[], links: GraphLink[]) {
       ...root,
       x: cx,
       y: cy,
-      size: getSemanticNodeSize(root, childCountById, degreeById, weightedDegreeById),
+      size: getSemanticNodeSize(root),
       depth: 0,
       clusterId: root.id,
     })
@@ -278,7 +246,7 @@ function computeHierarchyLayout(nodes: GraphNode[], links: GraphLink[]) {
         ...node,
         x,
         y,
-        size: getSemanticNodeSize(node, childCountById, degreeById, weightedDegreeById),
+        size: getSemanticNodeSize(node),
         depth: 1,
         clusterId: root.id,
       })
@@ -297,7 +265,7 @@ function computeHierarchyLayout(nodes: GraphNode[], links: GraphLink[]) {
           ...grandchildNode,
           x: gx,
           y: gy,
-          size: getSemanticNodeSize(grandchildNode, childCountById, degreeById, weightedDegreeById),
+          size: getSemanticNodeSize(grandchildNode),
           depth: grandchild.depth,
           clusterId: root.id,
         })
@@ -323,7 +291,7 @@ function computeHierarchyLayout(nodes: GraphNode[], links: GraphLink[]) {
         ...node,
         x,
         y,
-        size: getSemanticNodeSize(node, childCountById, degreeById, weightedDegreeById),
+        size: getSemanticNodeSize(node),
         depth: 3,
         clusterId: groupId,
       })
@@ -515,6 +483,25 @@ export function KnowledgeGraphCanvas({
         d3AlphaDecay={0.026}
         d3VelocityDecay={0.42}
       />
+
+      {/* 검색 결과 없음 Zero State UI 오버레이 */}
+      {searchTerm && searchTerm.trim() !== '' && matchedNodeIds && matchedNodeIds.length === 0 && (
+        <div className="absolute z-10 flex flex-col items-center justify-center gap-3 px-6 py-8 rounded-2xl bg-[#171a1d]/90 border border-snap-border/20 backdrop-blur-lg shadow-2xl max-w-sm text-center">
+          <div className="flex items-center justify-center w-12 h-12 rounded-full bg-red-950/20 text-red-400">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="10" />
+              <line x1="12" y1="8" x2="12" y2="12" />
+              <line x1="12" y1="16" x2="12.01" y2="16" />
+            </svg>
+          </div>
+          <span className="font-manrope font-bold text-sm text-snap-white">
+            검색 결과 없음
+          </span>
+          <p className="font-inter text-xs text-snap-muted leading-relaxed">
+            일치하는 문서 노드가 없습니다.<br />다른 검색어를 입력해 보세요.
+          </p>
+        </div>
+      )}
     </div>
   )
 }

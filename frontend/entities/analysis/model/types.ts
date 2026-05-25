@@ -28,6 +28,7 @@ export interface ConfirmPayload {
   deadline?: string | null
   summary: string
   tags: string[]
+  deadline?: string | null
 }
 
 /** POST /analysis/{id}/start → data */
