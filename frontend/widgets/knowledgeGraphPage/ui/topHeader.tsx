@@ -3,6 +3,7 @@
 import type { CategoryFilter } from "../knowledgeGraph.type";
 import type { GraphSummaryData } from "@/entities/graph";
 import { CATEGORY_FILTERS } from "../knowledgeGraph.constant";
+import { ThemeToggle } from "@/shared/ui";
 
 interface TopHeaderProps {
   activeFilter: CategoryFilter;
@@ -16,7 +17,11 @@ export function TopHeader({ activeFilter, onFilterChange, summaryData }: TopHead
   return (
     <header
       className="fixed left-[81px] right-0 top-0 z-10 flex h-16 items-center px-6"
-      style={{ background: "rgba(12,14,17,0.7)", backdropFilter: "blur(12px)" }}
+      style={{
+        background: "var(--th-header-bg)",
+        backdropFilter: "blur(12px)",
+        borderBottom: "1px solid var(--th-separator)",
+      }}
     >
       {/* 브랜드명 */}
       <div className="mr-8">
@@ -36,9 +41,6 @@ export function TopHeader({ activeFilter, onFilterChange, summaryData }: TopHead
         </span>
       </div>
 
-      {/* TODO: [API] getGraphSummary() 결과(node_count, tag_count)를 헤더 우측에 표시 */}
-      {/* TODO: [API] 카테고리 필터 변경 시 부모(KnowledgeGraphPage)의 getNodes(category) 재호출이 이루어지도록
-            현재 onFilterChange prop이 상위에서 처리 중이므로 상위 useEffect에 activeFilter 의존성 추가 필요 */}
       {/* 카테고리 칩 */}
       <nav className="flex items-center gap-2" aria-label="Category filters">
         {CATEGORY_FILTERS.map(({ id, label }) => {
@@ -47,20 +49,20 @@ export function TopHeader({ activeFilter, onFilterChange, summaryData }: TopHead
             <button
               key={id}
               onClick={() => onFilterChange(id)}
-              className="flex items-center px-4 h-[28px] rounded-full font-manrope transition-colors"
+              className="flex items-center px-4 h-[28px] rounded-full font-manrope transition-colors cursor-pointer"
               style={
                 isActive
                   ? {
-                      background: "#81ecff",
-                      color: "#003840",
+                      background: "var(--th-chip-active-bg)",
+                      color: "var(--th-chip-active-text)",
                       fontSize: 12,
                       fontWeight: 500,
                       letterSpacing: -0.4,
                     }
                   : {
-                      background: "#111417",
-                      border: "1px solid rgba(70,72,75,0.15)",
-                      color: "#aaabaf",
+                      background: "var(--th-chip-inactive-bg)",
+                      border: "1px solid var(--th-chip-inactive-border)",
+                      color: "var(--th-chip-inactive-text)",
                       fontSize: 12,
                       fontWeight: 500,
                       letterSpacing: -0.4,
@@ -75,28 +77,61 @@ export function TopHeader({ activeFilter, onFilterChange, summaryData }: TopHead
 
       <div className="ml-auto flex items-center gap-6">
         <div className="flex flex-col items-end">
-          <span className="text-[10px] uppercase tracking-[1px] text-snap-muted">Nodes</span>
-          <span className="text-[14px] font-bold text-snap-white">
+          <span
+            className="text-[10px] uppercase tracking-[1px]"
+            style={{ color: "var(--th-text-faint)" }}
+          >
+            Nodes
+          </span>
+          <span className="text-[14px] font-bold" style={{ color: "var(--th-text)" }}>
             {summaryData?.node_count ?? 0}
           </span>
         </div>
-        <div className="flex flex-col items-end border-l border-snap-border/10 pl-6">
-          <span className="text-[10px] uppercase tracking-[1px] text-snap-muted">Docs</span>
-          <span className="text-[14px] font-bold text-snap-white">
+        <div
+          className="flex flex-col items-end pl-6"
+          style={{ borderLeft: "1px solid var(--th-border)" }}
+        >
+          <span
+            className="text-[10px] uppercase tracking-[1px]"
+            style={{ color: "var(--th-text-faint)" }}
+          >
+            Docs
+          </span>
+          <span className="text-[14px] font-bold" style={{ color: "var(--th-text)" }}>
             {documentCount}
           </span>
         </div>
-        <div className="flex flex-col items-end border-l border-snap-border/10 pl-6">
-          <span className="text-[10px] uppercase tracking-[1px] text-snap-muted">Tags</span>
-          <span className="text-[14px] font-bold text-snap-white">
+        <div
+          className="flex flex-col items-end pl-6"
+          style={{ borderLeft: "1px solid var(--th-border)" }}
+        >
+          <span
+            className="text-[10px] uppercase tracking-[1px]"
+            style={{ color: "var(--th-text-faint)" }}
+          >
+            Tags
+          </span>
+          <span className="text-[14px] font-bold" style={{ color: "var(--th-text)" }}>
             {summaryData?.tag_count ?? 0}
           </span>
         </div>
-        <div className="flex flex-col items-end border-l border-snap-border/10 pl-6">
-          <span className="text-[10px] uppercase tracking-[1px] text-snap-muted">Edges</span>
-          <span className="text-[14px] font-bold text-snap-white">
+        <div
+          className="flex flex-col items-end pl-6"
+          style={{ borderLeft: "1px solid var(--th-border)" }}
+        >
+          <span
+            className="text-[10px] uppercase tracking-[1px]"
+            style={{ color: "var(--th-text-faint)" }}
+          >
+            Edges
+          </span>
+          <span className="text-[14px] font-bold" style={{ color: "var(--th-text)" }}>
             {summaryData?.edge_count ?? 0}
           </span>
+        </div>
+
+        <div className="pl-4" style={{ borderLeft: "1px solid var(--th-border)" }}>
+          <ThemeToggle />
         </div>
       </div>
 
@@ -127,7 +162,7 @@ export function TopHeader({ activeFilter, onFilterChange, summaryData }: TopHead
             display: none;
           }
           header > div:last-child {
-            display: none !important; /* 모바일에서 통계 요약은 숨김 처리 */
+            display: none !important;
           }
         }
       `}</style>

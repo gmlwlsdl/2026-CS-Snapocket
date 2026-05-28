@@ -26,6 +26,13 @@ export function LoginForm() {
     setIsLoading(true)
     setErrorMessage(null)
 
+    if (process.env.NODE_ENV === 'development') {
+      const { saveAccessToken } = await import('@/shared/api')
+      saveAccessToken('dev-mock-token')
+      router.push('/')
+      return
+    }
+
     try {
       await login({ email: form.email, password: form.password })
       router.push('/')
@@ -46,7 +53,7 @@ export function LoginForm() {
         <div className="flex flex-col gap-2">
           <label
             htmlFor="email"
-            className="font-inter text-[10px] text-snap-muted tracking-[1.5px] uppercase"
+            className="font-inter text-[11px] text-snap-muted tracking-[1.5px] uppercase"
           >
             Email Address
           </label>
@@ -66,7 +73,7 @@ export function LoginForm() {
           <div className="flex justify-between items-center">
             <label
               htmlFor="password"
-              className="font-inter text-[10px] text-snap-muted tracking-[1.5px] uppercase"
+              className="font-inter text-[11px] text-snap-muted tracking-[1.5px] uppercase"
             >
               Password
             </label>
