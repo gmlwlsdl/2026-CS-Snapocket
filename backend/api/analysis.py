@@ -20,6 +20,8 @@ from services.semantic_search import (
     serialize_document_for_index,
     sync_semantic_documents,
 )
+# 💡 [추가] 3단계에서 만들었던 S3 백업 서비스 함수를 가져옵니다.
+from services.cloud_service import export_mysql_to_s3
 
 # 분석 API 라우터 (/analysis/*)
 router = APIRouter(prefix="/analysis", tags=["analysis"])
@@ -33,7 +35,6 @@ class ConfirmAnalysisRequest(BaseModel):
     deadline: datetime | None = None
     summary: str
     tags: list[str]
-    deadline: datetime | None = None
 
 
 def _resolve_document_file_path(file_path: str) -> str:
@@ -134,7 +135,6 @@ def _run_analysis_job(job_id: int, document_id: int):
         except Exception:
             db.rollback()
     except AIClientError as exc:
-        # 예상 가능한 AI 통신/응답 오류
         db.rollback()
         document = (
             db.query(Document)
@@ -153,7 +153,6 @@ def _run_analysis_job(job_id: int, document_id: int):
             job.finished_at = datetime.now()
         db.commit()
     except Exception as exc:
-        # 그 외 예외도 failed로 처리해 상태 일관성을 유지한다.
         db.rollback()
         document = (
             db.query(Document)
@@ -182,7 +181,6 @@ def start_analysis(
     jwtToken: dict = Depends(jwtAuth),
     db: Session = Depends(get_db),
 ):
-    # 분석 시작: 문서/파일 검증 -> Job 생성 -> 백그라운드 실행
     user_name = jwtToken.get("sub")
     user_info = db.query(User).filter(User.email == user_name).first()
     if not user_info:
@@ -266,7 +264,6 @@ def status_analysis(
     jwtToken: dict = Depends(jwtAuth),
     db: Session = Depends(get_db),
 ):
-    # 최신 Job 기준으로 분석 진행 상태와 시작/종료 시각을 반환
     user_name = jwtToken.get("sub")
     user_info = db.query(User).filter(User.email == user_name).first()
     if not user_info:
@@ -315,7 +312,6 @@ def result_analysis(
     jwtToken: dict = Depends(jwtAuth),
     db: Session = Depends(get_db),
 ):
-    # 분석 완료 문서의 최신 결과를 반환
     user_name = jwtToken.get("sub")
     user_info = db.query(User).filter(User.email == user_name).first()
     if not user_info:
@@ -359,7 +355,6 @@ def result_analysis(
     latest_job = _latest_job(db, document.id)
     result = latest_job.raw_result if latest_job and isinstance(latest_job.raw_result, dict) else {}
 
-    # 리스트 타입 필드 방어적 파싱
     tags = result.get("tags") if isinstance(result.get("tags"), list) else []
     key_concepts = result.get("key_concepts") if isinstance(result.get("key_concepts"), list) else []
 
@@ -389,7 +384,6 @@ def save_analysis(
     jwtToken: dict = Depends(jwtAuth),
     db: Session = Depends(get_db),
 ):
-    # 사용자 수정값으로 분석 결과를 확정 저장
     user_name = jwtToken.get("sub")
     user_info = db.query(User).filter(User.email == user_name).first()
     if not user_info:
@@ -433,7 +427,7 @@ def save_analysis(
     latest_job = _latest_job(db, document.id)
     latest_result = latest_job.raw_result if latest_job and isinstance(latest_job.raw_result, dict) else {}
 
-    # 문서 메인 필드 저장
+    # MySQL(RDS)에 분석 결과 반영 및 저장
     document.title = confirm.title
     document.category = confirm.category
     document.capture_date = confirm.capture_date.date()
@@ -443,7 +437,6 @@ def save_analysis(
     document.status = "analyzed"
     document.deadline = confirm.deadline or latest_result.get("deadline")
 
-    # 최신 Job의 raw_result도 저장 데이터 기준으로 동기화
     if latest_job:
         updated_result = dict(latest_result)
         updated_result.update(
@@ -460,8 +453,9 @@ def save_analysis(
         )
         latest_job.raw_result = updated_result
 
-    db.commit()
+    db.commit() # 1️⃣ 여기서 MySQL 저장 완료!
     db.refresh(document)
+
     try:
         sync_semantic_documents(
             user_id=str(user_info.id),
@@ -479,12 +473,18 @@ def save_analysis(
     except Exception:
         db.rollback()
 
+    # ------------------------------------------------------------------
+    # 2️⃣ [통합 완료] MySQL 저장이 끝난 직후 자동으로 S3 클라우드 백업을 호출합니다.
+    # ------------------------------------------------------------------
+    s3_backup_res = export_mysql_to_s3()
+
     return ApiResponse(
         success=True,
-        message="분석 결과 저장 완료",
+        message="분석 결과 저장 및 클라우드 S3 백업 성공",
         data={
             "document_id": str(document.id),
             "status": "analyzed",
+            "s3_backup": s3_backup_res # 백업 성공/실패 여부를 리턴 데이터에 얹어줍니다.
         },
     )
 
@@ -496,7 +496,6 @@ def retry_analysis(
     jwtToken: dict = Depends(jwtAuth),
     db: Session = Depends(get_db),
 ):
-    # 최신 분석 Job 기준으로 재분석을 시작한다.
     user_name = jwtToken.get("sub")
     user_info = db.query(User).filter(User.email == user_name).first()
     if not user_info:
@@ -558,7 +557,6 @@ def retry_analysis(
             },
         )
 
-    # 재시도 Job 생성 후 동일 백그라운드 러너에 위임
     if not document.doc_id:
         document.doc_id = uuid.uuid4().hex
     document.status = "processing"
