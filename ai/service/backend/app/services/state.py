@@ -165,6 +165,8 @@ def build_app_state() -> AppState:
             use_chart_recognition=settings.paddle_doc_parser_use_chart_recognition,
             use_seal_recognition=settings.paddle_doc_parser_use_seal_recognition,
             use_ocr_for_image_block=settings.paddle_doc_parser_use_ocr_for_image_block,
+            vl_rec_max_concurrency=settings.paddle_doc_parser_vl_rec_max_concurrency,
+            max_new_tokens=settings.paddle_doc_parser_max_new_tokens,
         )
     router = OCREngineRouter(
         paddle_engine=paddle_engine,
