@@ -18,6 +18,8 @@ services:
       - "8080"
       - -c
       - "${AI_LLAMA_CTX_SIZE:-2048}"
+      - -np
+      - "${AI_LLAMA_PARALLEL:-1}"
       - -t
       - "${AI_LLAMA_THREADS:-8}"
       - -tb

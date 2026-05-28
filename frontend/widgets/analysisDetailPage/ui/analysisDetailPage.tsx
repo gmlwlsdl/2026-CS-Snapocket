@@ -263,10 +263,10 @@ export function AnalysisDetailPage() {
       await confirmAnalysis(id, {
         title: form.title,
         category: form.category,
-        capture_date: displayToIso(form.captureDate) || null,
+        capture_date: displayToIso(form.captureDate),
+        deadline: form.deadline ? displayToIso(form.deadline) : null,
         summary: form.summary,
         tags: form.tags.map((t) => rawTagName(t.label)),
-        deadline: displayToIso(form.deadline) || null,
       })
       router.push('/')
     } catch (e) {

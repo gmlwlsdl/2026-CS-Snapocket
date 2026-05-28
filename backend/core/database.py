@@ -24,6 +24,8 @@ def ensure_documents_schema_compatibility():
             conn.execute(text("ALTER TABLE documents ADD COLUMN doc_id VARCHAR(64)"))
         if "raw_text" not in columns:
             conn.execute(text("ALTER TABLE documents ADD COLUMN raw_text TEXT"))
+        if "deadline" not in columns:
+            conn.execute(text("ALTER TABLE documents ADD COLUMN deadline DATETIME"))
         if "raw" in columns:
             conn.execute(
                 text("UPDATE documents SET raw_text = raw WHERE raw_text IS NULL AND raw IS NOT NULL")
