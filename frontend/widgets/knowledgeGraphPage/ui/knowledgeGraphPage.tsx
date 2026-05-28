@@ -15,7 +15,7 @@ import {
 import { getSearchStatus, queryDocuments } from '@/entities/search'
 import { CATEGORY_TO_NODE_CATEGORY } from '../knowledgeGraph.utils'
 import dynamic from 'next/dynamic'
-import { SidebarNav, useToast } from '@/shared/ui'
+import { SidebarNav, useToast, useTheme } from '@/shared/ui'
 import { UploadModal } from '@/features/upload'
 import { fetchAnalysisStatus } from '@/entities/analysis'
 import { TopHeader } from './topHeader'
@@ -32,6 +32,7 @@ import { AiInputBar } from './aiInputBar'
 
 export function KnowledgeGraphPage() {
   const router = useRouter()
+  const { isDark } = useTheme()
   const [activeFilter, setActiveFilter] = useState<CategoryFilter>('all')
   const [searchTerm, setSearchTerm] = useState('')
   const [matchedNodeIds, setMatchedNodeIds] = useState<string[] | null>(null)
@@ -39,6 +40,7 @@ export function KnowledgeGraphPage() {
   const [aiAvailable, setAiAvailable] = useState(false)
   const [modeUsed, setModeUsed] = useState<'text' | 'semantic' | null>(null)
   const [isSearching, setIsSearching] = useState(false)
+  const [isExplicitSearch, setIsExplicitSearch] = useState(false)
   const [nodes, setNodes] = useState<GraphNode[]>([])
   const [edges, setEdges] = useState<GraphEdge[]>([])
   const [modalOpen, setModalOpen] = useState(false)
@@ -53,6 +55,7 @@ export function KnowledgeGraphPage() {
     setMatchedNodeIds(null)
     setMatchedScores(null)
     setModeUsed(null)
+    setIsExplicitSearch(false)
   }, [])
 
   const handleZoomIn = useCallback(() => {
@@ -253,6 +256,7 @@ export function KnowledgeGraphPage() {
       return
     }
 
+    setIsExplicitSearch(true)
     setIsSearching(true)
     try {
       // Enter/버튼 시에는 AI 상태를 반영한 auto 검색을 호출한다.
@@ -266,7 +270,7 @@ export function KnowledgeGraphPage() {
   }, [clearSearchState, loadAiAvailability, runAutoSearch, searchTerm])
 
   return (
-    <div className="flex h-screen w-full overflow-hidden bg-snap-bg">
+    <div className="flex h-screen w-full overflow-hidden" style={{ background: 'var(--th-bg)' }}>
       <SidebarNav onUpload={() => setModalOpen(true)} />
 
       <main className="relative flex-1" style={{ marginLeft: 81 }}>
@@ -284,6 +288,8 @@ export function KnowledgeGraphPage() {
             nodes={nodes}
             edges={edges}
             graphRef={graphRef}
+            isDark={isDark}
+            isExplicitSearch={isExplicitSearch}
           />
         </div>
 
@@ -297,7 +303,10 @@ export function KnowledgeGraphPage() {
           aiAvailable={aiAvailable}
           modeUsed={modeUsed}
           isSearching={isSearching}
-          onValueChange={setSearchTerm}
+          onValueChange={(value) => {
+            setSearchTerm(value)
+            setIsExplicitSearch(false)
+          }}
           onSubmitSearch={handleSemanticSearch}
         />
 
