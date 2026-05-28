@@ -71,6 +71,12 @@ class Settings:
     paddle_doc_parser_use_ocr_for_image_block: bool = _as_bool(
         os.getenv("PADDLE_DOC_PARSER_USE_OCR_FOR_IMAGE_BLOCK"), True
     )
+    paddle_doc_parser_vl_rec_max_concurrency: int = int(
+        os.getenv("PADDLE_DOC_PARSER_VL_REC_MAX_CONCURRENCY", "1")
+    )
+    paddle_doc_parser_max_new_tokens: int = int(
+        os.getenv("PADDLE_DOC_PARSER_MAX_NEW_TOKENS", "512")
+    )
 
     llm_base_url: str = os.getenv("LLM_BASE_URL", os.getenv("OLLAMA_BASE_URL", "http://llama-server:8080"))
     llm_model_paddle: str = os.getenv(
@@ -219,6 +225,12 @@ def load_settings() -> Settings:
         ),
         paddle_doc_parser_use_ocr_for_image_block=_as_bool(
             os.getenv("PADDLE_DOC_PARSER_USE_OCR_FOR_IMAGE_BLOCK"), True
+        ),
+        paddle_doc_parser_vl_rec_max_concurrency=int(
+            os.getenv("PADDLE_DOC_PARSER_VL_REC_MAX_CONCURRENCY", "1")
+        ),
+        paddle_doc_parser_max_new_tokens=int(
+            os.getenv("PADDLE_DOC_PARSER_MAX_NEW_TOKENS", "512")
         ),
         llm_base_url=os.getenv("LLM_BASE_URL", os.getenv("OLLAMA_BASE_URL", "http://llama-server:8080")),
         llm_model_paddle=os.getenv(

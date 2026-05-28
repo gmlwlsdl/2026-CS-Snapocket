@@ -52,6 +52,8 @@ class PaddleOCRVLDocParserEngine(OCREngine):
         use_seal_recognition: bool = False,
         use_ocr_for_image_block: bool = True,
         format_block_content: bool = True,
+        vl_rec_max_concurrency: int | None = None,
+        max_new_tokens: int | None = None,
     ) -> None:
         self.enabled = bool(enabled)
         self.vl_rec_server_url = self._normalize_v1_url(vl_rec_server_url)
@@ -66,6 +68,10 @@ class PaddleOCRVLDocParserEngine(OCREngine):
         self.use_seal_recognition = bool(use_seal_recognition)
         self.use_ocr_for_image_block = bool(use_ocr_for_image_block)
         self.format_block_content = bool(format_block_content)
+        self.vl_rec_max_concurrency = (
+            max(1, int(vl_rec_max_concurrency)) if vl_rec_max_concurrency is not None else None
+        )
+        self.max_new_tokens = max(32, int(max_new_tokens)) if max_new_tokens is not None else None
 
         self._lock = Lock()
         self._pipeline: Any | None = None
@@ -109,6 +115,8 @@ class PaddleOCRVLDocParserEngine(OCREngine):
                 "use_seal_recognition": self.use_seal_recognition,
                 "use_ocr_for_image_block": self.use_ocr_for_image_block,
                 "format_block_content": self.format_block_content,
+                "vl_rec_max_concurrency": self.vl_rec_max_concurrency,
+                "max_new_tokens": self.max_new_tokens,
                 "pipeline_loaded": self._pipeline is not None,
                 "inflight": bool(self._active_inference is not None and not self._active_inference.done()),
             }
@@ -189,6 +197,8 @@ class PaddleOCRVLDocParserEngine(OCREngine):
             "use_ocr_for_image_block": self.use_ocr_for_image_block,
             "format_block_content": self.format_block_content,
         }
+        if self.vl_rec_max_concurrency is not None:
+            kwargs["vl_rec_max_concurrency"] = self.vl_rec_max_concurrency
         if self.device:
             kwargs["device"] = self.device
         if self.engine:
@@ -204,6 +214,8 @@ class PaddleOCRVLDocParserEngine(OCREngine):
                 "vl_rec_backend": "llama-cpp-server",
                 "vl_rec_server_url": self.vl_rec_server_url,
             }
+            if self.vl_rec_max_concurrency is not None:
+                minimal["vl_rec_max_concurrency"] = self.vl_rec_max_concurrency
             if self.device:
                 minimal["device"] = self.device
             if self.engine:
@@ -463,7 +475,10 @@ class PaddleOCRVLDocParserEngine(OCREngine):
         try:
             pipeline = self._ensure_pipeline()
             source_path = self._write_image(image_bytes)
-            output = pipeline.predict(source_path)
+            predict_kwargs: dict[str, Any] = {}
+            if self.max_new_tokens is not None:
+                predict_kwargs["max_new_tokens"] = self.max_new_tokens
+            output = pipeline.predict(source_path, **predict_kwargs)
             page_results: list[OCREngineResult] = []
             for result in output:
                 data = self._result_to_dict(result, source_path)
