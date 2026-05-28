@@ -262,7 +262,6 @@ export function AnalysisDetailPage() {
         deadline: form.deadline ? displayToIso(form.deadline) : null,
         summary: form.summary,
         tags: form.tags.map((t) => rawTagName(t.label)),
-        deadline: displayToIso(form.deadline) || null,
       })
       router.push('/')
     } catch (e) {
