@@ -91,6 +91,7 @@ export function LoginForm() {
         size="lg"
         mt="xs"
         radius="md"
+        className="login-submit-button"
         style={{
           background: 'linear-gradient(135deg, #97c2ec 0%, #7daed8 100%)',
           color: '#0d2b45',
