@@ -53,8 +53,8 @@ export function SignupForm() {
     <form onSubmit={handleSubmit} noValidate style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <TextInput
         id="name"
-        label="Name"
-        placeholder="John Doe"
+        label="이름"
+        placeholder="이름을 입력해주세요"
         value={form.name}
         onChange={handleChange('name')}
         required
@@ -63,10 +63,10 @@ export function SignupForm() {
 
       <TextInput
         id="email"
-        label="Email Address"
+        label="이메일"
         type="email"
         autoComplete="email"
-        placeholder="name@company.com"
+        placeholder="이메일을 입력해주세요"
         value={form.email}
         onChange={handleChange('email')}
         required
@@ -75,9 +75,9 @@ export function SignupForm() {
 
       <PasswordInput
         id="password"
-        label="Password"
+        label="비밀번호"
         autoComplete="new-password"
-        placeholder="••••••••"
+        placeholder="비밀번호를 입력해주세요"
         value={form.password}
         onChange={handleChange('password')}
         required
@@ -109,7 +109,7 @@ export function SignupForm() {
           fontWeight: 700,
         }}
       >
-        {isLoading ? 'Creating Account…' : 'Create Account'}
+        {isLoading ? '회원가입 중…' : '회원가입'}
       </Button>
     </form>
   )

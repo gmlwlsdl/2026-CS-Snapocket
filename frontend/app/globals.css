@@ -101,3 +101,19 @@ body {
 .mantine-Notifications-root {
   z-index: 9999;
 }
+
+/* 로그인/회원가입 제출 버튼 hover 효과 */
+.login-submit-button {
+  transition: transform 0.15s ease, filter 0.15s ease, box-shadow 0.15s ease !important;
+}
+
+.login-submit-button:not([data-loading]):hover {
+  filter: brightness(1.05);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(151, 194, 236, 0.35);
+}
+
+.login-submit-button:not([data-loading]):active {
+  transform: translateY(0);
+  box-shadow: 0 2px 6px rgba(151, 194, 236, 0.2);
+}

@@ -49,13 +49,12 @@ export function LoginForm() {
     <form onSubmit={handleSubmit} noValidate style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <TextInput
         id="email"
-        label="Email Address"
+        label="이메일"
         type="email"
         autoComplete="email"
-        placeholder="name@company.com"
+        placeholder="이메일을 입력해주세요"
         value={form.email}
         onChange={handleChange('email')}
-        required
         styles={{
           label: { fontSize: 11, letterSpacing: '1.5px', textTransform: 'uppercase' },
           input: { height: 51 },
@@ -65,17 +64,13 @@ export function LoginForm() {
       <div>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
           <Text size="xs" style={{ letterSpacing: '1.5px', textTransform: 'uppercase', color: 'var(--mantine-color-dimmed)' }}>
-            Password
+            비밀번호
           </Text>
-          {/* TODO: [API] 비밀번호 재설정 엔드포인트 확정 후 연결 */}
-          <Anchor size="xs" c="snap" fw={600} style={{ letterSpacing: '0.5px' }}>
-            Forgot?
-          </Anchor>
         </div>
         <PasswordInput
           id="password"
           autoComplete="current-password"
-          placeholder="••••••••"
+          placeholder="비밀번호를 입력하세요"
           value={form.password}
           onChange={handleChange('password')}
           required
@@ -103,7 +98,7 @@ export function LoginForm() {
           fontWeight: 700,
         }}
       >
-        {isLoading ? 'Signing in…' : 'Sign In'}
+        {isLoading ? '로그인 중…' : '로그인'}
       </Button>
     </form>
   )
