@@ -18,7 +18,65 @@
   --color-snap-purple: #ac89ff;
 }
 
+/* ── Light mode (기본값) — design/design.md 기반 ── */
+:root {
+  --th-bg: #fbf9f8;
+  --th-panel: #f0eded;
+  --th-sidebar: #f6f3f2;
+  --th-surface: #eae8e7;
+  --th-surface-2: #e4e2e1;
+  --th-text: #1b1c1c;
+  --th-text-muted: #4c4546;
+  --th-text-faint: #7e7576;
+  --th-header-bg: rgba(251, 249, 248, 0.88);
+  --th-separator: rgba(0, 0, 0, 0.05);
+  --th-border: rgba(126, 117, 118, 0.25);
+  --th-chip-active-bg: #a6f2cf;
+  --th-chip-active-text: #002115;
+  --th-chip-inactive-bg: #eae8e7;
+  --th-chip-inactive-border: rgba(126, 117, 118, 0.2);
+  --th-chip-inactive-text: #4c4546;
+  --th-ai-bar-bg: rgba(234, 232, 231, 0.88);
+  --th-ai-bar-border: rgba(126, 117, 118, 0.18);
+  --th-control-bg: rgba(234, 232, 231, 0.85);
+  --th-control-border: rgba(126, 117, 118, 0.15);
+  --th-day-panel: #eae8e7;
+  --th-day-panel-border: rgba(0, 0, 0, 0.06);
+}
+
+/* ── Dark mode ── */
+[data-theme="dark"] {
+  --th-bg: #0c0e11;
+  --th-panel: #05070a;
+  --th-sidebar: #171a1d;
+  --th-surface: #111417;
+  --th-surface-2: #1a1d21;
+  --th-text: #f9f9fd;
+  --th-text-muted: #aaabaf;
+  --th-text-faint: #747579;
+  --th-header-bg: rgba(12, 14, 17, 0.7);
+  --th-separator: rgba(255, 255, 255, 0.04);
+  --th-border: rgba(70, 72, 75, 0.25);
+  --th-chip-active-bg: #81ecff;
+  --th-chip-active-text: #003840;
+  --th-chip-inactive-bg: #111417;
+  --th-chip-inactive-border: rgba(70, 72, 75, 0.15);
+  --th-chip-inactive-text: #aaabaf;
+  --th-ai-bar-bg: rgba(23, 26, 29, 0.7);
+  --th-ai-bar-border: rgba(70, 72, 75, 0.15);
+  --th-control-bg: rgba(23, 26, 29, 0.6);
+  --th-control-border: rgba(70, 72, 75, 0.1);
+  --th-day-panel: #111417;
+  --th-day-panel-border: rgba(255, 255, 255, 0.07);
+}
+
 body {
-  background: #0c0e11;
-  color: #f9f9fd;
+  background: var(--th-bg);
+  color: var(--th-text);
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+.th-placeholder::placeholder {
+  color: var(--th-text-muted);
+  opacity: 0.7;
 }

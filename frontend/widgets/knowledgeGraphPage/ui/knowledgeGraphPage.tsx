@@ -15,7 +15,7 @@ import {
 import { getSearchStatus, queryDocuments } from '@/entities/search'
 import { CATEGORY_TO_NODE_CATEGORY } from '../knowledgeGraph.utils'
 import dynamic from 'next/dynamic'
-import { SidebarNav, ToastStatus, type ToastItem } from '@/shared/ui'
+import { SidebarNav, useToast, useTheme } from '@/shared/ui'
 import { UploadModal } from '@/features/upload'
 import { fetchAnalysisStatus } from '@/entities/analysis'
 import { TopHeader } from './topHeader'
@@ -32,6 +32,7 @@ import { AiInputBar } from './aiInputBar'
 
 export function KnowledgeGraphPage() {
   const router = useRouter()
+  const { isDark } = useTheme()
   const [activeFilter, setActiveFilter] = useState<CategoryFilter>('all')
   const [searchTerm, setSearchTerm] = useState('')
   const [matchedNodeIds, setMatchedNodeIds] = useState<string[] | null>(null)
@@ -39,17 +40,11 @@ export function KnowledgeGraphPage() {
   const [aiAvailable, setAiAvailable] = useState(false)
   const [modeUsed, setModeUsed] = useState<'text' | 'semantic' | null>(null)
   const [isSearching, setIsSearching] = useState(false)
+  const [isExplicitSearch, setIsExplicitSearch] = useState(false)
   const [nodes, setNodes] = useState<GraphNode[]>([])
   const [edges, setEdges] = useState<GraphEdge[]>([])
   const [modalOpen, setModalOpen] = useState(false)
-  const [toastItems, setToastItems] = useState<ToastItem[]>([
-    {
-      id: 'test-error',
-      fileName: 'lecture_note_week12.pdf',
-      status: 'error',
-      analysisId: 'test-error',
-    },
-  ])
+  const { toastItems, showToast, updateToast } = useToast()
   const [summaryData, setSummaryData] = useState<GraphSummaryData>()
 
   const graphRef = useRef<ForceGraphMethods<NodeObject<GraphNode>> | undefined>(
@@ -60,6 +55,7 @@ export function KnowledgeGraphPage() {
     setMatchedNodeIds(null)
     setMatchedScores(null)
     setModeUsed(null)
+    setIsExplicitSearch(false)
   }, [])
 
   const handleZoomIn = useCallback(() => {
@@ -222,32 +218,18 @@ export function KnowledgeGraphPage() {
         try {
           const { status } = await fetchAnalysisStatus(item.id)
           if (status === 'analyzed') {
-            setToastItems((prev) =>
-              prev.map((i) =>
-                i.id === item.id ? { ...i, status: 'complete' } : i,
-              ),
-            )
+            updateToast(item.id, { status: 'complete' })
           } else if (status === 'failed') {
-            setToastItems((prev) =>
-              prev.map((i) =>
-                i.id === item.id ? { ...i, status: 'error' } : i,
-              ),
-            )
+            updateToast(item.id, { status: 'error' })
           }
         } catch {
-          setToastItems((prev) =>
-            prev.map((i) => (i.id === item.id ? { ...i, status: 'error' } : i)),
-          )
+          updateToast(item.id, { status: 'error' })
         }
       }, 3000),
     )
 
     return () => timers.forEach(clearInterval)
-  }, [toastItems])
-
-  const handleToastCancel = useCallback((item: ToastItem) => {
-    setToastItems((prev) => prev.filter((i) => i.id !== item.id))
-  }, [])
+  }, [toastItems, updateToast])
 
   const handleUpload = useCallback(async (file: File) => {
     const { uploadDocument } = await import('@/entities/document')
@@ -256,28 +238,16 @@ export function KnowledgeGraphPage() {
       const uploadRes = await uploadDocument(file)
       const documentId = uploadRes.document_id
 
-      setToastItems((prev) => [
-        {
-          id: documentId,
-          fileName: file.name,
-          status: 'processing',
-          analysisId: documentId,
-        },
-        ...prev,
-      ])
+      showToast({
+        id: documentId,
+        fileName: file.name,
+        status: 'processing',
+        analysisId: documentId,
+      })
     } catch (error) {
       console.error('Upload failed:', error)
     }
-  }, [])
-
-  const handleToastClick = useCallback(
-    (item: ToastItem) => {
-      if (item.status === 'complete') {
-        router.push(`/analysis/${item.analysisId}?mode=result`)
-      }
-    },
-    [router],
-  )
+  }, [showToast])
 
   const handleSemanticSearch = useCallback(async () => {
     const normalizedKeyword = searchTerm.trim()
@@ -286,6 +256,7 @@ export function KnowledgeGraphPage() {
       return
     }
 
+    setIsExplicitSearch(true)
     setIsSearching(true)
     try {
       // Enter/버튼 시에는 AI 상태를 반영한 auto 검색을 호출한다.
@@ -299,7 +270,7 @@ export function KnowledgeGraphPage() {
   }, [clearSearchState, loadAiAvailability, runAutoSearch, searchTerm])
 
   return (
-    <div className="flex h-screen w-full overflow-hidden bg-snap-bg">
+    <div className="flex h-screen w-full overflow-hidden" style={{ background: 'var(--th-bg)' }}>
       <SidebarNav onUpload={() => setModalOpen(true)} />
 
       <main className="relative flex-1" style={{ marginLeft: 81 }}>
@@ -317,6 +288,8 @@ export function KnowledgeGraphPage() {
             nodes={nodes}
             edges={edges}
             graphRef={graphRef}
+            isDark={isDark}
+            isExplicitSearch={isExplicitSearch}
           />
         </div>
 
@@ -330,14 +303,13 @@ export function KnowledgeGraphPage() {
           aiAvailable={aiAvailable}
           modeUsed={modeUsed}
           isSearching={isSearching}
-          onValueChange={setSearchTerm}
+          onValueChange={(value) => {
+            setSearchTerm(value)
+            setIsExplicitSearch(false)
+          }}
           onSubmitSearch={handleSemanticSearch}
         />
-        <ToastStatus
-          items={toastItems}
-          onItemClick={handleToastClick}
-          onCancel={handleToastCancel}
-        />
+
       </main>
 
       <UploadModal
@@ -345,6 +317,25 @@ export function KnowledgeGraphPage() {
         onClose={() => setModalOpen(false)}
         onUpload={handleUpload}
       />
+
+      <style>{`
+        @media (max-width: 768px) {
+          main {
+            margin-left: 0 !important;
+          }
+          aside {
+            display: none !important;
+          }
+          /* 모바일에서 AI 입력바를 화면에 맞게 반응형 정렬 */
+          .absolute.bottom-8 {
+            left: 16px !important;
+            right: 16px !important;
+            transform: none !important;
+            width: auto !important;
+            max-width: none !important;
+          }
+        }
+      `}</style>
     </div>
   )
 }

@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
+from typing import Any
 
 
 @dataclass
@@ -21,6 +22,7 @@ class OCREngineResult:
     col_idx: int | None = None
     rowspan: int | None = None
     colspan: int | None = None
+    structured_payload: dict[str, Any] | None = None
 
 
 class OCREngineBusyError(RuntimeError):

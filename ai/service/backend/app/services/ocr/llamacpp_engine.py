@@ -24,12 +24,28 @@ logger = logging.getLogger(__name__)
 _FENCE_LINE_RE = re.compile(r"^\s*`{3,}\s*([A-Za-z0-9_.:+-]+)?\s*$")
 _PROFILE_PROMPTS: dict[str, str] = {
     "paddle": (
-        "You are an OCR engine for document images. "
-        "Extract all visible text exactly as written. "
-        "Preserve line breaks. Return plain text only without explanation."
+        "You are Snapocket's document extraction engine. "
+        "Read the image once and return one JSON object only. "
+        "The JSON shape must be exactly: "
+        "{\"raw_text\": string, \"title\": string, \"category\": string, "
+        "\"capture_date\": \"YYYY-MM-DD\" or null, \"deadline\": \"YYYY-MM-DD\" or null, "
+        "\"summary\": string, \"tags\": string[], \"key_concepts\": string[]}. "
+        "raw_text must preserve all visible text and line breaks. "
+        "title must be a concise Korean document title. "
+        "summary must be 1-2 concise Korean sentences. "
+        "tags must be 3-7 short Korean concepts without #. "
+        "key_concepts must be 3-10 important searchable concepts from the document body. "
+        "deadline means a payment due date, submission deadline, expiration date, application closing date, "
+        "or similar explicit future/limit date. Do not invent dates. "
+        "Use null for unknown dates. Return JSON only without markdown or explanation."
     ),
 }
-OCR_PROMPT_VERSION = "ocr-v2-full-text"
+_OCR_ONLY_PROMPT = (
+    "You are an OCR engine for document images. "
+    "Extract all visible text exactly as written. "
+    "Preserve line breaks. Return plain text only without explanation."
+)
+OCR_PROMPT_VERSION = "snapocket-structured-v1"
 _STOP_TOKENS = ["</s>", "<|end_of_sentence|>"]
 
 
@@ -342,7 +358,70 @@ class LlamaCppVisionEngine(OCREngine):
             return "\n".join(parts).strip()
         return ""
 
-    def _infer_with_openai(self, image_b64: str, *, max_tokens_override: int | None = None) -> str:
+    @staticmethod
+    def _extract_json_object(raw: str) -> dict[str, Any] | None:
+        text = str(raw or "").strip()
+        if not text:
+            return None
+        fenced = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", text, flags=re.DOTALL | re.IGNORECASE)
+        if fenced:
+            text = fenced.group(1).strip()
+        else:
+            start = text.find("{")
+            end = text.rfind("}")
+            if start < 0 or end <= start:
+                return None
+            text = text[start : end + 1]
+        try:
+            parsed = json.loads(text)
+        except json.JSONDecodeError:
+            return None
+        return parsed if isinstance(parsed, dict) else None
+
+    @staticmethod
+    def _coerce_structured_payload(raw: str) -> dict[str, Any] | None:
+        parsed = LlamaCppVisionEngine._extract_json_object(raw)
+        if not parsed:
+            return None
+
+        raw_text = str(parsed.get("raw_text") or parsed.get("text") or "").strip()
+        if not raw_text:
+            return None
+
+        tags_value = parsed.get("tags") or parsed.get("tag") or []
+        if isinstance(tags_value, str):
+            tags = [token.strip().lstrip("#") for token in re.split(r"[,#\n]+", tags_value) if token.strip()]
+        elif isinstance(tags_value, list):
+            tags = [str(token).strip().lstrip("#") for token in tags_value if str(token).strip()]
+        else:
+            tags = []
+
+        concepts_value = parsed.get("key_concepts") or parsed.get("concepts") or []
+        if isinstance(concepts_value, str):
+            key_concepts = [token.strip().lstrip("#") for token in re.split(r"[,#\n]+", concepts_value) if token.strip()]
+        elif isinstance(concepts_value, list):
+            key_concepts = [str(token).strip().lstrip("#") for token in concepts_value if str(token).strip()]
+        else:
+            key_concepts = []
+
+        return {
+            "raw_text": raw_text,
+            "title": str(parsed.get("title") or "").strip(),
+            "category": str(parsed.get("category") or "").strip(),
+            "capture_date": parsed.get("capture_date"),
+            "deadline": parsed.get("deadline"),
+            "summary": str(parsed.get("summary") or "").strip(),
+            "tags": tags,
+            "key_concepts": key_concepts,
+        }
+
+    def _infer_with_openai(
+        self,
+        image_b64: str,
+        *,
+        max_tokens_override: int | None = None,
+        prompt_override: str | None = None,
+    ) -> str:
         # OpenAI 호환 chat/completions 포맷으로 OCR 프롬프트+이미지를 전달한다.
         max_tokens = self.max_tokens if max_tokens_override is None else max(1, int(max_tokens_override))
         payload = {
@@ -351,7 +430,7 @@ class LlamaCppVisionEngine(OCREngine):
                 {
                     "role": "user",
                     "content": [
-                        {"type": "text", "text": self._prompt()},
+                        {"type": "text", "text": prompt_override or self._prompt()},
                         {
                             "type": "image_url",
                             "image_url": {"url": f"data:image/jpeg;base64,{image_b64}"},
@@ -375,9 +454,22 @@ class LlamaCppVisionEngine(OCREngine):
 
         try:
             image_b64 = self._prepare_image_b64(image_bytes)
-            content = self._infer_with_openai(image_b64)
+            content = self._infer_with_openai(
+                image_b64,
+                max_tokens_override=max(self.max_tokens, 1536),
+            )
 
-            text = self._coerce_ocr_text(content)
+            structured_payload = self._coerce_structured_payload(content)
+            if structured_payload:
+                text = str(structured_payload.get("raw_text") or "").strip()
+            else:
+                logger.warning("%s structured extraction failed; falling back to plain OCR", self.name)
+                fallback_content = self._infer_with_openai(
+                    image_b64,
+                    max_tokens_override=max(self.max_tokens, 1024),
+                    prompt_override=_OCR_ONLY_PROMPT,
+                )
+                text = self._coerce_ocr_text(fallback_content)
             if not text:
                 raise RuntimeError("empty OCR output from backend")
 
@@ -403,8 +495,9 @@ class LlamaCppVisionEngine(OCREngine):
                     bbox=None,
                     page_no=page_no,
                     block_type="text",
+                    structured_payload=structured_payload if idx == 0 else None,
                 )
-                for line in deduped
+                for idx, line in enumerate(deduped)
             ]
         except Exception as exc:
             with self._lock:

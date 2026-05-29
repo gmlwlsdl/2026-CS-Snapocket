@@ -14,6 +14,8 @@ interface KnowledgeGraphCanvasProps {
   nodes: GraphNode[]
   edges: GraphEdge[]
   graphRef?: React.MutableRefObject<ForceGraphMethods<NodeObject<GraphNode>> | undefined>
+  isDark?: boolean
+  isExplicitSearch?: boolean
 }
 
 type GraphLink = {
@@ -308,6 +310,8 @@ export function KnowledgeGraphCanvas({
   nodes,
   edges,
   graphRef,
+  isDark = true,
+  isExplicitSearch = false,
 }: KnowledgeGraphCanvasProps) {
   const router = useRouter()
   const containerRef = useRef<HTMLDivElement>(null)
@@ -374,11 +378,14 @@ export function KnowledgeGraphCanvas({
     const strength = getMatchStrength(node)
     const visualStrength = searchTerm ? getVisualMatchStrength(strength) : 0.72
     const matched = visualStrength > 0
-    // 검색 점수는 soft-knee 곡선으로 시각화한다. 낮은 유사도도 완전히
-    // 사라지지는 않지만, 상위 결과와 같은 halo 체급으로 보이지 않게 한다.
     const opacity = getNodeOpacity(visualStrength)
     const color = NODE_COLOR[node.category] ?? '#81ecff'
     const baseR = ((NODE_DOT_SIZE[node.size] ?? 5) + Math.max(0, 2 - Number(node.depth ?? 2))) / globalScale
+
+    const textColorSecondary = isDark ? '#707982' : '#7e7576'
+    const textColorPrimary = isDark ? '#adb8c2' : '#4c4546'
+    const textColorMatched = isDark ? '#f9f9fd' : '#1b1c1c'
+    const textColorSoftMatch = isDark ? 'rgba(210, 224, 232, 0.72)' : 'rgba(55, 65, 81, 0.72)'
 
     if (matched) {
       ctx.save()
@@ -390,11 +397,17 @@ export function KnowledgeGraphCanvas({
         node.x, node.y, glowRadius,
       )
 
-      gradient.addColorStop(0, `rgba(255, 255, 255, ${0.1 + visualStrength * 0.38})`)
-      gradient.addColorStop(0.14, `rgba(241, 247, 255, ${0.08 + visualStrength * 0.24})`)
-      gradient.addColorStop(0.34, `rgba(116, 195, 213, ${0.025 + visualStrength * 0.1})`)
-      gradient.addColorStop(0.68, `rgba(116, 195, 213, ${0.005 + visualStrength * 0.026})`)
-      gradient.addColorStop(1, 'rgba(116, 195, 213, 0)')
+      if (isDark) {
+        gradient.addColorStop(0, `rgba(255, 255, 255, ${0.1 + visualStrength * 0.38})`)
+        gradient.addColorStop(0.14, `rgba(241, 247, 255, ${0.08 + visualStrength * 0.24})`)
+        gradient.addColorStop(0.34, `rgba(116, 195, 213, ${0.025 + visualStrength * 0.1})`)
+        gradient.addColorStop(0.68, `rgba(116, 195, 213, ${0.005 + visualStrength * 0.026})`)
+        gradient.addColorStop(1, 'rgba(116, 195, 213, 0)')
+      } else {
+        gradient.addColorStop(0, `rgba(27, 107, 79, ${0.06 + visualStrength * 0.18})`)
+        gradient.addColorStop(0.34, `rgba(166, 242, 207, ${0.03 + visualStrength * 0.1})`)
+        gradient.addColorStop(1, 'rgba(166, 242, 207, 0)')
+      }
 
       ctx.beginPath()
       ctx.arc(node.x, node.y, glowRadius, 0, 2 * Math.PI, false)
@@ -413,7 +426,7 @@ export function KnowledgeGraphCanvas({
       ctx.beginPath()
       ctx.arc(node.x, node.y, baseR, 0, 2 * Math.PI, false)
       ctx.fillStyle = color
-      ctx.globalAlpha = opacity
+      ctx.globalAlpha = isDark ? opacity : opacity * 0.85
       ctx.fill()
     }
 
@@ -423,28 +436,29 @@ export function KnowledgeGraphCanvas({
       ctx.textAlign = 'left'
       ctx.textBaseline = 'middle'
       ctx.fillStyle = !matched
-        ? (node.size === 'secondary' ? '#707982' : '#adb8c2')
+        ? (node.size === 'secondary' ? textColorSecondary : textColorPrimary)
         : visualStrength > 0.45
-          ? '#f9f9fd'
-          : 'rgba(210, 224, 232, 0.72)'
+          ? textColorMatched
+          : textColorSoftMatch
       ctx.fillText(node.label, node.x + baseR + 8 / globalScale, node.y)
     }
 
     ctx.globalAlpha = 1
     ctx.shadowBlur = 0
-  }, [getGlowRadius, getMatchStrength, getNodeOpacity, searchTerm])
+  }, [getGlowRadius, getMatchStrength, getNodeOpacity, isDark, searchTerm])
 
   return (
     <div
       ref={containerRef}
       className="relative flex h-full w-full items-center justify-center overflow-hidden"
-      style={{ background: '#0c0e11' }}
+      style={{ background: 'var(--th-bg)' }}
     >
       <div
         className="pointer-events-none absolute inset-0 z-0"
         style={{
-          background:
-            'radial-gradient(ellipse 58% 58% at 50% 50%, rgba(18,22,25,0.48) 0%, transparent 100%)',
+          background: isDark
+            ? 'radial-gradient(ellipse 58% 58% at 50% 50%, rgba(18,22,25,0.48) 0%, transparent 100%)'
+            : 'radial-gradient(ellipse 58% 58% at 50% 50%, rgba(240,237,237,0.4) 0%, transparent 100%)',
         }}
       />
 
@@ -457,10 +471,17 @@ export function KnowledgeGraphCanvas({
           const typedLink = link as { weight?: number; type?: GraphEdgeType }
           const weight = clamp01(Number(typedLink.weight ?? 0))
           const tension = smoothstep(Math.max(0, weight - 0.52) / 0.48)
-          if (typedLink.type === 'parent_of') {
-            return `rgba(212,224,238,${0.18 + tension * 0.40})`
+          if (isDark) {
+            if (typedLink.type === 'parent_of') {
+              return `rgba(212,224,238,${0.18 + tension * 0.40})`
+            }
+            return `rgba(132,216,236,${0.055 + tension * 0.22})`
+          } else {
+            if (typedLink.type === 'parent_of') {
+              return `rgba(76,69,70,${0.15 + tension * 0.30})`
+            }
+            return `rgba(27,107,79,${0.08 + tension * 0.22})`
           }
-          return `rgba(132,216,236,${0.055 + tension * 0.22})`
         }}
         linkWidth={(link) => {
           const typedLink = link as { weight?: number; type?: GraphEdgeType }
@@ -483,6 +504,31 @@ export function KnowledgeGraphCanvas({
         d3AlphaDecay={0.026}
         d3VelocityDecay={0.42}
       />
+
+      {/* 검색 결과 없음 Zero State UI 오버레이 — Enter 제출 이후에만 표시 */}
+      {searchTerm && searchTerm.trim() !== '' && isExplicitSearch && matchedNodeIds && matchedNodeIds.length === 0 && (
+        <div
+          className="absolute z-10 flex flex-col items-center justify-center gap-3 px-6 py-8 rounded-2xl backdrop-blur-lg shadow-2xl max-w-sm text-center"
+          style={{
+            background: 'var(--th-header-bg)',
+            border: '1px solid var(--th-border)',
+          }}
+        >
+          <div className="flex items-center justify-center w-12 h-12 rounded-full text-red-400" style={{ background: 'rgba(186,26,26,0.1)' }}>
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="10" />
+              <line x1="12" y1="8" x2="12" y2="12" />
+              <line x1="12" y1="16" x2="12.01" y2="16" />
+            </svg>
+          </div>
+          <span className="font-manrope font-bold text-sm" style={{ color: 'var(--th-text)' }}>
+            검색 결과 없음
+          </span>
+          <p className="font-inter text-xs leading-relaxed" style={{ color: 'var(--th-text-muted)' }}>
+            일치하는 문서 노드가 없습니다.<br />다른 검색어를 입력해 보세요.
+          </p>
+        </div>
+      )}
     </div>
   )
 }

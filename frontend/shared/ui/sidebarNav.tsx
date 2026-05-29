@@ -2,9 +2,10 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
-import { getMe } from '@/entities/auth'
+import { usePathname, useRouter } from 'next/navigation'
+import { getMe, logout } from '@/entities/auth'
 import type { MeResponseData } from '@/entities/auth/api/auth.api.type'
+import { useTheme } from '@/shared/lib/theme/themeContext'
 
 import GraphIcon from '@/public/graph.svg'
 import CalendarIcon from '@/public/calendar.svg'
@@ -14,6 +15,8 @@ interface SidebarNavProps {
 }
 
 export function SidebarNav({ onUpload }: SidebarNavProps) {
+  const router = useRouter()
+  const { isDark } = useTheme()
   const [isOpen, setIsOpen] = useState(false)
   const [user, setUser] = useState<MeResponseData | null>(null)
   const pathname = usePathname()
@@ -27,16 +30,33 @@ export function SidebarNav({ onUpload }: SidebarNavProps) {
       })
   }, [])
 
+  const handleLogout = async () => {
+    if (confirm('로그아웃 하시겠습니까?')) {
+      try {
+        await logout()
+        router.push('/login')
+      } catch (err) {
+        console.error('Failed to logout:', err)
+        const { clearAccessToken } = await import('@/shared/api')
+        clearAccessToken()
+        router.push('/login')
+      }
+    }
+  }
+
   const isGraph = pathname === '/'
   const isCalendar = pathname === '/calendar'
+
+  const inactiveIconFill = isDark ? '#FFFFFF' : '#4c4546'
+  const imgFilter = isDark ? 'none' : 'brightness(0) opacity(0.55)'
 
   return (
     <aside
       className="fixed left-0 top-0 z-30 flex h-full flex-col justify-between overflow-hidden py-6 transition-[width] duration-300 ease-in-out"
       style={{
         width: isOpen ? 256 : 81,
-        background: '#171a1d',
-        borderRight: '1px solid rgba(70,72,75,0.2)',
+        background: 'var(--th-sidebar)',
+        borderRight: '1px solid var(--th-border)',
       }}
       onMouseEnter={() => setIsOpen(true)}
       onMouseLeave={() => setIsOpen(false)}
@@ -71,7 +91,7 @@ export function SidebarNav({ onUpload }: SidebarNavProps) {
             </span>
             <span
               className="font-inter font-bold text-[10px] tracking-[2px]"
-              style={{ color: '#aaabaf' }}
+              style={{ color: 'var(--th-text-faint)' }}
             >
               Intelligent Graph
             </span>
@@ -92,13 +112,13 @@ export function SidebarNav({ onUpload }: SidebarNavProps) {
             }}
           >
             <div className="flex h-6 w-[43px] shrink-0 items-center justify-center">
-              <GraphIcon fill={isGraph ? "#00E3Fd" : "#FFFFFF"} />
+              <GraphIcon fill={isGraph ? "#00E3Fd" : inactiveIconFill} />
             </div>
             <span
               className="font-inter text-sm transition-all duration-300 overflow-hidden"
               style={{
                 fontWeight: isGraph ? 700 : 400,
-                color: isGraph ? '#81ecff' : '#aaabaf',
+                color: isGraph ? '#81ecff' : 'var(--th-text-muted)',
                 letterSpacing: '-0.4px',
                 opacity: isOpen ? 1 : 0,
                 maxWidth: isOpen ? 120 : 0,
@@ -121,13 +141,13 @@ export function SidebarNav({ onUpload }: SidebarNavProps) {
             }}
           >
             <div className="flex h-5 w-[41px] shrink-0 items-center justify-center">
-              <CalendarIcon fill={isCalendar ? "#00E3Fd" : "#FFFFFF"} />
+              <CalendarIcon fill={isCalendar ? "#00E3Fd" : inactiveIconFill} />
             </div>
             <span
               className="font-inter text-sm transition-all duration-300 overflow-hidden"
               style={{
                 fontWeight: isCalendar ? 700 : 400,
-                color: isCalendar ? '#81ecff' : '#aaabaf',
+                color: isCalendar ? '#81ecff' : 'var(--th-text-muted)',
                 letterSpacing: '-0.4px',
                 opacity: isOpen ? 1 : 0,
                 maxWidth: isOpen ? 120 : 0,
@@ -175,12 +195,12 @@ export function SidebarNav({ onUpload }: SidebarNavProps) {
         {/* Settings */}
         <div className="flex items-center py-3 pl-[21px]">
           <div className="flex h-5 w-[41px] shrink-0 items-center justify-center">
-            <img src="/setting.svg" alt="" />
+            <img src="/setting.svg" alt="" style={{ filter: imgFilter }} />
           </div>
           <span
             className="font-inter text-sm transition-all duration-300 overflow-hidden"
             style={{
-              color: '#aaabaf',
+              color: 'var(--th-text-muted)',
               letterSpacing: '-0.4px',
               opacity: isOpen ? 1 : 0,
               maxWidth: isOpen ? 120 : 0,
@@ -194,12 +214,12 @@ export function SidebarNav({ onUpload }: SidebarNavProps) {
         {/* Support */}
         <div className="flex items-center py-3 pl-[21px]">
           <div className="flex h-5 w-[41px] shrink-0 items-center justify-center">
-            <img src="/help.svg" alt="" />
+            <img src="/help.svg" alt="" style={{ filter: imgFilter }} />
           </div>
           <span
             className="font-inter text-sm transition-all duration-300 overflow-hidden"
             style={{
-              color: '#aaabaf',
+              color: 'var(--th-text-muted)',
               letterSpacing: '-0.4px',
               opacity: isOpen ? 1 : 0,
               maxWidth: isOpen ? 120 : 0,
@@ -213,13 +233,13 @@ export function SidebarNav({ onUpload }: SidebarNavProps) {
         {/* 사용자 프로필 */}
         <div
           className="flex items-center py-4 pl-[19px]"
-          style={{ borderTop: '1px solid rgba(70,72,75,0.1)' }}
+          style={{ borderTop: '1px solid var(--th-separator)' }}
         >
           <div
             className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full"
             style={{
-              border: '1px solid rgba(70,72,75,0.3)',
-              background: '#1a2a2a',
+              border: '1px solid var(--th-border)',
+              background: isDark ? '#1a2a2a' : '#d8f5ea',
             }}
           >
             <svg width="18" height="18" viewBox="0 0 20 20" fill="none">
@@ -251,17 +271,31 @@ export function SidebarNav({ onUpload }: SidebarNavProps) {
           >
             <span
               className="font-inter font-bold text-xs"
-              style={{ color: '#f9f9fd', letterSpacing: '-0.4px' }}
+              style={{ color: 'var(--th-text)', letterSpacing: '-0.4px' }}
             >
               {user?.name ?? "김스냅"}
             </span>
             <span
               className="font-inter text-[10px]"
-              style={{ color: '#aaabaf', letterSpacing: '-0.4px' }}
+              style={{ color: 'var(--th-text-muted)', letterSpacing: '-0.4px' }}
             >
               {user?.email ?? "kimsnap@gmail.com"}
             </span>
           </div>
+
+          {isOpen && (
+            <button
+              onClick={handleLogout}
+              className="ml-auto mr-4 text-red-400 hover:text-red-500 transition-colors p-1 cursor-pointer shrink-0"
+              title="로그아웃"
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                <polyline points="16 17 21 12 16 7" />
+                <line x1="21" y1="12" x2="9" y2="12" />
+              </svg>
+            </button>
+          )}
         </div>
       </div>
     </aside>

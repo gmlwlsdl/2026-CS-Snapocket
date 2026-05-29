@@ -26,6 +26,7 @@ from app.services.model_probe import ModelAvailabilityProber
 from app.services.model_registry import ModelRegistry
 from app.services.asr.qwen_asr_engine import QwenASREngine
 from app.services.ocr.llamacpp_engine import LlamaCppVisionEngine
+from app.services.ocr.paddle_doc_parser_engine import PaddleOCRVLDocParserEngine
 from app.services.ocr.router import OCREngineRouter
 from app.services.persistence import PersistenceStore
 from app.services.pipeline import InferencePipeline
@@ -134,20 +135,39 @@ def build_app_state() -> AppState:
         persistence=persistence,
     )
 
-    # 현재 로컬 OCR 런타임은 paddle gguf 단일 엔진만 사용한다.
-    paddle_engine = LlamaCppVisionEngine(
-        name="paddle",
-        model=settings.llm_model_paddle,
-        profile="paddle",
-        enabled=settings.paddle_enable,
-        base_url=settings.llm_base_url,
-        availability_ttl_s=settings.model_availability_ttl_s,
-        request_timeout_s=settings.llm_request_timeout_s,
-        keep_alive=settings.llm_keep_alive,
-        temperature=settings.llm_temperature,
-        max_side_px=settings.llm_image_max_side_px,
-        max_tokens=settings.llm_max_tokens,
-    )
+    # 기본 경로는 공식 PaddleOCRVL doc-parser pipeline이다. llama.cpp는
+    # PaddleOCRVL 내부의 VLM recognition backend로만 연결한다.
+    if str(settings.paddle_runtime or "").strip().lower() in {"llama", "llamacpp", "legacy"}:
+        paddle_engine = LlamaCppVisionEngine(
+            name="paddle",
+            model=settings.llm_model_paddle,
+            profile="paddle",
+            enabled=settings.paddle_enable,
+            base_url=settings.llm_base_url,
+            availability_ttl_s=settings.model_availability_ttl_s,
+            request_timeout_s=settings.llm_request_timeout_s,
+            keep_alive=settings.llm_keep_alive,
+            temperature=settings.llm_temperature,
+            max_side_px=settings.llm_image_max_side_px,
+            max_tokens=settings.llm_max_tokens,
+        )
+    else:
+        paddle_engine = PaddleOCRVLDocParserEngine(
+            enabled=settings.paddle_enable,
+            vl_rec_server_url=settings.llm_base_url,
+            pipeline_version=settings.paddle_doc_parser_pipeline_version,
+            device=settings.paddle_doc_parser_device,
+            engine=settings.paddle_doc_parser_engine,
+            request_timeout_s=settings.llm_request_timeout_s,
+            availability_ttl_s=settings.model_availability_ttl_s,
+            use_doc_preprocessor=settings.paddle_doc_parser_use_doc_preprocessor,
+            use_layout_detection=settings.paddle_doc_parser_use_layout_detection,
+            use_chart_recognition=settings.paddle_doc_parser_use_chart_recognition,
+            use_seal_recognition=settings.paddle_doc_parser_use_seal_recognition,
+            use_ocr_for_image_block=settings.paddle_doc_parser_use_ocr_for_image_block,
+            vl_rec_max_concurrency=settings.paddle_doc_parser_vl_rec_max_concurrency,
+            max_new_tokens=settings.paddle_doc_parser_max_new_tokens,
+        )
     router = OCREngineRouter(
         paddle_engine=paddle_engine,
         default_engine="paddle",

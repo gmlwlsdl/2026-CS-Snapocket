@@ -2,7 +2,7 @@
 
 import { useState, useRef, useCallback, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { SidebarNav } from '@/shared/ui'
+import { SidebarNav, ThemeToggle } from '@/shared/ui'
 import { UploadModal } from '@/features/upload'
 import { t as translate } from '@/shared/lib/i18n'
 import {
@@ -11,6 +11,15 @@ import {
   type CalendarDates,
   type CalendarDayItem,
 } from '@/entities/calendar'
+
+const CATEGORY_FILTERS = [
+  { id: 'all', label: 'All' },
+  { id: 'lecture', label: 'Lecture' },
+  { id: 'assignment', label: 'Assignment' },
+  { id: 'notice', label: 'Notice' },
+  { id: 'receipt', label: 'Receipt' },
+  { id: 'memo', label: 'Memo' },
+] as const
 
 const WEEKDAYS = ['월', '화', '수', '목', '금', '토', '일']
 
@@ -95,6 +104,7 @@ export function CalendarPage() {
   const [year, setYear] = useState(today.getFullYear())
   const [month, setMonth] = useState(today.getMonth())
   const [search, setSearch] = useState('')
+  const [activeFilter, setActiveFilter] = useState<'all' | 'lecture' | 'assignment' | 'notice' | 'receipt' | 'memo'>('all')
   const [calendarDates, setCalendarDates] = useState<CalendarDates>({})
   const [selectedDate, setSelectedDate] = useState<string | null>(null)
   const [dayItems, setDayItems] = useState<CalendarDayItem[]>([])
@@ -107,10 +117,14 @@ export function CalendarPage() {
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
-    fetchCalendarMonth({ year, month: month + 1 })
+    fetchCalendarMonth({
+      year,
+      month: month + 1,
+      category: activeFilter === 'all' ? undefined : activeFilter
+    })
       .then(setCalendarDates)
       .catch((err) => console.error('Failed to load calendar:', err))
-  }, [year, month])
+  }, [year, month, activeFilter])
 
   const cells = buildGrid(year, month)
   const rows: (typeof cells)[] = []
@@ -163,12 +177,15 @@ export function CalendarPage() {
     setDayItems([])
     setDayPanelOpen(true)
     try {
-      const items = await fetchCalendarDay({ date: dateStr })
+      const items = await fetchCalendarDay({
+        date: dateStr,
+        category: activeFilter === 'all' ? undefined : activeFilter
+      })
       setDayItems(items)
     } catch (err) {
       console.error('Failed to load day items:', err)
     }
-  }, [])
+  }, [activeFilter])
 
   const handleDayPanelClose = useCallback(() => {
     setDayPanelOpen(false)
@@ -176,20 +193,27 @@ export function CalendarPage() {
     setDayItems([])
   }, [])
 
-  // TODO: [API] uploadDocument(file) 호출 후 반환된 document_id로 /analysis/{id} 이동.
-  //   현재는 토스트만 표시하고 실제 업로드 없이 종료됨.
-  const handleUpload = useCallback((file: File) => {
+  const handleUpload = useCallback(async (file: File) => {
     if (toastTimerRef.current) clearTimeout(toastTimerRef.current)
     setUploadToast({ visible: true, fileName: file.name })
-    toastTimerRef.current = setTimeout(() => {
+ 
+    try {
+      const { uploadDocument } = await import('@/entities/document')
+      const uploadRes = await uploadDocument(file)
+      
       setUploadToast({ visible: false, fileName: '' })
-    }, 3500)
-  }, [])
+      router.push(`/analysis/${uploadRes.document_id}`)
+    } catch (error) {
+      console.error('Upload failed:', error)
+      alert('파일 업로드에 실패했습니다. 다시 시도해 주세요.')
+      setUploadToast({ visible: false, fileName: '' })
+    }
+  }, [router])
 
   return (
     <div
       className="flex h-screen w-full overflow-hidden"
-      style={{ background: '#0c0e11' }}
+      style={{ background: 'var(--th-bg)' }}
     >
       <SidebarNav onUpload={() => setModalOpen(true)} />
 
@@ -202,15 +226,15 @@ export function CalendarPage() {
           className="flex shrink-0 items-center justify-between px-8"
           style={{
             height: 64,
-            background: 'rgba(12,14,17,0.7)',
-            borderBottom: '1px solid rgba(255,255,255,0.05)',
+            background: 'var(--th-header-bg)',
+            borderBottom: '1px solid var(--th-separator)',
             backdropFilter: 'blur(8px)',
           }}
         >
           <div className="flex items-center gap-6">
             <span
               className="font-manrope font-semibold text-sm"
-              style={{ color: '#aaabaf', letterSpacing: '1.4px' }}
+              style={{ color: 'var(--th-text-faint)', letterSpacing: '1.4px' }}
             >
               SCHEDULE
             </span>
@@ -227,11 +251,12 @@ export function CalendarPage() {
                 onClick={prevMonth}
                 className="flex h-5 w-4 items-center justify-center rounded transition-opacity hover:opacity-70"
                 aria-label="이전 달"
+                style={{ color: 'var(--th-text-faint)' }}
               >
                 <svg width="7" height="12" viewBox="0 0 7 12" fill="none">
                   <path
                     d="M6 1L1 6L6 11"
-                    stroke="#aaabaf"
+                    stroke="currentColor"
                     strokeWidth="1.5"
                     strokeLinecap="round"
                     strokeLinejoin="round"
@@ -243,11 +268,12 @@ export function CalendarPage() {
                 onClick={nextMonth}
                 className="flex h-5 w-4 items-center justify-center rounded transition-opacity hover:opacity-70"
                 aria-label="다음 달"
+                style={{ color: 'var(--th-text-faint)' }}
               >
                 <svg width="7" height="12" viewBox="0 0 7 12" fill="none">
                   <path
                     d="M1 1L6 6L1 11"
-                    stroke="#aaabaf"
+                    stroke="currentColor"
                     strokeWidth="1.5"
                     strokeLinecap="round"
                     strokeLinejoin="round"
@@ -257,47 +283,85 @@ export function CalendarPage() {
             </div>
           </div>
 
-          {/* 검색 */}
-          <div
-            className="flex items-center gap-2 rounded-full px-4"
-            style={{
-              width: 256,
-              height: 36,
-              background: '#111417',
-            }}
-          >
-            <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-              <circle cx="6" cy="6" r="5" stroke="#747579" strokeWidth="1.3" />
-              <path
-                d="M10 10L13 13"
-                stroke="#747579"
-                strokeWidth="1.3"
-                strokeLinecap="round"
+          {/* 카테고리 필터 칩 */}
+          <nav className="flex items-center gap-2" aria-label="Category filters">
+            {CATEGORY_FILTERS.map(({ id, label }) => {
+              const isActive = activeFilter === id;
+              return (
+                <button
+                  key={id}
+                  onClick={() => setActiveFilter(id)}
+                  className="flex items-center px-4 h-[28px] rounded-full font-manrope transition-colors cursor-pointer"
+                  style={
+                    isActive
+                      ? {
+                          background: 'var(--th-chip-active-bg)',
+                          color: 'var(--th-chip-active-text)',
+                          fontSize: 12,
+                          fontWeight: 500,
+                          letterSpacing: -0.4,
+                        }
+                      : {
+                          background: 'var(--th-chip-inactive-bg)',
+                          border: '1px solid var(--th-chip-inactive-border)',
+                          color: 'var(--th-chip-inactive-text)',
+                          fontSize: 12,
+                          fontWeight: 500,
+                          letterSpacing: -0.4,
+                        }
+                  }
+                >
+                  {label}
+                </button>
+              );
+            })}
+          </nav>
+
+          {/* 검색 + 테마 토글 */}
+          <div className="flex items-center gap-3">
+            <div
+              className="flex items-center gap-2 rounded-full px-4"
+              style={{
+                width: 224,
+                height: 36,
+                background: 'var(--th-surface)',
+                border: '1px solid var(--th-border)',
+              }}
+            >
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style={{ color: 'var(--th-text-faint)', flexShrink: 0 }}>
+                <circle cx="6" cy="6" r="5" stroke="currentColor" strokeWidth="1.3" />
+                <path
+                  d="M10 10L13 13"
+                  stroke="currentColor"
+                  strokeWidth="1.3"
+                  strokeLinecap="round"
+                />
+              </svg>
+              <input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="flex-1 bg-transparent font-manrope text-[10px] font-medium tracking-widest outline-none th-placeholder"
+                style={{ color: 'var(--th-text-muted)', letterSpacing: '1.4px' }}
+                placeholder={translate('findDocument', 'ko')}
+                aria-label="문서 검색"
               />
-            </svg>
-            <input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="flex-1 bg-transparent font-manrope text-[10px] font-medium tracking-widest outline-none"
-              style={{ color: '#aaabaf', letterSpacing: '1.4px' }}
-              placeholder={translate('findDocument', 'ko')}
-              aria-label="문서 검색"
-            />
-            {search && (
-              <button
-                onClick={() => setSearch('')}
-                style={{ color: '#747579' }}
-              >
-                <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
-                  <path
-                    d="M1 1L9 9M9 1L1 9"
-                    stroke="currentColor"
-                    strokeWidth="1.3"
-                    strokeLinecap="round"
-                  />
-                </svg>
-              </button>
-            )}
+              {search && (
+                <button
+                  onClick={() => setSearch('')}
+                  style={{ color: 'var(--th-text-faint)' }}
+                >
+                  <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+                    <path
+                      d="M1 1L9 9M9 1L1 9"
+                      stroke="currentColor"
+                      strokeWidth="1.3"
+                      strokeLinecap="round"
+                    />
+                  </svg>
+                </button>
+              )}
+            </div>
+            <ThemeToggle />
           </div>
         </header>
 
@@ -306,7 +370,7 @@ export function CalendarPage() {
           {/* 요일 헤더 */}
           <div
             className="grid shrink-0 grid-cols-7"
-            style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}
+            style={{ borderBottom: '1px solid var(--th-separator)' }}
           >
             {WEEKDAYS.map((day) => (
               <div
@@ -314,12 +378,12 @@ export function CalendarPage() {
                 className="flex items-center justify-center"
                 style={{
                   height: 48,
-                  borderRight: '1px solid rgba(255,255,255,0.03)',
+                  borderRight: '1px solid var(--th-separator)',
                 }}
               >
                 <span
                   className="font-inter font-bold text-[10px] tracking-[2px]"
-                  style={{ color: '#aaabaf' }}
+                  style={{ color: 'var(--th-text-muted)' }}
                 >
                   {day}
                 </span>
@@ -336,7 +400,7 @@ export function CalendarPage() {
               <div
                 key={rowIdx}
                 className="grid grid-cols-7"
-                style={{ borderBottom: '1px solid rgba(255,255,255,0.03)' }}
+                style={{ borderBottom: '1px solid var(--th-separator)' }}
               >
                 {row.map((cell, colIdx) => {
                   const todayCell = isToday(cell.date)
@@ -354,9 +418,9 @@ export function CalendarPage() {
                       onKeyDown={(e) => {
                         if (e.key === 'Enter' || e.key === ' ') handleDayClick(cell.date)
                       }}
-                      className="relative flex flex-col overflow-hidden transition-colors cursor-pointer hover:bg-white/2"
+                      className="relative flex flex-col overflow-hidden transition-colors cursor-pointer"
                       style={{
-                        borderRight: '1px solid rgba(255,255,255,0.03)',
+                        borderRight: '1px solid var(--th-separator)',
                         background: isSelected
                           ? 'rgba(129,236,255,0.06)'
                           : todayCell
@@ -374,8 +438,8 @@ export function CalendarPage() {
                           color: todayCell
                             ? '#81ecff'
                             : cell.current
-                              ? '#f9f9fd'
-                              : 'rgba(170,171,175,0.3)',
+                              ? 'var(--th-text)'
+                              : 'var(--th-text-faint)',
                         }}
                       >
                         {String(cell.date.getDate()).padStart(2, '0')}
@@ -431,15 +495,15 @@ export function CalendarPage() {
             className="fixed right-0 top-0 z-20 flex h-full flex-col overflow-hidden"
             style={{
               width: 320,
-              background: '#111417',
-              borderLeft: '1px solid rgba(255,255,255,0.07)',
+              background: 'var(--th-day-panel)',
+              borderLeft: '1px solid var(--th-day-panel-border)',
             }}
           >
             <div
               className="flex shrink-0 items-center justify-between px-6"
               style={{
                 height: 64,
-                borderBottom: '1px solid rgba(255,255,255,0.05)',
+                borderBottom: '1px solid var(--th-separator)',
               }}
             >
               <span
@@ -451,12 +515,13 @@ export function CalendarPage() {
               <button
                 onClick={handleDayPanelClose}
                 className="flex h-7 w-7 items-center justify-center rounded transition-opacity hover:opacity-70"
+                style={{ color: 'var(--th-text-faint)' }}
                 aria-label="닫기"
               >
                 <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
                   <path
                     d="M1 1L11 11M11 1L1 11"
-                    stroke="#747579"
+                    stroke="currentColor"
                     strokeWidth="1.5"
                     strokeLinecap="round"
                   />
@@ -468,7 +533,7 @@ export function CalendarPage() {
               {dayItems.length === 0 ? (
                 <div
                   className="flex flex-1 items-center justify-center font-inter text-xs"
-                  style={{ color: '#747579' }}
+                  style={{ color: 'var(--th-text-faint)' }}
                 >
                   문서 없음
                 </div>
@@ -477,12 +542,12 @@ export function CalendarPage() {
                   <button
                     key={item.id}
                     onClick={() => router.push(`/analysis/${item.id}`)}
-                    className="flex flex-col gap-1.5 rounded-lg px-4 py-3 text-left transition-colors hover:bg-white/4"
-                    style={{ background: 'rgba(255,255,255,0.02)' }}
+                    className="flex flex-col gap-1.5 rounded-lg px-4 py-3 text-left transition-colors"
+                    style={{ background: 'var(--th-separator)' }}
                   >
                     <span
                       className="font-inter text-xs font-medium leading-snug"
-                      style={{ color: '#f9f9fd' }}
+                      style={{ color: 'var(--th-text)' }}
                     >
                       {item.title}
                     </span>
@@ -518,9 +583,10 @@ export function CalendarPage() {
         <div
           className="fixed bottom-6 left-1/2 -translate-x-1/2 rounded-full px-5 py-2.5 font-inter text-xs font-medium"
           style={{
-            background: '#1a1d21',
-            border: '1px solid rgba(255,255,255,0.08)',
-            color: '#aaabaf',
+            background: 'var(--th-surface-2, var(--th-surface))',
+            border: '1px solid var(--th-border)',
+            color: 'var(--th-text-muted)',
+            backdropFilter: 'blur(8px)',
           }}
         >
           {uploadToast.fileName} 업로드 중…
@@ -532,6 +598,51 @@ export function CalendarPage() {
         onClose={() => setModalOpen(false)}
         onUpload={handleUpload}
       />
+
+      <style>{`
+        @media (max-width: 768px) {
+          main {
+            margin-left: 0 !important;
+            padding-left: 12px !important;
+            padding-right: 12px !important;
+          }
+          header {
+            flex-direction: column !important;
+            height: auto !important;
+            padding: 16px 12px !important;
+            gap: 12px !important;
+            align-items: stretch !important;
+          }
+          header > div:first-child {
+            justify-content: space-between !important;
+            width: 100% !important;
+          }
+          header nav {
+            overflow-x: auto !important;
+            white-space: nowrap !important;
+            padding-bottom: 6px !important;
+            justify-content: flex-start !important;
+            width: 100% !important;
+            scrollbar-width: none;
+          }
+          header nav::-webkit-scrollbar {
+            display: none;
+          }
+          header > div:last-child {
+            width: 100% !important;
+          }
+          .grid-cols-7 > div {
+            min-height: 54px !important;
+          }
+          .grid-cols-7 span {
+            padding: 6px 0 0 6px !important;
+            font-size: 11px !important;
+          }
+          aside {
+            display: none !important;
+          }
+        }
+      `}</style>
     </div>
   )
 }

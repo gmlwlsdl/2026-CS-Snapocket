@@ -1,15 +1,17 @@
-import { LoginForm } from "@/features/auth";
-import { NeuralNetworkBg } from "./neuralNetworkBg";
+'use client'
 
-export function LoginPage() {
+import { SignupForm } from "@/features/auth"
+import { NeuralNetworkBg } from "@/widgets/loginPage/ui/neuralNetworkBg"
+
+export function SignupPage() {
   return (
     <div className="flex min-h-screen w-full bg-snap-bg font-inter">
-      {/* 왼쪽 시각적 패널 */}
+      {/* 왼쪽 시각적 패널 (로그인과 동일하게 브랜딩 분위기 유지) */}
       <section className="relative hidden lg:flex flex-col w-1/2 bg-snap-panel overflow-hidden">
         {/* 뉴럴 네트워크 SVG 배경 */}
         <NeuralNetworkBg />
 
-        {/* 블러 오버레이 — 분위기 연출 */}
+        {/* 블러 오버레이 */}
         <div
           className="absolute rounded-full pointer-events-none"
           style={{
@@ -35,7 +37,6 @@ export function LoginPage() {
 
         {/* 브랜드 콘텐츠 오버레이 */}
         <div className="relative z-10 flex flex-col justify-end h-full px-16 pb-20">
-          {/* 로고 + 슬로건 */}
           <div className="flex flex-col gap-2 mb-10">
             <h1
               className="font-manrope font-extrabold text-snap-white leading-none"
@@ -64,8 +65,8 @@ export function LoginPage() {
                 10M+
               </span>
               <span
-                className="font-inter text-snap-muted/75 uppercase"
-                style={{ fontSize: 11, letterSpacing: 2, lineHeight: "15px" }}
+                className="font-inter text-snap-muted/60 uppercase"
+                style={{ fontSize: 10, letterSpacing: 2, lineHeight: "15px" }}
               >
                 Assets Analyzed
               </span>
@@ -78,8 +79,8 @@ export function LoginPage() {
                 99.9%
               </span>
               <span
-                className="font-inter text-snap-muted/75 uppercase"
-                style={{ fontSize: 11, letterSpacing: 2, lineHeight: "15px" }}
+                className="font-inter text-snap-muted/60 uppercase"
+                style={{ fontSize: 10, letterSpacing: 2, lineHeight: "15px" }}
               >
                 Recognition Accuracy
               </span>
@@ -88,7 +89,7 @@ export function LoginPage() {
         </div>
       </section>
 
-      {/* 오른쪽 로그인 폼 패널 */}
+      {/* 오른쪽 회원가입 폼 패널 */}
       <section className="flex flex-col w-full lg:w-1/2 bg-snap-bg">
         <div className="flex flex-1 flex-col justify-center px-8 sm:px-16 lg:px-[100px]">
           <div className="w-full max-w-[448px] mx-auto flex flex-col gap-8">
@@ -98,24 +99,24 @@ export function LoginPage() {
                 className="font-manrope font-bold text-snap-white"
                 style={{ fontSize: 30, letterSpacing: -0.75, lineHeight: "36px" }}
               >
-                Welcome back
+                Create an Account
               </h2>
               <p className="font-inter text-snap-muted" style={{ fontSize: 16, lineHeight: "24px" }}>
-                Access your curated digital gallery.
+                Build your own intelligent digital pocket.
               </p>
             </div>
 
-            {/* 폼 */}
-            <LoginForm />
+            {/* 회원가입 폼 */}
+            <SignupForm />
 
-            {/* 회원가입 링크 */}
+            {/* 로그인 링크 */}
             <p className="text-center font-inter text-snap-muted" style={{ fontSize: 14, lineHeight: "20px" }}>
-              New to Snapocket?{" "}
+              Already have an account?{" "}
               <a
-                href="/signup"
+                href="/login"
                 className="text-snap-cyan font-semibold hover:text-snap-cyan/80 transition-colors"
               >
-                Create an Account
+                Sign In
               </a>
             </p>
           </div>
@@ -124,8 +125,8 @@ export function LoginPage() {
         {/* 하단 푸터 */}
         <footer className="flex items-center justify-between px-8 sm:px-12 py-5">
           <span
-            className="font-inter text-snap-muted/55"
-            style={{ fontSize: 11, letterSpacing: 1, lineHeight: "15px" }}
+            className="font-inter text-snap-muted/30"
+            style={{ fontSize: 10, letterSpacing: 1, lineHeight: "15px" }}
           >
             © 2024 Snapocket AI. The Digital Curator.
           </span>
@@ -134,8 +135,8 @@ export function LoginPage() {
               <a
                 key={label}
                 href={`/${label.toLowerCase()}`}
-                className="font-inter text-snap-muted/60 hover:text-snap-muted/80 transition-colors"
-                style={{ fontSize: 11, letterSpacing: 1, lineHeight: "15px" }}
+                className="font-inter text-snap-muted/40 hover:text-snap-muted/60 transition-colors"
+                style={{ fontSize: 10, letterSpacing: 1, lineHeight: "15px" }}
               >
                 {label}
               </a>
@@ -144,5 +145,5 @@ export function LoginPage() {
         </footer>
       </section>
     </div>
-  );
+  )
 }

@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import { Manrope, Inter } from "next/font/google";
+import { ToastProvider } from '@/shared/ui';
+import { ThemeProvider } from '@/shared/lib/theme/themeContext';
 import "./globals.css";
 
 const manrope = Manrope({
@@ -23,8 +25,15 @@ export default function RootLayout({ children }: { children: ReactNode }) {
     <html
       lang="en"
       className={`${manrope.variable} ${inter.variable} h-full antialiased`}
+      suppressHydrationWarning
     >
-      <body className="min-h-full">{children}</body>
+      <body className="min-h-full">
+        <ThemeProvider>
+          <ToastProvider>
+            {children}
+          </ToastProvider>
+        </ThemeProvider>
+      </body>
     </html>
   );
 }
