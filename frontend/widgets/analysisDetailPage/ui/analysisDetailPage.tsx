@@ -118,6 +118,7 @@ export function AnalysisDetailPage() {
 
   const [addingTag, setAddingTag] = useState(false)
   const [newTag, setNewTag] = useState('')
+  const [isSavingTag, setIsSavingTag] = useState(false)
 
   const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const imageBlobRef = useRef<string | null>(null)
@@ -288,10 +289,11 @@ export function AnalysisDetailPage() {
 
   async function handleAddTag() {
     const trimmed = newTag.trim()
-    if (!trimmed) return
+    if (!trimmed || isSavingTag) return
+    setIsSavingTag(true)
     const rawName = rawTagName(trimmed)
     if (form.tags.some((t) => rawTagName(t.label) === rawName)) {
-      setNewTag(''); setAddingTag(false); return
+      setNewTag(''); setAddingTag(false); setIsSavingTag(false); return
     }
     try {
       const savedTags = await replaceDocumentTags(id, {
@@ -309,7 +311,7 @@ export function AnalysisDetailPage() {
     } catch (err) {
       toast.error(err, '태그 추가에 실패했습니다.')
     } finally {
-      setNewTag(''); setAddingTag(false)
+      setNewTag(''); setAddingTag(false); setIsSavingTag(false)
     }
   }
 
@@ -421,7 +423,7 @@ export function AnalysisDetailPage() {
 
           <Group gap="xs">
             <Button
-              variant="default"
+              variant="outline"
               flex={1}
               h={48}
               radius="md"
@@ -538,9 +540,9 @@ export function AnalysisDetailPage() {
               <Group gap="xs">
                 {form.keyConcepts.length > 0
                   ? form.keyConcepts.map((concept, idx) => (
-                      <Badge key={idx} color="snap" variant="light" radius="xl">{concept}</Badge>
+                      <Badge key={idx} color="snap" variant="white" radius="xl">{concept}</Badge>
                     ))
-                  : <Text size="xs" c="dimmed" fs="italic">{isProcessing ? 'Extracting concepts…' : 'No concepts extracted'}</Text>
+                  : <Text size="xs" c="dimmed" fs="italic">{isProcessing ? '개념 추출 중…' : '추출된 개념 없음'}</Text>
                 }
               </Group>
             </Stack>
@@ -554,7 +556,7 @@ export function AnalysisDetailPage() {
             <Textarea
               readOnly
               value={form.rawText}
-              placeholder={isProcessing ? 'Extracting text…' : 'No text available'}
+              placeholder={isProcessing ? '텍스트 추출 중…' : '추출된 텍스트가 없습니다'}
               minRows={7}
               styles={{ input: { opacity: 0.5 } }}
             />
@@ -569,10 +571,9 @@ export function AnalysisDetailPage() {
               {form.tags.map((tag) => (
                 <div
                   key={tag.id}
-                  className="group flex items-center gap-1 rounded-md px-3 py-1"
-                  style={{ background: 'var(--th-surface)', border: `1px solid ${tag.color}33` }}
+                  className="group snap-tag flex items-center gap-1 rounded-md px-3 py-1"
                 >
-                  <span className="text-[12px] font-bold" style={{ color: tag.color }}>{tag.label}</span>
+                  <span className="text-[12px] font-bold">{tag.label}</span>
                   {isInteractive && (
                     <button
                       onClick={() => handleRemoveTag(tag.id)}
@@ -593,11 +594,19 @@ export function AnalysisDetailPage() {
                       autoFocus
                       value={newTag}
                       onChange={(e) => setNewTag(e.target.value)}
-                      onKeyDown={(e) => { if (e.key === 'Enter') handleAddTag(); if (e.key === 'Escape') setAddingTag(false) }}
-                      onBlur={handleAddTag}
-                      className="rounded-md px-3 outline-none h-[26px] border border-snap-cyan/30 text-[12px] font-bold text-snap-cyan w-[100px]"
-                      style={{ background: 'var(--th-surface)' }}
-                      placeholder="#tag"
+                      onKeyDown={(e) => {
+                        if (e.nativeEvent.isComposing) return
+                        if (e.key === 'Enter') {
+                          e.preventDefault()
+                          handleAddTag()
+                        }
+                        if (e.key === 'Escape') {
+                          setAddingTag(false)
+                        }
+                      }}
+                      onBlur={() => setAddingTag(false)}
+                      className="snap-tag-input rounded-md px-3 outline-none h-[26px] text-[12px] font-bold w-[100px]"
+                      placeholder="새로운 태그"
                     />
                   : <Button variant="subtle" color="gray" size="xs" radius="md" onClick={() => setAddingTag(true)}>
                       {translate('addTag', 'ko')}

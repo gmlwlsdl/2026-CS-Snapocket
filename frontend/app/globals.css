@@ -117,3 +117,34 @@ body {
   transform: translateY(0);
   box-shadow: 0 2px 6px rgba(151, 194, 236, 0.2);
 }
+
+/* ── Tag (태그) 스타일 ── */
+.snap-tag {
+  background-color: var(--mantine-color-snap-1);
+  color: var(--mantine-color-snap-6);
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+[data-mantine-color-scheme="dark"] .snap-tag {
+  background-color: rgba(151, 194, 236, 0.15);
+  color: #97c2ec;
+}
+
+.snap-tag-input {
+  background-color: var(--mantine-color-snap-1);
+  color: var(--mantine-color-snap-6);
+  border: 1px solid rgba(151, 194, 236, 0.3);
+  transition: all 0.2s ease;
+}
+
+[data-mantine-color-scheme="dark"] .snap-tag-input {
+  background-color: rgba(151, 194, 236, 0.1);
+  color: #97c2ec;
+  border-color: rgba(151, 194, 236, 0.4);
+}
+
+.snap-tag-input:focus {
+  border-color: #97c2ec;
+  box-shadow: 0 0 0 2px rgba(151, 194, 236, 0.2);
+}
+
