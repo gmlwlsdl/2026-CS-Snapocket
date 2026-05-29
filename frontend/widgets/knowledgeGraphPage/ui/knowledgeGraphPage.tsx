@@ -17,6 +17,7 @@ import { CATEGORY_TO_NODE_CATEGORY } from '../knowledgeGraph.utils'
 import dynamic from 'next/dynamic'
 import { SidebarNav, useToast, useTheme } from '@/shared/ui'
 import { UploadModal } from '@/features/upload'
+import { getAccessToken } from '@/shared/api'
 import { fetchAnalysisStatus } from '@/entities/analysis'
 import { TopHeader } from './topHeader'
 import type { ForceGraphMethods, NodeObject } from 'react-force-graph-2d'
@@ -135,14 +136,23 @@ export function KnowledgeGraphPage() {
   )
 
   useEffect(() => {
+    const token = getAccessToken()
+    if (!token) {
+      router.push('/login')
+      return
+    }
+
     getGraphSummary()
       .then(setSummaryData)
       .catch((err) => console.error('Failed to load graph summary:', err))
 
     loadAiAvailability()
-  }, [loadAiAvailability])
+  }, [loadAiAvailability, router])
 
   useEffect(() => {
+    const token = getAccessToken()
+    if (!token) return
+
     const controller = new AbortController()
 
     async function loadGraph() {
@@ -193,6 +203,9 @@ export function KnowledgeGraphPage() {
   }, [activeFilter])
 
   useEffect(() => {
+    const token = getAccessToken()
+    if (!token) return
+
     const normalizedKeyword = searchTerm.trim()
     if (!normalizedKeyword) {
       clearSearchState()

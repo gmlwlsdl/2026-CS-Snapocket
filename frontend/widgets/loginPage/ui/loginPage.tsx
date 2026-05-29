@@ -1,8 +1,19 @@
+'use client'
+
 import { LoginForm } from "@/features/auth";
-import { Anchor, Text } from "@mantine/core";
+import { Text } from "@mantine/core";
 import { ForceLightMode } from "@/shared/ui";
+import Link from "next/link";
+import { useEffect } from "react";
+import { clearAccessToken } from "@/shared/api";
 
 export function LoginPage() {
+  useEffect(() => {
+    // 로그인 화면 진입 시 만료된 잔여 세션 쿠키를 완전히 제거하여
+    // 미들웨어/프록시가 로그인된 유저로 오인해 메인 대시보드로 무한 리다이렉트하는 루프를 예방합니다.
+    clearAccessToken();
+  }, []);
+
   return (
     <ForceLightMode>
     <div className="flex min-h-screen w-full font-inter justify-center" style={{ background: 'var(--th-bg)' }}>
@@ -15,35 +26,35 @@ export function LoginPage() {
                 className="font-manrope font-bold"
                 style={{ fontSize: 30, letterSpacing: -0.75, lineHeight: "36px", color: 'var(--th-text)' }}
               >
-                Welcome back
+                로그인
               </h2>
-              <Text c="dimmed" style={{ fontSize: 16, lineHeight: "24px" }}>
-                Access your curated digital gallery.
-              </Text>
             </div>
 
             <LoginForm />
 
             <Text ta="center" size="sm" c="dimmed">
-              New to Snapocket?{" "}
-              <Anchor href="/signup" c="snap" fw={600}>
-                Create an Account
-              </Anchor>
+              회원이 아니신가요?{" "}
+              <Link
+                href="/signup"
+                style={{
+                  color: 'var(--th-chip-active-bg, #97c2ec)',
+                  fontWeight: 600,
+                  textDecoration: 'underline',
+                  fontSize: 'inherit',
+                  fontFamily: 'inherit',
+                }}
+                className="hover:opacity-80 transition-opacity"
+              >
+                회원가입
+              </Link>
             </Text>
           </div>
         </div>
 
-        <footer className="flex items-center justify-between px-8 sm:px-12 py-5">
+        <footer className="flex items-center justify-center px-8 sm:px-12 py-5">
           <Text size="xs" c="dimmed" style={{ letterSpacing: 1 }}>
-            © 2026 Snapocket AI. The Digital Curator.
+            © 2026 Snapocket AI. 
           </Text>
-          <nav className="flex gap-6" aria-label="Footer links">
-            {(["Privacy", "Terms", "Security"] as const).map((label) => (
-              <Anchor key={label} href={`/${label.toLowerCase()}`} size="xs" c="dimmed" style={{ letterSpacing: 1 }}>
-                {label}
-              </Anchor>
-            ))}
-          </nav>
         </footer>
       </section>
     </div>
