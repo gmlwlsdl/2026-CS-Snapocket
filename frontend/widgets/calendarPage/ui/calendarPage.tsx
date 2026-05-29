@@ -2,9 +2,8 @@
 
 import { useState, useRef, useCallback, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { SidebarNav, ThemeToggle } from '@/shared/ui'
+import { SidebarNav, useToast } from '@/shared/ui'
 import { UploadModal } from '@/features/upload'
-import { t as translate } from '@/shared/lib/i18n'
 import {
   fetchCalendarMonth,
   fetchCalendarDay,
@@ -12,14 +11,9 @@ import {
   type CalendarDayItem,
 } from '@/entities/calendar'
 
-const CATEGORY_FILTERS = [
-  { id: 'all', label: 'All' },
-  { id: 'lecture', label: 'Lecture' },
-  { id: 'assignment', label: 'Assignment' },
-  { id: 'notice', label: 'Notice' },
-  { id: 'receipt', label: 'Receipt' },
-  { id: 'memo', label: 'Memo' },
-] as const
+import { TopHeader } from '@/widgets/knowledgeGraphPage/ui/topHeader'
+import type { CategoryFilter } from '@/widgets/knowledgeGraphPage/knowledgeGraph.type'
+import { CaretLeftIcon, CaretRightIcon } from '@phosphor-icons/react'
 
 const WEEKDAYS = ['월', '화', '수', '목', '금', '토', '일']
 
@@ -30,7 +24,7 @@ const MONTH_NAMES = [
 
 const CATEGORY_COLOR: Record<string, string> = {
   lecture: '#ac89ff',
-  assignment: '#81ecff',
+  assignment: '#97c2ec',
   notice: '#fab0ff',
   receipt: '#ffd27f',
   memo: '#7ff0bb',
@@ -100,11 +94,12 @@ function formatDateLabel(dateStr: string) {
 
 export function CalendarPage() {
   const router = useRouter()
+  const { toast } = useToast()
   const today = new Date()
   const [year, setYear] = useState(today.getFullYear())
   const [month, setMonth] = useState(today.getMonth())
-  const [search, setSearch] = useState('')
-  const [activeFilter, setActiveFilter] = useState<'all' | 'lecture' | 'assignment' | 'notice' | 'receipt' | 'memo'>('all')
+  const [search] = useState('')
+  const [activeFilter, setActiveFilter] = useState<CategoryFilter>('all')
   const [calendarDates, setCalendarDates] = useState<CalendarDates>({})
   const [selectedDate, setSelectedDate] = useState<string | null>(null)
   const [dayItems, setDayItems] = useState<CalendarDayItem[]>([])
@@ -205,10 +200,10 @@ export function CalendarPage() {
       router.push(`/analysis/${uploadRes.document_id}`)
     } catch (error) {
       console.error('Upload failed:', error)
-      alert('파일 업로드에 실패했습니다. 다시 시도해 주세요.')
+      toast.error('파일 업로드에 실패했습니다. 다시 시도해 주세요.')
       setUploadToast({ visible: false, fileName: '' })
     }
-  }, [router])
+  }, [router, toast])
 
   return (
     <div
@@ -218,152 +213,52 @@ export function CalendarPage() {
       <SidebarNav onUpload={() => setModalOpen(true)} />
 
       <main
-        className="flex flex-1 flex-col overflow-hidden"
+        className="flex flex-1 flex-col overflow-hidden pt-16"
         style={{ marginLeft: 81 }}
       >
         {/* ── 헤더 ─────────────────────────────────── */}
-        <header
-          className="flex shrink-0 items-center justify-between px-8"
-          style={{
-            height: 64,
-            background: 'var(--th-header-bg)',
-            borderBottom: '1px solid var(--th-separator)',
-            backdropFilter: 'blur(8px)',
-          }}
+        <TopHeader
+          activeFilter={activeFilter}
+          onFilterChange={(v) => setActiveFilter(v)}
+          // summaryData={summaryData}
+        />
+        <div
+          className="calendar-month-toolbar flex h-16 shrink-0 items-center justify-center gap-5 px-8"
+          style={{ borderBottom: '1px solid var(--th-separator)' }}
         >
-          <div className="flex items-center gap-6">
+          <button
+            onClick={prevMonth}
+            className="calendar-month-button flex h-9 w-9 items-center justify-center rounded-full transition-all"
+            aria-label="이전 달"
+            style={{ color: 'var(--th-text-muted)' }}
+          >
+            <CaretLeftIcon size={18} weight="bold" />
+          </button>
+
+          <div className="flex min-w-[152px] items-baseline justify-center gap-2">
             <span
-              className="font-manrope font-semibold text-sm"
-              style={{ color: 'var(--th-text-faint)', letterSpacing: '1.4px' }}
+              className="font-manrope text-2xl font-extrabold"
+              style={{ color: 'var(--th-text)', letterSpacing: '-0.4px' }}
             >
-              SCHEDULE
+              {MONTH_NAMES[month]}
             </span>
-
-            <div className="flex items-center gap-2">
-              <span
-                className="font-manrope font-bold text-sm"
-                style={{ color: '#81ecff', letterSpacing: '1.4px' }}
-              >
-                {MONTH_NAMES[month].toUpperCase()} {year}
-              </span>
-
-              <button
-                onClick={prevMonth}
-                className="flex h-5 w-4 items-center justify-center rounded transition-opacity hover:opacity-70"
-                aria-label="이전 달"
-                style={{ color: 'var(--th-text-faint)' }}
-              >
-                <svg width="7" height="12" viewBox="0 0 7 12" fill="none">
-                  <path
-                    d="M6 1L1 6L6 11"
-                    stroke="currentColor"
-                    strokeWidth="1.5"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </svg>
-              </button>
-
-              <button
-                onClick={nextMonth}
-                className="flex h-5 w-4 items-center justify-center rounded transition-opacity hover:opacity-70"
-                aria-label="다음 달"
-                style={{ color: 'var(--th-text-faint)' }}
-              >
-                <svg width="7" height="12" viewBox="0 0 7 12" fill="none">
-                  <path
-                    d="M1 1L6 6L1 11"
-                    stroke="currentColor"
-                    strokeWidth="1.5"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </svg>
-              </button>
-            </div>
-          </div>
-
-          {/* 카테고리 필터 칩 */}
-          <nav className="flex items-center gap-2" aria-label="Category filters">
-            {CATEGORY_FILTERS.map(({ id, label }) => {
-              const isActive = activeFilter === id;
-              return (
-                <button
-                  key={id}
-                  onClick={() => setActiveFilter(id)}
-                  className="flex items-center px-4 h-[28px] rounded-full font-manrope transition-colors cursor-pointer"
-                  style={
-                    isActive
-                      ? {
-                          background: 'var(--th-chip-active-bg)',
-                          color: 'var(--th-chip-active-text)',
-                          fontSize: 12,
-                          fontWeight: 500,
-                          letterSpacing: -0.4,
-                        }
-                      : {
-                          background: 'var(--th-chip-inactive-bg)',
-                          border: '1px solid var(--th-chip-inactive-border)',
-                          color: 'var(--th-chip-inactive-text)',
-                          fontSize: 12,
-                          fontWeight: 500,
-                          letterSpacing: -0.4,
-                        }
-                  }
-                >
-                  {label}
-                </button>
-              );
-            })}
-          </nav>
-
-          {/* 검색 + 테마 토글 */}
-          <div className="flex items-center gap-3">
-            <div
-              className="flex items-center gap-2 rounded-full px-4"
-              style={{
-                width: 224,
-                height: 36,
-                background: 'var(--th-surface)',
-                border: '1px solid var(--th-border)',
-              }}
+            <span
+              className="font-manrope text-sm font-bold"
+              style={{ color: '#97c2ec', letterSpacing: '0.8px' }}
             >
-              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style={{ color: 'var(--th-text-faint)', flexShrink: 0 }}>
-                <circle cx="6" cy="6" r="5" stroke="currentColor" strokeWidth="1.3" />
-                <path
-                  d="M10 10L13 13"
-                  stroke="currentColor"
-                  strokeWidth="1.3"
-                  strokeLinecap="round"
-                />
-              </svg>
-              <input
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="flex-1 bg-transparent font-manrope text-[10px] font-medium tracking-widest outline-none th-placeholder"
-                style={{ color: 'var(--th-text-muted)', letterSpacing: '1.4px' }}
-                placeholder={translate('findDocument', 'ko')}
-                aria-label="문서 검색"
-              />
-              {search && (
-                <button
-                  onClick={() => setSearch('')}
-                  style={{ color: 'var(--th-text-faint)' }}
-                >
-                  <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
-                    <path
-                      d="M1 1L9 9M9 1L1 9"
-                      stroke="currentColor"
-                      strokeWidth="1.3"
-                      strokeLinecap="round"
-                    />
-                  </svg>
-                </button>
-              )}
-            </div>
-            <ThemeToggle />
+              {year}
+            </span>
           </div>
-        </header>
+
+          <button
+            onClick={nextMonth}
+            className="calendar-month-button flex h-9 w-9 items-center justify-center rounded-full transition-all"
+            aria-label="다음 달"
+            style={{ color: 'var(--th-text-muted)' }}
+          >
+            <CaretRightIcon size={18} weight="bold" />
+          </button>
+        </div>
 
         {/* ── 캘린더 ───────────────────────────────── */}
         <div className="flex flex-1 flex-col overflow-hidden">
@@ -436,7 +331,7 @@ export function CalendarPage() {
                           padding: '16px 0 0 16px',
                           display: 'block',
                           color: todayCell
-                            ? '#81ecff'
+                            ? '#97c2ec'
                             : cell.current
                               ? 'var(--th-text)'
                               : 'var(--th-text-faint)',
@@ -488,13 +383,13 @@ export function CalendarPage() {
       {dayPanelOpen && (
         <>
           <div
-            className="fixed inset-0 z-10"
+            className="calendar-day-panel-backdrop fixed inset-0 z-10"
             onClick={handleDayPanelClose}
           />
           <aside
-            className="fixed right-0 top-0 z-20 flex h-full flex-col overflow-hidden"
+            className="calendar-day-panel fixed right-0 top-0 z-20 flex h-full flex-col overflow-hidden"
             style={{
-              width: 320,
+              width: 360,
               background: 'var(--th-day-panel)',
               borderLeft: '1px solid var(--th-day-panel-border)',
             }}
@@ -502,19 +397,27 @@ export function CalendarPage() {
             <div
               className="flex shrink-0 items-center justify-between px-6"
               style={{
-                height: 64,
+                height: 72,
                 borderBottom: '1px solid var(--th-separator)',
               }}
             >
-              <span
-                className="font-inter font-semibold text-xs tracking-widest"
-                style={{ color: '#81ecff' }}
-              >
-                {selectedDate ? formatDateLabel(selectedDate) : ''}
-              </span>
+              <div className="flex flex-col gap-1">
+                <span
+                  className="font-inter text-[10px] font-bold uppercase tracking-[2px]"
+                  style={{ color: '#97c2ec' }}
+                >
+                  Selected Date
+                </span>
+                <span
+                  className="font-manrope text-base font-extrabold"
+                  style={{ color: 'var(--th-text)', letterSpacing: '-0.4px' }}
+                >
+                  {selectedDate ? formatDateLabel(selectedDate) : ''}
+                </span>
+              </div>
               <button
                 onClick={handleDayPanelClose}
-                className="flex h-7 w-7 items-center justify-center rounded transition-opacity hover:opacity-70"
+                className="calendar-day-panel-close flex h-8 w-8 items-center justify-center rounded-full transition-all"
                 style={{ color: 'var(--th-text-faint)' }}
                 aria-label="닫기"
               >
@@ -529,24 +432,30 @@ export function CalendarPage() {
               </button>
             </div>
 
-            <div className="flex flex-1 flex-col gap-2 overflow-y-auto p-4">
+            <div className="flex flex-1 flex-col gap-3 overflow-y-auto p-5">
               {dayItems.length === 0 ? (
                 <div
-                  className="flex flex-1 items-center justify-center font-inter text-xs"
-                  style={{ color: 'var(--th-text-faint)' }}
+                  className="calendar-day-empty flex flex-1 flex-col items-center justify-center gap-2 rounded-2xl px-6 text-center font-inter"
                 >
-                  문서 없음
+                  <span
+                    className="font-manrope text-sm font-bold"
+                    style={{ color: 'var(--th-text)' }}
+                  >
+                    문서 없음
+                  </span>
+                  <span className="text-xs leading-5" style={{ color: 'var(--th-text-faint)' }}>
+                    이 날짜에 연결된 문서가 없습니다.
+                  </span>
                 </div>
               ) : (
                 dayItems.map((item) => (
                   <button
                     key={item.id}
                     onClick={() => router.push(`/analysis/${item.id}`)}
-                    className="flex flex-col gap-1.5 rounded-lg px-4 py-3 text-left transition-colors"
-                    style={{ background: 'var(--th-separator)' }}
+                    className="calendar-day-card flex flex-col gap-3 rounded-xl px-4 py-4 text-left transition-all"
                   >
                     <span
-                      className="font-inter text-xs font-medium leading-snug"
+                      className="font-inter text-sm font-semibold leading-snug"
                       style={{ color: 'var(--th-text)' }}
                     >
                       {item.title}
@@ -563,8 +472,8 @@ export function CalendarPage() {
                       </span>
                       {item.deadline && (
                         <span
-                          className="font-inter text-[9px]"
-                          style={{ color: '#747579' }}
+                          className="font-inter text-[10px] font-medium"
+                          style={{ color: 'var(--th-text-faint)' }}
                         >
                           {item.deadline.slice(0, 10)}
                         </span>
@@ -600,11 +509,105 @@ export function CalendarPage() {
       />
 
       <style>{`
+        .calendar-day-panel-backdrop {
+          background: rgba(15, 23, 42, 0.12);
+          backdrop-filter: blur(2px);
+          animation: calendar-backdrop-in 180ms ease-out;
+        }
+
+        .calendar-day-panel {
+          box-shadow: -18px 0 48px rgba(15, 23, 42, 0.12);
+          animation: calendar-panel-in 220ms cubic-bezier(0.22, 1, 0.36, 1);
+        }
+
+        .calendar-day-panel-close {
+          background: rgba(151, 194, 236, 0.08);
+        }
+
+        .calendar-day-panel-close:hover {
+          background: rgba(151, 194, 236, 0.18);
+          color: #97c2ec !important;
+          transform: rotate(90deg);
+        }
+
+        .calendar-day-panel-close:focus-visible {
+          outline: 2px solid rgba(151, 194, 236, 0.72);
+          outline-offset: 2px;
+        }
+
+        .calendar-day-card {
+          background: var(--th-day-panel-card);
+          border: 1px solid var(--th-day-panel-card-border);
+          box-shadow: 0 8px 24px rgba(15, 23, 42, 0.06);
+        }
+
+        .calendar-day-card:hover {
+          border-color: rgba(151, 194, 236, 0.55);
+          box-shadow: 0 14px 32px rgba(151, 194, 236, 0.18);
+          transform: translateX(-3px);
+        }
+
+        .calendar-day-card:active {
+          transform: translateX(-1px) scale(0.99);
+        }
+
+        .calendar-day-card:focus-visible {
+          outline: 2px solid rgba(151, 194, 236, 0.72);
+          outline-offset: 2px;
+        }
+
+        .calendar-day-empty {
+          background: var(--th-day-panel-card);
+          // border: 1px dashed var(--th-day-panel-card-border);
+        }
+
+        @keyframes calendar-panel-in {
+          from {
+            opacity: 0;
+            transform: translateX(24px);
+          }
+          to {
+            opacity: 1;
+            transform: translateX(0);
+          }
+        }
+
+        @keyframes calendar-backdrop-in {
+          from {
+            opacity: 0;
+          }
+          to {
+            opacity: 1;
+          }
+        }
+
+        .calendar-month-button {
+          background: transparent;
+        }
+
+        .calendar-month-button:hover {
+          background: rgba(151, 194, 236, 0.1);
+          color: #97c2ec !important;
+          transform: translateY(-1px);
+        }
+
+        .calendar-month-button:focus-visible {
+          outline: 2px solid rgba(151, 194, 236, 0.72);
+          outline-offset: 2px;
+        }
+
         @media (max-width: 768px) {
           main {
             margin-left: 0 !important;
             padding-left: 12px !important;
             padding-right: 12px !important;
+            padding-top: 120px !important;
+          }
+          .calendar-month-toolbar {
+            height: 56px !important;
+            padding-left: 0 !important;
+            padding-right: 0 !important;
+            gap: 12px !important;
           }
           header {
             flex-direction: column !important;
@@ -638,8 +641,33 @@ export function CalendarPage() {
             padding: 6px 0 0 6px !important;
             font-size: 11px !important;
           }
-          aside {
+          aside:not(.calendar-day-panel) {
             display: none !important;
+          }
+          .calendar-day-panel {
+            top: auto !important;
+            bottom: 0 !important;
+            right: 0 !important;
+            display: flex !important;
+            width: 100% !important;
+            height: 72vh !important;
+            border-left: 0 !important;
+            border-top: 1px solid var(--th-day-panel-border) !important;
+            border-radius: 20px 20px 0 0;
+            animation-name: calendar-panel-up-in;
+          }
+          .calendar-day-panel-backdrop {
+            display: block !important;
+          }
+          @keyframes calendar-panel-up-in {
+            from {
+              opacity: 0;
+              transform: translateY(24px);
+            }
+            to {
+              opacity: 1;
+              transform: translateY(0);
+            }
           }
         }
       `}</style>

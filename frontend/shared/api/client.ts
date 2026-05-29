@@ -49,7 +49,7 @@ function redirectToLogin(): never {
   throw new ApiError(401, "Unauthorized");
 }
 
-/** 바이너리 응답을 받아 Blob Object URL을 반환. 사용 후 URL.revokeObjectURL() 호출 필요. */
+/** Fetch binary response and return Blob Object URL. URL.revokeObjectURL() should be called after use. */
 export async function apiFetchBlobUrl(path: string): Promise<string> {
   const headers = new Headers();
   const token = getAccessToken();

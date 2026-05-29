@@ -2,6 +2,9 @@
 
 import { t as translate } from '@/shared/lib/i18n'
 import { useTheme } from '@/shared/lib/theme/themeContext'
+import { TextInput } from '@mantine/core'
+
+import {HeadCircuitIcon, PaperPlaneTiltIcon} from '@phosphor-icons/react'
 
 interface AiInputBarProps {
   value: string
@@ -21,6 +24,7 @@ export function AiInputBar({
   onSubmitSearch,
 }: AiInputBarProps) {
   const { isDark } = useTheme()
+  const canSubmit = Boolean(value.trim()) && !isSearching
 
   const statusLabel = isSearching
     ? '검색 중'
@@ -33,25 +37,25 @@ export function AiInputBar({
   const statusStyle = aiAvailable
     ? isDark
       ? {
-          background: 'rgba(129,236,255,0.16)',
-          color: '#b9f8ff',
-          border: '1px solid rgba(129,236,255,0.28)',
+          background: 'rgba(151,194,236,0.18)',
+          color: '#beddf4',
+          // border: '1px solid rgba(151,194,236,0.3)',
         }
       : {
-          background: 'rgba(166,242,207,0.3)',
-          color: '#1b6b4f',
-          border: '1px solid rgba(166,242,207,0.5)',
+          background: 'rgba(151,194,236,0.2)',
+          color: '#1b4b7a',
+          // border: '1px solid rgba(151,194,236,0.4)',
         }
     : isDark
       ? {
           background: 'rgba(170,171,175,0.16)',
           color: '#d2d5da',
-          border: '1px solid rgba(170,171,175,0.2)',
+          // border: '1px solid rgba(170,171,175,0.2)',
         }
       : {
           background: 'rgba(76,69,70,0.08)',
           color: 'var(--th-text-muted)',
-          border: '1px solid var(--th-border)',
+          // border: '1px solid var(--th-border)',
         }
 
   return (
@@ -62,51 +66,88 @@ export function AiInputBar({
         </span>
       </div>
       <div
-        className="flex h-14 items-center gap-3 px-6"
+        className="ai-input-shell flex h-14 items-center gap-3 pr-6 pl-3"
         style={{
-          background: 'var(--th-ai-bar-bg)',
-          border: '1px solid var(--th-ai-bar-border)',
+          // background: 'var(--th-ai-bar-bg)',
+          // border: '1px solid var(--th-ai-bar-border)',
           borderRadius: 9999,
           backdropFilter: 'blur(12px)',
         }}
       >
-        <img
-          src="/ai.svg"
-          alt="AI 로고"
-          style={{ filter: isDark ? 'none' : 'brightness(0) opacity(0.5)' }}
-        />
 
-        <input
-          type="text"
+        <TextInput
           value={value}
           onChange={(e) => onValueChange(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') onSubmitSearch()
-          }}
+          onKeyDown={(e) => { if (e.key === 'Enter' && canSubmit) onSubmitSearch() }}
           placeholder={translate('askAiAboutKnowledgeGraph', 'ko')}
-          className="flex-1 bg-transparent font-inter outline-none th-placeholder"
-          style={{ fontSize: 14, lineHeight: '16.94px', color: 'var(--th-text)' }}
           aria-label="Ask AI about your knowledge graph"
+          variant="unstyled"
+          style={{ flex: 1 }}
+          styles={{
+            input: {
+              fontSize: 14,
+              lineHeight: '16.94px',
+              color: 'var(--th-text)',
+              // background: 'transparent',
+              fontFamily: 'var(--font-inter), Inter, sans-serif',
+            },
+          }}
+          leftSection={<HeadCircuitIcon size={20} weight="fill" />}
         />
 
         <button
           onClick={onSubmitSearch}
-          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full"
-          style={{ background: value.trim() ? '#81ecff' : 'rgba(70,72,75,0.3)' }}
+          className="ai-input-send flex h-7 w-7 shrink-0 items-center justify-center rounded-full"
+          style={{
+            // background: canSubmit ? '#97c2ec' : 'rgba(70,72,75,0.3)',
+          }}
           aria-label="Send"
-          disabled={!value.trim() || isSearching}
+          disabled={!canSubmit}
         >
-          <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-            <path
-              d="M7 12V2M3 6L7 2L11 6"
-              stroke={value.trim() ? '#003840' : 'var(--th-text-faint)'}
-              strokeWidth="1.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </svg>
+          <PaperPlaneTiltIcon size={20} weight="fill" color={canSubmit ? isDark? '#97c2ec' : '#003840' : 'rgba(170,171,175,0.75)'}/>
         </button>
       </div>
+
+      <style>{`
+        .ai-input-shell {
+          transition:
+            background-color 160ms ease,
+            border-color 160ms ease,
+            box-shadow 160ms ease;
+        }
+
+        .ai-input-shell:hover,
+        .ai-input-shell:focus-within {
+          border-color: rgba(151, 194, 236, 0.65);
+          box-shadow: 0 10px 30px rgba(151, 194, 236, 0.16);
+          background-color:rgba(151, 194, 236, 0.2);
+        }
+
+        .ai-input-send {
+          transition:
+            background-color 160ms ease,
+            box-shadow 160ms ease,
+            transform 160ms ease,
+            opacity 160ms ease;
+        }
+
+        .ai-input-send:not(:disabled):hover {
+          // background: #acd0f0 !important;
+          // box-shadow: 0 8px 18px rgba(151, 194, 236, 0.34);
+          transform: translateY(-1px);
+          cursor: pointer;
+        }
+
+        .ai-input-send:not(:disabled):focus-visible {
+          outline: 2px solid rgba(151, 194, 236, 0.75);
+          outline-offset: 3px;
+        }
+
+        .ai-input-send:disabled {
+          cursor: not-allowed;
+          opacity: 0.65;
+        }
+      `}</style>
     </div>
   )
 }

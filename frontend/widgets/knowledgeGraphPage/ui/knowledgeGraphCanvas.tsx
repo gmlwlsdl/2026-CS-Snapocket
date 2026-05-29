@@ -16,6 +16,7 @@ interface KnowledgeGraphCanvasProps {
   graphRef?: React.MutableRefObject<ForceGraphMethods<NodeObject<GraphNode>> | undefined>
   isDark?: boolean
   isExplicitSearch?: boolean
+  similarityThreshold?: number
 }
 
 type GraphLink = {
@@ -36,6 +37,7 @@ const CLUSTER_RING_RADIUS = 280
 const CHILD_RING_BASE = 74
 const GRANDCHILD_RING_BASE = 48
 const SEARCH_GLOW_FLOOR = 0.18
+const LAYOUT_SIMILARITY_THRESHOLD = 0.3
 const FORCE_LINK_DISTANCE = {
   parentMin: 82,
   parentMax: 138,
@@ -142,7 +144,7 @@ function getSemanticNodeSize(node: GraphNode): NodeSize {
   return 'secondary'
 }
 
-function selectVisibleLinks(nodes: GraphNode[], edges: GraphEdge[]) {
+function selectVisibleLinks(nodes: GraphNode[], edges: GraphEdge[], similarityThreshold = 0.64) {
   const nodeIds = new Set(nodes.map((node) => node.id))
   const validEdges = uniqueByNodePair(
     edges.filter((edge) => nodeIds.has(edge.from) && nodeIds.has(edge.to)),
@@ -157,7 +159,7 @@ function selectVisibleLinks(nodes: GraphNode[], edges: GraphEdge[]) {
     }))
 
   const sparseAuxiliaryLinks = validEdges
-    .filter((edge) => edge.type !== 'parent_of' && edge.weight >= 0.64)
+    .filter((edge) => edge.type !== 'parent_of' && edge.weight >= similarityThreshold)
     .sort((a, b) => b.weight - a.weight)
     .map((edge) => ({
       source: edge.from,
@@ -312,6 +314,7 @@ export function KnowledgeGraphCanvas({
   graphRef,
   isDark = true,
   isExplicitSearch = false,
+  similarityThreshold = 0.64,
 }: KnowledgeGraphCanvasProps) {
   const router = useRouter()
   const containerRef = useRef<HTMLDivElement>(null)
@@ -332,11 +335,20 @@ export function KnowledgeGraphCanvas({
     [matchedNodeIdSet, matchedNodeIds, matchedScores, searchTerm],
   )
 
-  const graphData = useMemo(() => {
-    const visibleLinks = selectVisibleLinks(nodes, edges)
-    const layoutNodes = computeHierarchyLayout(nodes, visibleLinks)
-    return { nodes: layoutNodes, links: visibleLinks }
+  const layoutNodes = useMemo(() => {
+    const layoutLinks = selectVisibleLinks(nodes, edges, LAYOUT_SIMILARITY_THRESHOLD)
+    return computeHierarchyLayout(nodes, layoutLinks)
   }, [nodes, edges])
+
+  const visibleLinks = useMemo(
+    () => selectVisibleLinks(nodes, edges, similarityThreshold),
+    [nodes, edges, similarityThreshold],
+  )
+
+  const graphData = useMemo(
+    () => ({ nodes: layoutNodes, links: visibleLinks }),
+    [layoutNodes, visibleLinks],
+  )
 
   useEffect(() => {
     const graph = graphRef?.current
@@ -359,7 +371,47 @@ export function KnowledgeGraphCanvas({
     centerForce?.strength?.(0.055)
 
     graph.d3ReheatSimulation()
-  }, [graphData, graphRef])
+  }, [graphRef, layoutNodes])
+
+  useEffect(() => {
+    const graph = graphRef?.current
+    if (!graph || layoutNodes.length === 0) return
+
+    const frame = window.requestAnimationFrame(() => {
+      window.setTimeout(() => {
+        graph.zoomToFit(900, 120)
+      }, 120)
+    })
+
+    return () => window.cancelAnimationFrame(frame)
+  }, [graphRef, layoutNodes])
+
+  useEffect(() => {
+    const graph = graphRef?.current
+    const normalizedSearchTerm = searchTerm?.trim() ?? ''
+    if (!graph || !normalizedSearchTerm || !matchedNodeIds || matchedNodeIds.length === 0) return
+
+    const matchedIdSet = new Set(matchedNodeIds.map(String))
+    const matchedNodes = layoutNodes.filter((node) => matchedIdSet.has(String(node.id)))
+    if (matchedNodes.length === 0) return
+
+    const timer = window.setTimeout(() => {
+      if (matchedNodes.length === 1) {
+        const [node] = matchedNodes
+        graph.centerAt(node.x, node.y, 700)
+        graph.zoom(2.1, 700)
+        return
+      }
+
+      graph.zoomToFit(
+        800,
+        160,
+        (node) => matchedIdSet.has(String(node.id)),
+      )
+    }, 180)
+
+    return () => window.clearTimeout(timer)
+  }, [graphRef, layoutNodes, matchedNodeIds, searchTerm])
 
   const getNodeOpacity = useCallback(
     (visualStrength: number) => {
@@ -379,7 +431,7 @@ export function KnowledgeGraphCanvas({
     const visualStrength = searchTerm ? getVisualMatchStrength(strength) : 0.72
     const matched = visualStrength > 0
     const opacity = getNodeOpacity(visualStrength)
-    const color = NODE_COLOR[node.category] ?? '#81ecff'
+    const color = NODE_COLOR[node.category] ?? '#97c2ec'
     const baseR = ((NODE_DOT_SIZE[node.size] ?? 5) + Math.max(0, 2 - Number(node.depth ?? 2))) / globalScale
 
     const textColorSecondary = isDark ? '#707982' : '#7e7576'
@@ -400,13 +452,13 @@ export function KnowledgeGraphCanvas({
       if (isDark) {
         gradient.addColorStop(0, `rgba(255, 255, 255, ${0.1 + visualStrength * 0.38})`)
         gradient.addColorStop(0.14, `rgba(241, 247, 255, ${0.08 + visualStrength * 0.24})`)
-        gradient.addColorStop(0.34, `rgba(116, 195, 213, ${0.025 + visualStrength * 0.1})`)
-        gradient.addColorStop(0.68, `rgba(116, 195, 213, ${0.005 + visualStrength * 0.026})`)
-        gradient.addColorStop(1, 'rgba(116, 195, 213, 0)')
+        gradient.addColorStop(0.34, `rgba(151, 194, 236, ${0.025 + visualStrength * 0.1})`)
+        gradient.addColorStop(0.68, `rgba(151, 194, 236, ${0.005 + visualStrength * 0.026})`)
+        gradient.addColorStop(1, 'rgba(151, 194, 236, 0)')
       } else {
-        gradient.addColorStop(0, `rgba(27, 107, 79, ${0.06 + visualStrength * 0.18})`)
-        gradient.addColorStop(0.34, `rgba(166, 242, 207, ${0.03 + visualStrength * 0.1})`)
-        gradient.addColorStop(1, 'rgba(166, 242, 207, 0)')
+        gradient.addColorStop(0, `rgba(13, 43, 69, ${0.06 + visualStrength * 0.16})`)
+        gradient.addColorStop(0.34, `rgba(151, 194, 236, ${0.04 + visualStrength * 0.12})`)
+        gradient.addColorStop(1, 'rgba(151, 194, 236, 0)')
       }
 
       ctx.beginPath()
@@ -430,9 +482,9 @@ export function KnowledgeGraphCanvas({
       ctx.fill()
     }
 
-    if (globalScale > 0.8) {
-      const fontSize = (node.size === 'root' ? 12 : node.size === 'primary' ? 10 : 8) / globalScale
-      ctx.font = `${node.size === 'root' ? '650' : node.size === 'primary' ? '520' : '400'} ${fontSize}px Inter`
+    if (globalScale > 0.48) {
+      const fontSize = (node.size === 'root' ? 16 : node.size === 'primary' ? 13 : 11) / globalScale
+      ctx.font = `${node.size === 'root' ? '700' : node.size === 'primary' ? '620' : '520'} ${fontSize}px Inter`
       ctx.textAlign = 'left'
       ctx.textBaseline = 'middle'
       ctx.fillStyle = !matched
@@ -440,12 +492,42 @@ export function KnowledgeGraphCanvas({
         : visualStrength > 0.45
           ? textColorMatched
           : textColorSoftMatch
-      ctx.fillText(node.label, node.x + baseR + 8 / globalScale, node.y)
+      ctx.lineWidth = 3.5 / globalScale
+      ctx.strokeStyle = isDark ? 'rgba(12, 14, 17, 0.72)' : 'rgba(255, 255, 255, 0.82)'
+      ctx.strokeText(node.label, node.x + baseR + 10 / globalScale, node.y)
+      ctx.fillText(node.label, node.x + baseR + 10 / globalScale, node.y)
     }
 
     ctx.globalAlpha = 1
     ctx.shadowBlur = 0
   }, [getGlowRadius, getMatchStrength, getNodeOpacity, isDark, searchTerm])
+
+  const paintNodePointerArea = useCallback((
+    node: NodeObject<GraphNode>,
+    paintColor: string,
+    ctx: CanvasRenderingContext2D,
+    globalScale: number,
+  ) => {
+    const baseR = ((NODE_DOT_SIZE[node.size] ?? 5) + Math.max(0, 2 - Number(node.depth ?? 2))) / globalScale
+    const hitR = Math.max(baseR + 14 / globalScale, 18 / globalScale)
+    const fontSize = (node.size === 'root' ? 16 : node.size === 'primary' ? 13 : 11) / globalScale
+
+    ctx.fillStyle = paintColor
+    ctx.beginPath()
+    ctx.arc(node.x, node.y, hitR, 0, 2 * Math.PI, false)
+    ctx.fill()
+
+    ctx.font = `${node.size === 'root' ? '700' : node.size === 'primary' ? '620' : '520'} ${fontSize}px Inter`
+    const labelWidth = ctx.measureText(node.label).width
+    const labelX = node.x + baseR + 7 / globalScale
+    const labelHeight = Math.max(22 / globalScale, fontSize * 1.6)
+    ctx.fillRect(
+      labelX,
+      node.y - labelHeight / 2,
+      labelWidth + 18 / globalScale,
+      labelHeight,
+    )
+  }, [])
 
   return (
     <div
@@ -466,28 +548,30 @@ export function KnowledgeGraphCanvas({
         ref={graphRef}
         graphData={graphData}
         nodeCanvasObject={drawNode}
+        nodePointerAreaPaint={paintNodePointerArea}
         nodeLabel="label"
         linkColor={(link) => {
           const typedLink = link as { weight?: number; type?: GraphEdgeType }
           const weight = clamp01(Number(typedLink.weight ?? 0))
           const tension = smoothstep(Math.max(0, weight - 0.52) / 0.48)
+          const searchOpacityMultiplier = searchTerm?.trim() ? 0.52 : 1
           if (isDark) {
             if (typedLink.type === 'parent_of') {
-              return `rgba(212,224,238,${0.18 + tension * 0.40})`
+              return `rgba(218,231,244,${(0.34 + tension * 0.46) * searchOpacityMultiplier})`
             }
-            return `rgba(132,216,236,${0.055 + tension * 0.22})`
+            return `rgba(151,194,236,${(0.18 + tension * 0.34) * searchOpacityMultiplier})`
           } else {
             if (typedLink.type === 'parent_of') {
-              return `rgba(76,69,70,${0.15 + tension * 0.30})`
+              return `rgba(46,86,132,${(0.36 + tension * 0.36) * searchOpacityMultiplier})`
             }
-            return `rgba(27,107,79,${0.08 + tension * 0.22})`
+            return `rgba(61,112,166,${(0.18 + tension * 0.32) * searchOpacityMultiplier})`
           }
         }}
         linkWidth={(link) => {
           const typedLink = link as { weight?: number; type?: GraphEdgeType }
           const weight = clamp01(Number(typedLink.weight ?? 0))
           const tension = smoothstep(Math.max(0, weight - 0.52) / 0.48)
-          return typedLink.type === 'parent_of' ? 1.1 + tension * 2.3 : 0.52 + tension * 1
+          return typedLink.type === 'parent_of' ? 1.6 + tension * 2.6 : 0.9 + tension * 1.35
         }}
         linkLineDash={(link) => ((link as { type?: GraphEdgeType }).type === 'parent_of' ? [] : [4, 6])}
         backgroundColor="transparent"
@@ -506,7 +590,7 @@ export function KnowledgeGraphCanvas({
       />
 
       {/* 검색 결과 없음 Zero State UI 오버레이 — Enter 제출 이후에만 표시 */}
-      {searchTerm && searchTerm.trim() !== '' && isExplicitSearch && matchedNodeIds && matchedNodeIds.length === 0 && (
+      {/* {searchTerm && searchTerm.trim() !== '' && isExplicitSearch && matchedNodeIds && matchedNodeIds.length === 0 && (
         <div
           className="absolute z-10 flex flex-col items-center justify-center gap-3 px-6 py-8 rounded-2xl backdrop-blur-lg shadow-2xl max-w-sm text-center"
           style={{
@@ -528,7 +612,7 @@ export function KnowledgeGraphCanvas({
             일치하는 문서 노드가 없습니다.<br />다른 검색어를 입력해 보세요.
           </p>
         </div>
-      )}
+      )} */}
     </div>
   )
 }

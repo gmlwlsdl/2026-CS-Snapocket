@@ -6,9 +6,10 @@ import { usePathname, useRouter } from 'next/navigation'
 import { getMe, logout } from '@/entities/auth'
 import type { MeResponseData } from '@/entities/auth/api/auth.api.type'
 import { useTheme } from '@/shared/lib/theme/themeContext'
+import { useToast } from '@/shared/lib/toast/toastContext'
 
-import GraphIcon from '@/public/graph.svg'
-import CalendarIcon from '@/public/calendar.svg'
+import { CalendarBlankIcon, GraphIcon, FolderSimplePlusIcon, SignOutIcon, UserCircleIcon } from '@phosphor-icons/react'
+
 
 interface SidebarNavProps {
   onUpload?: () => void
@@ -17,7 +18,9 @@ interface SidebarNavProps {
 export function SidebarNav({ onUpload }: SidebarNavProps) {
   const router = useRouter()
   const { isDark } = useTheme()
+  const { toast } = useToast()
   const [isOpen, setIsOpen] = useState(false)
+  const [hoveredItem, setHoveredItem] = useState<'graph' | 'calendar' | null>(null)
   const [user, setUser] = useState<MeResponseData | null>(null)
   const pathname = usePathname()
 
@@ -30,95 +33,71 @@ export function SidebarNav({ onUpload }: SidebarNavProps) {
       })
   }, [])
 
-  const handleLogout = async () => {
-    if (confirm('로그아웃 하시겠습니까?')) {
-      try {
-        await logout()
-        router.push('/login')
-      } catch (err) {
-        console.error('Failed to logout:', err)
-        const { clearAccessToken } = await import('@/shared/api')
-        clearAccessToken()
-        router.push('/login')
-      }
-    }
+  const handleLogout = () => {
+    toast.runWithCountdown({
+      title: '로그아웃 예약',
+      message: '이 알림을 닫으면 로그아웃이 취소됩니다.',
+      actionLabel: '로그아웃',
+      duration: 4000,
+      color: 'red',
+      onComplete: async () => {
+        try {
+          await logout()
+          router.push('/login')
+        } catch (err) {
+          console.error('Failed to logout:', err)
+          const { clearAccessToken } = await import('@/shared/api')
+          clearAccessToken()
+          router.push('/login')
+        }
+      },
+    })
   }
 
   const isGraph = pathname === '/'
   const isCalendar = pathname === '/calendar'
+  const isGraphHighlighted = isGraph || hoveredItem === 'graph'
+  const isCalendarHighlighted = isCalendar || hoveredItem === 'calendar'
 
   const inactiveIconFill = isDark ? '#FFFFFF' : '#4c4546'
-  const imgFilter = isDark ? 'none' : 'brightness(0) opacity(0.55)'
 
   return (
     <aside
-      className="fixed left-0 top-0 z-30 flex h-full flex-col justify-between overflow-hidden py-6 transition-[width] duration-300 ease-in-out"
+      className="fixed left-0 top-16 z-30 flex flex-col justify-between overflow-hidden py-6 transition-[width] duration-300 ease-in-out"
       style={{
         width: isOpen ? 256 : 81,
-        background: 'var(--th-sidebar)',
-        borderRight: '1px solid var(--th-border)',
+        height: 'calc(100vh - 64px)',
+        background: isDark ? '#0c0e11' : '#FFFFFF'
+        // borderRight: '1px solid var(--th-border)',
       }}
       onMouseEnter={() => setIsOpen(true)}
       onMouseLeave={() => setIsOpen(false)}
     >
-      {/* 상단: 브랜드 + 네비게이션 + CTA */}
+      {/* 상단: 네비게이션 + CTA */}
       <div className="flex flex-col gap-6">
-        {/* 브랜드 헤더 */}
-        <div className="flex items-center gap-3 px-[19px]">
-          <div
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg"
-            style={{ background: '#00e3fd' }}
-          />
-
-          <div
-            className="flex flex-col overflow-hidden transition-all duration-300"
-            style={{
-              opacity: isOpen ? 1 : 0,
-              width: isOpen ? 'auto' : 0,
-              whiteSpace: 'nowrap',
-            }}
-          >
-            <span
-              className="font-manrope font-bold text-xl leading-7"
-              style={{
-                background: 'linear-gradient(90deg, #81ecff 0%, #ac89ff 100%)',
-                WebkitBackgroundClip: 'text',
-                WebkitTextFillColor: 'transparent',
-                letterSpacing: '-0.4px',
-              }}
-            >
-              Snapocket
-            </span>
-            <span
-              className="font-inter font-bold text-[10px] tracking-[2px]"
-              style={{ color: 'var(--th-text-faint)' }}
-            >
-              Intelligent Graph
-            </span>
-          </div>
-        </div>
-
         {/* 네비게이션 탭 */}
         <nav className="flex flex-col">
           {/* Graph View */}
           <Link
             href="/"
-            className="relative flex items-center py-3 pl-[19px] transition-colors"
+            className="sidebar-nav-item relative flex items-center py-3 pl-[19px] transition-colors"
             style={{
-              background: isGraph ? 'rgba(129,236,255,0.05)' : 'transparent',
+              background: isGraph ? 'rgba(151,194,236,0.08)' : 'transparent',
               borderLeft: isGraph
-                ? '2px solid #81ecff'
+                ? '2px solid #97c2ec'
                 : '2px solid transparent',
             }}
+            onMouseEnter={() => setHoveredItem('graph')}
+            onMouseLeave={() => setHoveredItem(null)}
           >
             <div className="flex h-6 w-[43px] shrink-0 items-center justify-center">
-              <GraphIcon fill={isGraph ? "#00E3Fd" : inactiveIconFill} />
+              <GraphIcon size={20} fill={isGraphHighlighted ? "#97c2ec" : inactiveIconFill} />
             </div>
             <span
               className="font-inter text-sm transition-all duration-300 overflow-hidden"
               style={{
                 fontWeight: isGraph ? 700 : 400,
-                color: isGraph ? '#81ecff' : 'var(--th-text-muted)',
+                color: isGraphHighlighted ? '#97c2ec' : 'var(--th-text-muted)',
                 letterSpacing: '-0.4px',
                 opacity: isOpen ? 1 : 0,
                 maxWidth: isOpen ? 120 : 0,
@@ -132,22 +111,24 @@ export function SidebarNav({ onUpload }: SidebarNavProps) {
           {/* Calendar */}
           <Link
             href="/calendar"
-            className="flex items-center py-3 pl-[21px] transition-colors"
+            className="sidebar-nav-item flex items-center py-3 pl-[21px] transition-colors"
             style={{
-              background: isCalendar ? 'rgba(129,236,255,0.05)' : 'transparent',
+              background: isCalendar ? 'rgba(151,194,236,0.08)' : 'transparent',
               borderLeft: isCalendar
-                ? '2px solid #81ecff'
+                ? '2px solid #97c2ec'
                 : '2px solid transparent',
             }}
+            onMouseEnter={() => setHoveredItem('calendar')}
+            onMouseLeave={() => setHoveredItem(null)}
           >
             <div className="flex h-5 w-[41px] shrink-0 items-center justify-center">
-              <CalendarIcon fill={isCalendar ? "#00E3Fd" : inactiveIconFill} />
+                <CalendarBlankIcon size={20} fill={isCalendarHighlighted ? "#97c2ec" : inactiveIconFill} />            
             </div>
             <span
               className="font-inter text-sm transition-all duration-300 overflow-hidden"
               style={{
                 fontWeight: isCalendar ? 700 : 400,
-                color: isCalendar ? '#81ecff' : 'var(--th-text-muted)',
+                color: isCalendarHighlighted ? '#97c2ec' : 'var(--th-text-muted)',
                 letterSpacing: '-0.4px',
                 opacity: isOpen ? 1 : 0,
                 maxWidth: isOpen ? 120 : 0,
@@ -162,22 +143,22 @@ export function SidebarNav({ onUpload }: SidebarNavProps) {
         {/* CTA 버튼 */}
         <div className="px-[19px]">
           <button
-            className="flex items-center justify-center rounded-xl transition-all duration-300 cursor-pointer"
+            className="sidebar-cta flex items-center justify-center rounded-xl transition-all duration-300 cursor-pointer"
             style={{
-              background: 'linear-gradient(135deg, #81ecff 0%, #00e3fd 100%)',
+              background: 'linear-gradient(135deg, #97c2ec 0%, #7daed8 100%)',
               height: 52,
               width: isOpen ? 208 : 50,
             }}
             onClick={onUpload}
             aria-label="Upload new file"
           >
-            <div className="flex h-[14px] w-[14px] shrink-0 items-center justify-center">
-              <img src="/add.svg" alt="" />
+            <div className="flex shrink-0 items-center justify-center">
+              <FolderSimplePlusIcon size={20} weight="fill" />
             </div>
             <span
               className="font-inter font-bold text-sm tracking-[1.4px] transition-all duration-300 overflow-hidden"
               style={{
-                color: '#003840',
+                color: '#0d2b45',
                 opacity: isOpen ? 1 : 0,
                 maxWidth: isOpen ? 120 : 0,
                 whiteSpace: 'nowrap',
@@ -192,73 +173,19 @@ export function SidebarNav({ onUpload }: SidebarNavProps) {
 
       {/* 하단: 설정, 지원, 프로필 */}
       <div className="flex flex-col">
-        {/* Settings */}
-        <div className="flex items-center py-3 pl-[21px]">
-          <div className="flex h-5 w-[41px] shrink-0 items-center justify-center">
-            <img src="/setting.svg" alt="" style={{ filter: imgFilter }} />
-          </div>
-          <span
-            className="font-inter text-sm transition-all duration-300 overflow-hidden"
-            style={{
-              color: 'var(--th-text-muted)',
-              letterSpacing: '-0.4px',
-              opacity: isOpen ? 1 : 0,
-              maxWidth: isOpen ? 120 : 0,
-              whiteSpace: 'nowrap',
-            }}
-          >
-            Settings
-          </span>
-        </div>
-
-        {/* Support */}
-        <div className="flex items-center py-3 pl-[21px]">
-          <div className="flex h-5 w-[41px] shrink-0 items-center justify-center">
-            <img src="/help.svg" alt="" style={{ filter: imgFilter }} />
-          </div>
-          <span
-            className="font-inter text-sm transition-all duration-300 overflow-hidden"
-            style={{
-              color: 'var(--th-text-muted)',
-              letterSpacing: '-0.4px',
-              opacity: isOpen ? 1 : 0,
-              maxWidth: isOpen ? 120 : 0,
-              whiteSpace: 'nowrap',
-            }}
-          >
-            Support
-          </span>
-        </div>
-
         {/* 사용자 프로필 */}
         <div
-          className="flex items-center py-4 pl-[19px]"
-          style={{ borderTop: '1px solid var(--th-separator)' }}
+          className="sidebar-profile flex items-center py-4 pl-[19px]"
+          // style={{ borderTop: '1px solid var(--th-separator)' }}
         >
           <div
             className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full"
             style={{
-              border: '1px solid var(--th-border)',
-              background: isDark ? '#1a2a2a' : '#d8f5ea',
+              // border: '1px solid var(--th-border)',
+              // background: isDark ? '#1a2a2a' : '#d8f5ea',
             }}
           >
-            <svg width="18" height="18" viewBox="0 0 20 20" fill="none">
-              <circle
-                cx="10"
-                cy="7"
-                r="4"
-                stroke="#81ecff"
-                strokeWidth="1.5"
-                opacity="0.5"
-              />
-              <path
-                d="M2 18C2 14.7 5.6 12 10 12C14.4 12 18 14.7 18 18"
-                stroke="#81ecff"
-                strokeWidth="1.5"
-                strokeLinecap="round"
-                opacity="0.5"
-              />
-            </svg>
+            <UserCircleIcon size={20} weight="fill" />
           </div>
 
           <div
@@ -289,15 +216,41 @@ export function SidebarNav({ onUpload }: SidebarNavProps) {
               className="ml-auto mr-4 text-red-400 hover:text-red-500 transition-colors p-1 cursor-pointer shrink-0"
               title="로그아웃"
             >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-                <polyline points="16 17 21 12 16 7" />
-                <line x1="21" y1="12" x2="9" y2="12" />
-              </svg>
+              <SignOutIcon size={20} weight="fill" />
             </button>
           )}
         </div>
       </div>
+
+      <style>{`
+        .sidebar-nav-item:hover {
+          background: rgba(151, 194, 236, 0.08) !important;
+        }
+
+        .sidebar-nav-item:focus-visible {
+          outline: 2px solid rgba(151, 194, 236, 0.7);
+          outline-offset: -2px;
+        }
+
+        .sidebar-cta:hover {
+          box-shadow: 0 10px 22px rgba(151, 194, 236, 0.28);
+          filter: brightness(1.04);
+          transform: translateY(-1px);
+        }
+
+        .sidebar-cta:focus-visible {
+          outline: 2px solid rgba(151, 194, 236, 0.75);
+          outline-offset: 3px;
+        }
+
+        .sidebar-profile {
+          transition: background-color 160ms ease;
+        }
+
+        .sidebar-profile:hover {
+          background: rgba(151, 194, 236, 0.06);
+        }
+      `}</style>
     </aside>
   )
 }
