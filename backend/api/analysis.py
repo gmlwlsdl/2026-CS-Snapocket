@@ -433,7 +433,6 @@ def save_analysis(
     document.title = confirm.title
     document.category = confirm.category
     document.capture_date = confirm.capture_date.date()
-    document.deadline = confirm.deadline
     document.summary = confirm.summary
     document.raw_text = str(latest_result.get("raw_text") or document.raw_text or "")
     document.status = "analyzed"
