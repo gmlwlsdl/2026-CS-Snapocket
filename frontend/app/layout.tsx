@@ -1,8 +1,10 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import { Manrope, Inter } from "next/font/google";
+import { ColorSchemeScript } from '@mantine/core';
+import { MantineClientProvider } from '@/shared/lib/mantine/MantineClientProvider';
 import { ToastProvider } from '@/shared/ui';
-import { ThemeProvider } from '@/shared/lib/theme/themeContext';
+import { MSWProvider } from '@/shared/lib/msw/MSWProvider';
 import "./globals.css";
 
 const manrope = Manrope({
@@ -27,12 +29,17 @@ export default function RootLayout({ children }: { children: ReactNode }) {
       className={`${manrope.variable} ${inter.variable} h-full antialiased`}
       suppressHydrationWarning
     >
+      <head>
+        <ColorSchemeScript defaultColorScheme="light" />
+      </head>
       <body className="min-h-full">
-        <ThemeProvider>
-          <ToastProvider>
-            {children}
-          </ToastProvider>
-        </ThemeProvider>
+        <MSWProvider>
+          <MantineClientProvider>
+            <ToastProvider>
+              {children}
+            </ToastProvider>
+          </MantineClientProvider>
+        </MSWProvider>
       </body>
     </html>
   );

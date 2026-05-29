@@ -1,148 +1,63 @@
+'use client'
+
 import { LoginForm } from "@/features/auth";
-import { NeuralNetworkBg } from "./neuralNetworkBg";
+import { Text } from "@mantine/core";
+import { ForceLightMode } from "@/shared/ui";
+import Link from "next/link";
+import { useEffect } from "react";
+import { clearAccessToken } from "@/shared/api";
 
 export function LoginPage() {
+  useEffect(() => {
+    // 로그인 화면 진입 시 만료된 잔여 세션 쿠키를 완전히 제거하여
+    // 미들웨어/프록시가 로그인된 유저로 오인해 메인 대시보드로 무한 리다이렉트하는 루프를 예방합니다.
+    clearAccessToken();
+  }, []);
+
   return (
-    <div className="flex min-h-screen w-full bg-snap-bg font-inter">
-      {/* 왼쪽 시각적 패널 */}
-      <section className="relative hidden lg:flex flex-col w-1/2 bg-snap-panel overflow-hidden">
-        {/* 뉴럴 네트워크 SVG 배경 */}
-        <NeuralNetworkBg />
-
-        {/* 블러 오버레이 — 분위기 연출 */}
-        <div
-          className="absolute rounded-full pointer-events-none"
-          style={{
-            width: 384,
-            height: 614,
-            top: "20%",
-            left: "28%",
-            background: "rgba(129,236,255,0.05)",
-            filter: "blur(80px)",
-          }}
-        />
-        <div
-          className="absolute rounded-full pointer-events-none"
-          style={{
-            width: 256,
-            height: 410,
-            bottom: "15%",
-            left: "5%",
-            background: "rgba(172,137,255,0.05)",
-            filter: "blur(60px)",
-          }}
-        />
-
-        {/* 브랜드 콘텐츠 오버레이 */}
-        <div className="relative z-10 flex flex-col justify-end h-full px-16 pb-20">
-          {/* 로고 + 슬로건 */}
-          <div className="flex flex-col gap-2 mb-10">
-            <h1
-              className="font-manrope font-extrabold text-snap-white leading-none"
-              style={{ fontSize: 60, letterSpacing: -3 }}
-            >
-              Snapocket
-            </h1>
-            <p
-              className="font-manrope text-snap-cyan-2"
-              style={{ fontSize: 20, letterSpacing: -0.5, lineHeight: "32.5px" }}
-            >
-              The intelligence behind every lens.
-            </p>
-          </div>
-
-          {/* 통계 */}
-          <div
-            className="flex gap-10 pt-6"
-            style={{ borderTop: "1px solid rgba(129,236,255,0.20)" }}
-          >
-            <div className="flex flex-col gap-0.5">
-              <span
-                className="font-manrope font-bold text-snap-white"
-                style={{ fontSize: 30, letterSpacing: -0.75, lineHeight: "36px" }}
-              >
-                10M+
-              </span>
-              <span
-                className="font-inter text-snap-muted/75 uppercase"
-                style={{ fontSize: 11, letterSpacing: 2, lineHeight: "15px" }}
-              >
-                Assets Analyzed
-              </span>
-            </div>
-            <div className="flex flex-col gap-0.5">
-              <span
-                className="font-manrope font-bold text-snap-white"
-                style={{ fontSize: 30, letterSpacing: -0.75, lineHeight: "36px" }}
-              >
-                99.9%
-              </span>
-              <span
-                className="font-inter text-snap-muted/75 uppercase"
-                style={{ fontSize: 11, letterSpacing: 2, lineHeight: "15px" }}
-              >
-                Recognition Accuracy
-              </span>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* 오른쪽 로그인 폼 패널 */}
-      <section className="flex flex-col w-full lg:w-1/2 bg-snap-bg">
+    <ForceLightMode>
+    <div className="flex min-h-screen w-full font-inter justify-center" style={{ background: 'var(--th-bg)' }}>
+      <section className="flex flex-col w-full lg:w-1/2" style={{ background: 'var(--th-bg)' }}>
         <div className="flex flex-1 flex-col justify-center px-8 sm:px-16 lg:px-[100px]">
           <div className="w-full max-w-[448px] mx-auto flex flex-col gap-8">
             {/* 헤더 */}
             <div className="flex flex-col gap-2">
               <h2
-                className="font-manrope font-bold text-snap-white"
-                style={{ fontSize: 30, letterSpacing: -0.75, lineHeight: "36px" }}
+                className="font-manrope font-bold"
+                style={{ fontSize: 30, letterSpacing: -0.75, lineHeight: "36px", color: 'var(--th-text)' }}
               >
-                Welcome back
+                로그인
               </h2>
-              <p className="font-inter text-snap-muted" style={{ fontSize: 16, lineHeight: "24px" }}>
-                Access your curated digital gallery.
-              </p>
             </div>
 
-            {/* 폼 */}
             <LoginForm />
 
-            {/* 회원가입 링크 */}
-            <p className="text-center font-inter text-snap-muted" style={{ fontSize: 14, lineHeight: "20px" }}>
-              New to Snapocket?{" "}
-              <a
+            <Text ta="center" size="sm" c="dimmed">
+              회원이 아니신가요?{" "}
+              <Link
                 href="/signup"
-                className="text-snap-cyan font-semibold hover:text-snap-cyan/80 transition-colors"
+                style={{
+                  color: 'var(--th-chip-active-bg, #97c2ec)',
+                  fontWeight: 600,
+                  textDecoration: 'underline',
+                  fontSize: 'inherit',
+                  fontFamily: 'inherit',
+                }}
+                className="hover:opacity-80 transition-opacity"
               >
-                Create an Account
-              </a>
-            </p>
+                회원가입
+              </Link>
+            </Text>
           </div>
         </div>
 
-        {/* 하단 푸터 */}
-        <footer className="flex items-center justify-between px-8 sm:px-12 py-5">
-          <span
-            className="font-inter text-snap-muted/55"
-            style={{ fontSize: 11, letterSpacing: 1, lineHeight: "15px" }}
-          >
-            © 2024 Snapocket AI. The Digital Curator.
-          </span>
-          <nav className="flex gap-6" aria-label="Footer links">
-            {(["Privacy", "Terms", "Security"] as const).map((label) => (
-              <a
-                key={label}
-                href={`/${label.toLowerCase()}`}
-                className="font-inter text-snap-muted/60 hover:text-snap-muted/80 transition-colors"
-                style={{ fontSize: 11, letterSpacing: 1, lineHeight: "15px" }}
-              >
-                {label}
-              </a>
-            ))}
-          </nav>
+        <footer className="flex items-center justify-center px-8 sm:px-12 py-5">
+          <Text size="xs" c="dimmed" style={{ letterSpacing: 1 }}>
+            © 2026 Snapocket AI. 
+          </Text>
         </footer>
       </section>
     </div>
+    </ForceLightMode>
   );
 }

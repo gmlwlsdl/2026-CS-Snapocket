@@ -1,49 +1,19 @@
 'use client'
 
-import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
+import { useMantineColorScheme, useComputedColorScheme } from '@mantine/core'
 
-type Theme = 'light' | 'dark'
-
-interface ThemeContextValue {
-  theme: Theme
-  isDark: boolean
-  toggleTheme: () => void
-}
-
-const ThemeContext = createContext<ThemeContextValue>({
-  theme: 'light',
-  isDark: false,
-  toggleTheme: () => {},
-})
-
-function getInitialTheme(): Theme {
-  if (typeof window === 'undefined') return 'light'
-  const saved = localStorage.getItem('snapocket-theme') as Theme | null
-  return saved === 'dark' ? 'dark' : 'light'
-}
-
-export function ThemeProvider({ children }: { children: ReactNode }) {
-  const [theme, setTheme] = useState<Theme>(getInitialTheme)
-
-  useEffect(() => {
-    document.documentElement.setAttribute('data-theme', theme)
-  }, [theme])
-
-  const toggleTheme = () => {
-    setTheme((prev) => {
-      const next: Theme = prev === 'light' ? 'dark' : 'light'
-      localStorage.setItem('snapocket-theme', next)
-      return next
-    })
-  }
-
-  return (
-    <ThemeContext.Provider value={{ theme, isDark: theme === 'dark', toggleTheme }}>
-      {children}
-    </ThemeContext.Provider>
-  )
-}
-
+// MantineProvider 아래 어디서나 사용 가능한 통합 테마 훅
 export function useTheme() {
-  return useContext(ThemeContext)
+  const { setColorScheme } = useMantineColorScheme()
+  const colorScheme = useComputedColorScheme('light', { getInitialValueInEffect: true })
+  const isDark = colorScheme === 'dark'
+
+  const toggleTheme = () => setColorScheme(isDark ? 'light' : 'dark')
+
+  return { theme: colorScheme as 'light' | 'dark', isDark, toggleTheme }
+}
+
+// 하위 호환을 위한 더미 Provider — MantineProvider로 대체됨
+export function ThemeProvider({ children }: { children: React.ReactNode }) {
+  return <>{children}</>
 }

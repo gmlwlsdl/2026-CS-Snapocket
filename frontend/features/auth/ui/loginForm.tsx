@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import type { FormEvent } from 'react'
 import { useRouter } from 'next/navigation'
+import { TextInput, PasswordInput, Button, Text, Anchor } from '@mantine/core'
 import type { LoginFormState } from '@/features/auth/loginForm.type'
 import { login } from '@/entities/auth/api'
 import { ApiError } from '@/shared/api'
@@ -10,7 +11,6 @@ import { ApiError } from '@/shared/api'
 export function LoginForm() {
   const router = useRouter()
   const [form, setForm] = useState<LoginFormState>({ email: '', password: '' })
-  const [showPassword, setShowPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
 
@@ -37,119 +37,70 @@ export function LoginForm() {
       await login({ email: form.email, password: form.password })
       router.push('/')
     } catch (err) {
-      if (err instanceof ApiError) {
-        setErrorMessage(err.message)
-      } else {
-        setErrorMessage('로그인에 실패했습니다. 다시 시도해주세요.')
-      }
+      setErrorMessage(
+        err instanceof ApiError ? err.message : '로그인에 실패했습니다. 다시 시도해주세요.',
+      )
     } finally {
       setIsLoading(false)
     }
   }
 
   return (
-    <div className="flex flex-col gap-6">
-      <form onSubmit={handleSubmit} className="flex flex-col gap-4" noValidate>
-        <div className="flex flex-col gap-2">
-          <label
-            htmlFor="email"
-            className="font-inter text-[11px] text-snap-muted tracking-[1.5px] uppercase"
-          >
-            Email Address
-          </label>
-          <input
-            id="email"
-            type="email"
-            autoComplete="email"
-            placeholder="name@company.com"
-            value={form.email}
-            onChange={handleChange('email')}
-            required
-            className="w-full h-[51px] rounded-lg bg-snap-input px-4 font-inter text-base text-snap-white placeholder:text-snap-muted/30 outline-none focus:ring-1 focus:ring-snap-cyan/40 transition"
-          />
+    <form onSubmit={handleSubmit} noValidate style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <TextInput
+        id="email"
+        label="이메일"
+        type="email"
+        autoComplete="email"
+        placeholder="이메일을 입력해주세요"
+        value={form.email}
+        onChange={handleChange('email')}
+        styles={{
+          label: { fontSize: 11, letterSpacing: '1.5px', textTransform: 'uppercase' },
+          input: { height: 51 },
+        }}
+      />
+
+      <div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+          <Text size="xs" style={{ letterSpacing: '1.5px', textTransform: 'uppercase', color: 'var(--mantine-color-dimmed)' }}>
+            비밀번호
+          </Text>
         </div>
+        <PasswordInput
+          id="password"
+          autoComplete="current-password"
+          placeholder="비밀번호를 입력하세요"
+          value={form.password}
+          onChange={handleChange('password')}
+          required
+          styles={{ input: { height: 51 } }}
+        />
+      </div>
 
-        <div className="flex flex-col gap-2">
-          <div className="flex justify-between items-center">
-            <label
-              htmlFor="password"
-              className="font-inter text-[11px] text-snap-muted tracking-[1.5px] uppercase"
-            >
-              Password
-            </label>
-            {/* TODO: [API] 비밀번호 재설정 — 관련 엔드포인트 확정 후 연결 */}
-            <button
-              type="button"
-              className="font-inter text-[10px] text-snap-cyan tracking-[0.5px] font-semibold hover:text-snap-cyan/80 transition-colors"
-            >
-              Forgot?
-            </button>
-          </div>
-          <div className="relative">
-            <input
-              id="password"
-              type={showPassword ? 'text' : 'password'}
-              autoComplete="current-password"
-              placeholder="••••••••"
-              value={form.password}
-              onChange={handleChange('password')}
-              required
-              className="w-full h-[51px] rounded-lg bg-snap-input px-4 pr-12 font-inter text-base text-snap-white placeholder:text-snap-muted/30 outline-none focus:ring-1 focus:ring-snap-cyan/40 transition"
-            />
-            <button
-              type="button"
-              aria-label={showPassword ? 'Hide password' : 'Show password'}
-              onClick={() => setShowPassword((v) => !v)}
-              className="absolute right-4 top-1/2 -translate-y-1/2 text-snap-muted/50 hover:text-snap-muted transition-colors"
-            >
-              {showPassword ? (
-                <svg
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                >
-                  <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94" />
-                  <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19" />
-                  <line x1="1" y1="1" x2="23" y2="23" />
-                </svg>
-              ) : (
-                <svg
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                >
-                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
-                  <circle cx="12" cy="12" r="3" />
-                </svg>
-              )}
-            </button>
-          </div>
-        </div>
+      {errorMessage && (
+        <Text role="alert" size="sm" c="red">
+          {errorMessage}
+        </Text>
+      )}
 
-        {errorMessage !== null && (
-          <p role="alert" className="font-inter text-[13px] text-red-400">
-            {errorMessage}
-          </p>
-        )}
-
-        {/* 로그인 버튼 */}
-        <button
-          type="submit"
-          disabled={isLoading}
-          className="relative w-full h-14 rounded-lg font-manrope font-bold text-base text-snap-btn-text overflow-hidden transition-opacity hover:opacity-90 mt-2 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
-          style={{
-            background: 'linear-gradient(135deg, #81ecff 0%, #00e3fd 100%)',
-          }}
-        >
-          {isLoading ? 'Signing in…' : 'Sign In'}
-        </button>
-      </form>
-    </div>
+      <Button
+        type="submit"
+        loading={isLoading}
+        fullWidth
+        size="lg"
+        mt="xs"
+        radius="md"
+        className="login-submit-button"
+        style={{
+          background: 'linear-gradient(135deg, #97c2ec 0%, #7daed8 100%)',
+          color: '#0d2b45',
+          fontFamily: 'var(--font-manrope), Manrope, sans-serif',
+          fontWeight: 700,
+        }}
+      >
+        {isLoading ? '로그인 중…' : '로그인'}
+      </Button>
+    </form>
   )
 }

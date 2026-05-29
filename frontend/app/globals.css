@@ -1,3 +1,8 @@
+/* ── Mantine core CSS (컴포넌트 기본 스타일) ── */
+@import '@mantine/core/styles.css';
+@import '@mantine/notifications/styles.css';
+@import '@mantine/dropzone/styles.css';
+
 @import "tailwindcss";
 
 @theme inline {
@@ -6,46 +11,48 @@
 
   --color-snap-bg: #0c0e11;
   --color-snap-panel: #05070a;
-  --color-snap-cyan: #81ecff;
-  --color-snap-cyan-2: #00d4ec;
-  --color-snap-cyan-3: #00e3fd;
+  --color-snap-cyan: #97c2ec;
+  --color-snap-cyan-2: #7daed8;
+  --color-snap-cyan-3: #beddf4;
   --color-snap-white: #f9f9fd;
   --color-snap-muted: #aaabaf;
   --color-snap-input: #111417;
   --color-snap-social: #23262a;
   --color-snap-border: #46484b;
-  --color-snap-btn-text: #003840;
+  --color-snap-btn-text: #0d2b45;
   --color-snap-purple: #ac89ff;
 }
 
-/* ── Light mode (기본값) — design/design.md 기반 ── */
+/* ── Light mode (기본값) — 컬러 팔레트: #97C2EC / #D6D0C2 / #1F1F1F / #FFFFFF ── */
 :root {
-  --th-bg: #fbf9f8;
-  --th-panel: #f0eded;
-  --th-sidebar: #f6f3f2;
-  --th-surface: #eae8e7;
-  --th-surface-2: #e4e2e1;
-  --th-text: #1b1c1c;
-  --th-text-muted: #4c4546;
-  --th-text-faint: #7e7576;
-  --th-header-bg: rgba(251, 249, 248, 0.88);
-  --th-separator: rgba(0, 0, 0, 0.05);
-  --th-border: rgba(126, 117, 118, 0.25);
-  --th-chip-active-bg: #a6f2cf;
-  --th-chip-active-text: #002115;
-  --th-chip-inactive-bg: #eae8e7;
-  --th-chip-inactive-border: rgba(126, 117, 118, 0.2);
-  --th-chip-inactive-text: #4c4546;
-  --th-ai-bar-bg: rgba(234, 232, 231, 0.88);
-  --th-ai-bar-border: rgba(126, 117, 118, 0.18);
-  --th-control-bg: rgba(234, 232, 231, 0.85);
-  --th-control-border: rgba(126, 117, 118, 0.15);
-  --th-day-panel: #eae8e7;
-  --th-day-panel-border: rgba(0, 0, 0, 0.06);
+  --th-bg: #ffffff;
+  --th-panel: #f5f2ec;
+  --th-sidebar: #f9f7f3;
+  --th-surface: #ede8df;
+  --th-surface-2: #e4dfd5;
+  --th-text: #1f1f1f;
+  --th-text-muted: #4a4540;
+  --th-text-faint: #7e7975;
+  --th-header-bg: rgba(255, 255, 255, 0.88);
+  --th-separator: rgba(0, 0, 0, 0.06);
+  --th-border: rgba(162, 155, 144, 0.3);
+  --th-chip-active-bg: #97c2ec;
+  --th-chip-active-text: #0d2b45;
+  --th-chip-inactive-bg: #ede8df;
+  --th-chip-inactive-border: rgba(162, 155, 144, 0.25);
+  --th-chip-inactive-text: #4a4540;
+  --th-ai-bar-bg: rgba(237, 232, 223, 0.88);
+  --th-ai-bar-border: rgba(162, 155, 144, 0.22);
+  --th-control-bg: rgba(237, 232, 223, 0.85);
+  --th-control-border: rgba(162, 155, 144, 0.18);
+  --th-day-panel: rgba(255, 255, 255, 0.96);
+  --th-day-panel-border: rgba(151, 194, 236, 0.28);
+  --th-day-panel-card: rgba(248, 251, 255, 0.92);
+  --th-day-panel-card-border: rgba(151, 194, 236, 0.22);
 }
 
-/* ── Dark mode ── */
-[data-theme="dark"] {
+/* ── Dark mode — Mantine이 [data-mantine-color-scheme="dark"] 설정 ── */
+[data-mantine-color-scheme="dark"] {
   --th-bg: #0c0e11;
   --th-panel: #05070a;
   --th-sidebar: #171a1d;
@@ -68,6 +75,8 @@
   --th-control-border: rgba(70, 72, 75, 0.1);
   --th-day-panel: #111417;
   --th-day-panel-border: rgba(255, 255, 255, 0.07);
+  --th-day-panel-card: rgba(26, 29, 33, 0.88);
+  --th-day-panel-card-border: rgba(255, 255, 255, 0.07);
 }
 
 body {
@@ -80,3 +89,62 @@ body {
   color: var(--th-text-muted);
   opacity: 0.7;
 }
+
+/* ── Mantine 컴포넌트 커스터마이징 ── */
+
+/* Input: 공통 */
+.mantine-Input-input {
+  font-family: var(--font-inter), Inter, sans-serif !important;
+}
+
+/* Notification 위치 조정 */
+.mantine-Notifications-root {
+  z-index: 9999;
+}
+
+/* 로그인/회원가입 제출 버튼 hover 효과 */
+.login-submit-button {
+  transition: transform 0.15s ease, filter 0.15s ease, box-shadow 0.15s ease !important;
+}
+
+.login-submit-button:not([data-loading]):hover {
+  filter: brightness(1.05);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(151, 194, 236, 0.35);
+}
+
+.login-submit-button:not([data-loading]):active {
+  transform: translateY(0);
+  box-shadow: 0 2px 6px rgba(151, 194, 236, 0.2);
+}
+
+/* ── Tag (태그) 스타일 ── */
+.snap-tag {
+  background-color: var(--mantine-color-snap-1);
+  color: var(--mantine-color-snap-6);
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+[data-mantine-color-scheme="dark"] .snap-tag {
+  background-color: rgba(151, 194, 236, 0.15);
+  color: #97c2ec;
+}
+
+.snap-tag-input {
+  background-color: var(--mantine-color-snap-1);
+  color: var(--mantine-color-snap-6);
+  border: 1px solid rgba(151, 194, 236, 0.3);
+  transition: all 0.2s ease;
+}
+
+[data-mantine-color-scheme="dark"] .snap-tag-input {
+  background-color: rgba(151, 194, 236, 0.1);
+  color: #97c2ec;
+  border-color: rgba(151, 194, 236, 0.4);
+}
+
+.snap-tag-input:focus {
+  border-color: #97c2ec;
+  box-shadow: 0 0 0 2px rgba(151, 194, 236, 0.2);
+}
+
