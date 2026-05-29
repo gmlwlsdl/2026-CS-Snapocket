@@ -25,7 +25,6 @@ export function MSWProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!IS_MSW_ENABLED || initialized) {
-      setReady(true);
       return;
     }
     startMSW().then(() => {
