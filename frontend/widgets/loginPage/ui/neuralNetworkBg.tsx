@@ -104,8 +104,8 @@ export function NeuralNetworkBg() {
           </feMerge>
         </filter>
         <radialGradient id="node-glow" cx="50%" cy="50%" r="50%">
-          <stop offset="0%" stopColor="#81ecff" stopOpacity="0.9" />
-          <stop offset="100%" stopColor="#81ecff" stopOpacity="0" />
+          <stop offset="0%" stopColor="#97c2ec" stopOpacity="0.9" />
+          <stop offset="100%" stopColor="#97c2ec" stopOpacity="0" />
         </radialGradient>
       </defs>
 
@@ -122,7 +122,7 @@ export function NeuralNetworkBg() {
             y1={a.y}
             x2={b.x}
             y2={b.y}
-            stroke="#81ecff"
+            stroke="#97c2ec"
             strokeOpacity={isBright ? opacity * 1.8 : opacity}
             strokeWidth={isBright ? 1.2 : 0.8}
             filter={isBright ? "url(#glow-line)" : undefined}
@@ -148,7 +148,7 @@ export function NeuralNetworkBg() {
               cx={node.x}
               cy={node.y}
               r={isHighlighted ? 3.5 : 2}
-              fill="#81ecff"
+              fill="#97c2ec"
               fillOpacity={isHighlighted ? 0.9 : 0.35}
               filter={isHighlighted ? "url(#glow-node)" : undefined}
             />

@@ -1,16 +1,19 @@
 'use client'
 
-import { useState, useRef, useCallback } from 'react'
-import { t as translate} from '@/shared/lib/i18n'
+import { useCallback, useState } from 'react'
+import { Modal, Button, Group, Text, Stack } from '@mantine/core'
+import { Dropzone, type FileWithPath, MIME_TYPES } from '@mantine/dropzone'
+import { t as translate } from '@/shared/lib/i18n'
 import { useToast } from '@/shared/ui'
 
-const ALLOWED_EXTENSIONS = ['pdf', 'jpg', 'jpeg', 'png', 'mp4']
+import { UploadSimpleIcon, XIcon } from '@phosphor-icons/react'
 
-function validateFile(file: File): boolean {
-  const parts = file.name.split('.')
-  const extension = parts.length > 1 ? parts[parts.length - 1].toLowerCase() : ''
-  return ALLOWED_EXTENSIONS.includes(extension)
-}
+const ACCEPTED_MIME: string[] = [
+  MIME_TYPES.pdf,
+  MIME_TYPES.jpeg,
+  MIME_TYPES.png,
+  'video/mp4',
+]
 
 interface UploadModalProps {
   open: boolean
@@ -19,51 +22,21 @@ interface UploadModalProps {
 }
 
 export function UploadModal({ open, onClose, onUpload }: UploadModalProps) {
-  const [isDragging, setIsDragging] = useState(false)
-  const [selectedFile, setSelectedFile] = useState<File | null>(null)
-  const fileInputRef = useRef<HTMLInputElement>(null)
+  const [selectedFile, setSelectedFile] = useState<FileWithPath | null>(null)
   const { toast } = useToast()
 
-  const handleDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault()
-    setIsDragging(false)
-    const file = e.dataTransfer.files[0]
-    if (file) {
-      if (validateFile(file)) {
-        setSelectedFile(file)
-      } else {
-        toast.error('허용되지 않는 파일 형식입니다. PDF, JPG, JPEG, PNG, MP4 파일만 업로드할 수 있습니다.')
-      }
-    }
+  const handleDrop = useCallback((files: FileWithPath[]) => {
+    if (files[0]) setSelectedFile(files[0])
+  }, [])
+
+  const handleReject = useCallback(() => {
+    toast.error(translate('invalidUploadFileType', 'ko'))
   }, [toast])
 
-  const handleFileChange = useCallback(
-    (e: React.ChangeEvent<HTMLInputElement>) => {
-      const file = e.target.files?.[0]
-      if (file) {
-        if (validateFile(file)) {
-          setSelectedFile(file)
-        } else {
-          toast.error('허용되지 않는 파일 형식입니다. PDF, JPG, JPEG, PNG, MP4 파일만 업로드할 수 있습니다.')
-          if (fileInputRef.current) {
-            fileInputRef.current.value = ''
-          }
-        }
-      }
-    },
-    [toast],
-  )
-
-  // TODO: [API] uploadDocument(file) 호출 후 반환된 document_id를 상위로 전달해야 함.
-  //   현재는 File 객체만 onUpload로 넘기고 실제 업로드는 하지 않음.
-  //   연결 방식: const { document_id } = await uploadDocument(file, true)
-  //   → onUpload(file, document_id) 형태로 시그니처 변경 필요.
-  //   업로드 중 로딩 상태 및 오류 처리도 여기서 담당.
   const handleStartAnalysis = useCallback(() => {
-    const file =
-      selectedFile ??
-      new File([], 'sample_document.pdf', { type: 'application/pdf' })
-    onUpload(file)
+    if (!selectedFile) return
+
+    onUpload(selectedFile)
     setSelectedFile(null)
     onClose()
   }, [selectedFile, onUpload, onClose])
@@ -73,141 +46,134 @@ export function UploadModal({ open, onClose, onUpload }: UploadModalProps) {
     onClose()
   }, [onClose])
 
-  if (!open) return null
-
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center"
-      style={{ background: 'rgba(12,14,17,0.75)' }}
-      onClick={handleClose}
-    >
-      <div
-        className="relative flex flex-col rounded-xl overflow-hidden"
-        style={{
-          width: 672,
-          background: 'rgba(23,26,29,0.95)',
-          border: '1px solid rgba(70,72,75,0.1)',
-          backdropFilter: 'blur(16px)',
-          boxShadow: '0 24px 64px rgba(0,0,0,0.6)',
-        }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Header */}
-        <div className="flex items-start justify-between px-8 pt-8 pb-6">
-          <div>
-            <h2
-              className="font-manrope font-extrabold text-2xl"
-              style={{ color: '#f9f9fd', letterSpacing: '-0.6px' }}
-            >
-              {translate('uploadSources', 'ko')}
-            </h2>
-            <p className="font-inter text-sm mt-1" style={{ color: '#aaabaf' }}>
-              {translate('feedYourKnowledgeVault', 'ko')}
-            </p>
-          </div>
-          <button
-            onClick={handleClose}
-            className="mt-1 flex h-8 w-8 items-center justify-center rounded-lg transition-colors"
-            aria-label="Close modal"
-          >
-            <img src="/close.svg" alt="Close 아이콘" />
-          </button>
+    <Modal
+      opened={open}
+      onClose={handleClose}
+      title={
+        <div>
+          <Text fw={800} size="xl" ff="var(--font-manrope), Manrope, sans-serif" style={{ letterSpacing: '-0.6px' }}>
+            {translate('uploadSources', 'ko')}
+          </Text>
+          <Text size="sm" c="dimmed" mt={2}>
+            {translate('feedYourKnowledgeVault', 'ko')}
+          </Text>
         </div>
-
-        {/* Content */}
-        <div className="px-8 flex flex-col gap-4">
-          {/* Drag & Drop Zone */}
-          <div
-            className="relative flex flex-col items-center justify-center rounded-xl gap-5 cursor-pointer transition-colors"
-            style={{
-              minHeight: 330,
-              background: isDragging
-                ? 'rgba(129,236,255,0.07)'
-                : 'rgba(17,20,23,0.3)',
-              border: `1px solid ${isDragging ? 'rgba(129,236,255,0.35)' : 'rgba(70,72,75,0.3)'}`,
-            }}
-            onDragOver={(e) => {
-              e.preventDefault()
-              setIsDragging(true)
-            }}
-            onDragLeave={() => setIsDragging(false)}
-            onDrop={handleDrop}
-            onClick={() => fileInputRef.current?.click()}
-          >
-            <input
-              ref={fileInputRef}
-              type="file"
-              className="hidden"
-              onChange={handleFileChange}
-              accept=".pdf,.jpg,.jpeg,.png,.mp4"
-            />
-
-            {/* Upload icon circle */}
-            <div
-              className="flex h-20 w-20 items-center justify-center rounded-full"
-              style={{ background: 'rgba(129,236,255,0.1)' }}
-            >
-              <img src="/upload.svg" alt="Upload 아이콘" />
-            </div>
-
-            <div className="flex flex-col items-center gap-1 text-center">
-              <p
-                className="font-manrope font-semibold text-lg"
-                style={{ color: '#f9f9fd' }}
+      }
+      size={672}
+      padding="xl"
+      styles={{
+        header: { paddingBottom: 0 },
+        body: { paddingTop: 16 },
+      }}
+    >
+      <Stack gap="lg">
+        <Dropzone
+          onDrop={handleDrop}
+          onReject={handleReject}
+          accept={ACCEPTED_MIME}
+          maxFiles={1}
+          styles={{
+            root: {
+              minHeight: 280,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              border: '1px dashed var(--mantine-color-default-border)',
+              // background: 'var(--mantine-color-default)',
+              borderRadius: 'var(--mantine-radius-md)',
+            },
+          }}
+        >
+          <Stack align="center" gap="md" style={{ pointerEvents: 'none' }}>
+            <Dropzone.Accept>
+              <div
+                style={{
+                  width: 80,
+                  height: 80,
+                  borderRadius: '50%',
+                  background: 'rgba(151,194,236,0.15)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
               >
-                {selectedFile
-                  ? selectedFile.name
-                  : translate('dropFilesHereOrClickToBrowse', 'ko')}
-              </p>
-              <p
-                className="font-inter text-xs tracking-widest"
-                style={{ color: '#aaabaf' }}
+                <UploadSimpleIcon size={20} weight="fill" />
+              </div>
+            </Dropzone.Accept>
+            <Dropzone.Reject>
+              <div
+                style={{
+                  width: 80,
+                  height: 80,
+                  borderRadius: '50%',
+                  background: 'rgba(239,68,68,0.1)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
               >
+                <XIcon size={20} />
+              </div>
+            </Dropzone.Reject>
+            <Dropzone.Idle>
+              <div
+                style={{
+                  width: 80,
+                  height: 80,
+                  borderRadius: '50%',
+                  background: 'rgba(151,194,236,0.1)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <UploadSimpleIcon size={20} weight="fill" />
+              </div>
+            </Dropzone.Idle>
+
+            <div style={{ textAlign: 'center' }}>
+              <Text fw={600} size="lg" ff="var(--font-manrope), Manrope, sans-serif">
+                {selectedFile ? selectedFile.name : translate('dropFilesHereOrClickToBrowse', 'ko')}
+              </Text>
+              <Text size="xs" c="dimmed" mt={4} style={{ letterSpacing: '0.08em' }}>
                 {translate('supportForPdfJpgPngOrMp4', 'ko')}
-              </p>
+              </Text>
             </div>
 
-            <button
-              className="rounded-full px-8 py-3 font-inter font-bold text-base transition-colors"
-              style={{
-                background: '#23262a',
-                border: '1px solid rgba(129,236,255,0.2)',
-                color: '#81ecff',
-              }}
-              onClick={(e) => {
-                e.stopPropagation()
-                fileInputRef.current?.click()
-              }}
+            <Button
+              variant='transparent'
+              radius="xl"
+              px="xl"
+              disabled={Boolean(selectedFile)}
+              onClick={(e) => e.stopPropagation()}
             >
               {translate('selectFiles', 'ko')}
-            </button>
-          </div>
-        </div>
+            </Button>
+          </Stack>
+        </Dropzone>
 
-        {/* Footer */}
-        <div
-          className="flex items-center justify-end gap-2 px-8 py-6 mt-4"
-          style={{ background: 'rgba(35,38,42,0.3)' }}
-        >
-          <button
-            onClick={handleClose}
-            className="font-inter font-semibold text-base px-6 py-2.5 rounded-full transition-colors cursor-pointer"
-            style={{ color: '#aaabaf' }}
-          >
+        <Group justify="flex-end" gap="sm">
+          <Button variant="subtle" color="gray" radius="xl" onClick={handleClose}>
             {translate('cancel', 'ko')}
-          </button>
-          <button
+          </Button>
+          <Button
+            radius="xl"
+            px="xl"
+            disabled={!selectedFile}
             onClick={handleStartAnalysis}
-            className="font-inter font-bold text-base rounded-full px-8 py-3 transition-opacity hover:opacity-90 cursor-pointer"
             style={{
-              background: 'linear-gradient(90deg, #81ecff 0%, #00d4ec 100%)',
-              color: '#003840',
+              background: selectedFile
+                ? 'linear-gradient(90deg, #97c2ec 0%, #7daed8 100%)'
+                : 'var(--mantine-color-gray-2)',
+              color: selectedFile ? '#0d2b45' : 'var(--mantine-color-gray-5)',
+              fontWeight: 700,
             }}
           >
             {translate('startAnalysis', 'ko')}
-          </button>
-        </div>
-      </div>
-    </div>
+          </Button>
+        </Group>
+      </Stack>
+    </Modal>
   )
 }

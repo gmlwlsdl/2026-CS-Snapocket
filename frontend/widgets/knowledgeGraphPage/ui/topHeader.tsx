@@ -4,6 +4,7 @@ import type { CategoryFilter } from "../knowledgeGraph.type";
 import type { GraphSummaryData } from "@/entities/graph";
 import { CATEGORY_FILTERS } from "../knowledgeGraph.constant";
 import { ThemeToggle } from "@/shared/ui";
+import { Chip, Group } from "@mantine/core";
 
 interface TopHeaderProps {
   activeFilter: CategoryFilter;
@@ -16,64 +17,62 @@ export function TopHeader({ activeFilter, onFilterChange, summaryData }: TopHead
 
   return (
     <header
-      className="fixed left-[81px] right-0 top-0 z-10 flex h-16 items-center px-6"
+      className="fixed left-0 right-0 top-0 z-20 flex h-16 items-center px-6"
       style={{
         background: "var(--th-header-bg)",
         backdropFilter: "blur(12px)",
-        borderBottom: "1px solid var(--th-separator)",
+        // borderBottom: "1px solid var(--th-separator)",
       }}
     >
-      {/* 브랜드명 */}
-      <div className="mr-8">
-        <span
-          className="font-manrope font-bold"
-          style={{
-            fontSize: 20,
-            letterSpacing: -0.4,
-            lineHeight: "28px",
-            background: "linear-gradient(90deg, #81ecff 0%, #ac89ff 100%)",
-            WebkitBackgroundClip: "text",
-            WebkitTextFillColor: "transparent",
-            backgroundClip: "text",
-          }}
-        >
-          Snapocket
-        </span>
+      <div className="flex w-[256px] shrink-0 items-center gap-3">
+        <div className="flex flex-col overflow-hidden whitespace-nowrap">
+          <span
+            className="font-manrope text-xl font-bold leading-7"
+            style={{
+              background: 'linear-gradient(90deg, #97c2ec 0%, #ac89ff 100%)',
+              WebkitBackgroundClip: 'text',
+              WebkitTextFillColor: 'transparent',
+              letterSpacing: '-0.4px',
+            }}
+          >
+            Snapocket
+          </span>
+          <span
+            className="font-inter text-[10px] font-bold tracking-[2px]"
+            style={{ color: 'var(--th-text-faint)' }}
+          >
+            Intelligent Graph
+          </span>
+        </div>
       </div>
 
       {/* 카테고리 칩 */}
-      <nav className="flex items-center gap-2" aria-label="Category filters">
-        {CATEGORY_FILTERS.map(({ id, label }) => {
-          const isActive = activeFilter === id;
-          return (
-            <button
+      <Chip.Group value={activeFilter} onChange={(v) => onFilterChange(v as CategoryFilter)}>
+        <Group gap={6}>
+          {CATEGORY_FILTERS.map(({ id, label }) => (
+            <Chip
               key={id}
-              onClick={() => onFilterChange(id)}
-              className="flex items-center px-4 h-[28px] rounded-full font-manrope transition-colors cursor-pointer"
-              style={
-                isActive
-                  ? {
-                      background: "var(--th-chip-active-bg)",
-                      color: "var(--th-chip-active-text)",
-                      fontSize: 12,
-                      fontWeight: 500,
-                      letterSpacing: -0.4,
-                    }
-                  : {
-                      background: "var(--th-chip-inactive-bg)",
-                      border: "1px solid var(--th-chip-inactive-border)",
-                      color: "var(--th-chip-inactive-text)",
-                      fontSize: 12,
-                      fontWeight: 500,
-                      letterSpacing: -0.4,
-                    }
-              }
+              value={id}
+              size="xs"
+              radius="xl"
+              styles={{
+                label: {
+                  fontFamily: 'var(--font-manrope), Manrope, sans-serif',
+                  fontSize: 12,
+                  fontWeight: 500,
+                  letterSpacing: -0.4,
+                  paddingInline: 16,
+                  height: 28,
+                  background: activeFilter === id ? 'linear-gradient(135deg, #97c2ec 0%, #7daed8 100%)' : '',
+                  color: activeFilter === id ? 'var(--th-chip-active-text)' : '',
+                },
+              }}
             >
               {label}
-            </button>
-          );
-        })}
-      </nav>
+            </Chip>
+          ))}
+        </Group>
+      </Chip.Group>
 
       <div className="ml-auto flex items-center gap-6">
         <div className="flex flex-col items-end">

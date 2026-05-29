@@ -44,7 +44,8 @@ export function KnowledgeGraphPage() {
   const [nodes, setNodes] = useState<GraphNode[]>([])
   const [edges, setEdges] = useState<GraphEdge[]>([])
   const [modalOpen, setModalOpen] = useState(false)
-  const { toastItems, showToast, updateToast } = useToast()
+  const [similarityThreshold, setSimilarityThreshold] = useState(0.64)
+  const { toastItems, showToast, updateToast, toast } = useToast()
   const [summaryData, setSummaryData] = useState<GraphSummaryData>()
 
   const graphRef = useRef<ForceGraphMethods<NodeObject<GraphNode>> | undefined>(
@@ -128,6 +129,7 @@ export function KnowledgeGraphPage() {
         size: 50,
       })
       applySearchResults(response.items, response.modeUsed, response.aiAvailable)
+      return response.items
     },
     [activeFilter, applySearchResults],
   )
@@ -260,14 +262,17 @@ export function KnowledgeGraphPage() {
     setIsSearching(true)
     try {
       // Enter/버튼 시에는 AI 상태를 반영한 auto 검색을 호출한다.
-      await runAutoSearch(normalizedKeyword)
+      const items = await runAutoSearch(normalizedKeyword)
+      if (items.length === 0) {
+        toast.info('검색 결과가 없습니다. 다른 검색어를 입력해 보세요.')
+      }
     } catch (error) {
       console.error('Failed to run semantic search:', error)
       await loadAiAvailability()
     } finally {
       setIsSearching(false)
     }
-  }, [clearSearchState, loadAiAvailability, runAutoSearch, searchTerm])
+  }, [clearSearchState, loadAiAvailability, runAutoSearch, searchTerm, toast])
 
   return (
     <div className="flex h-screen w-full overflow-hidden" style={{ background: 'var(--th-bg)' }}>
@@ -290,6 +295,7 @@ export function KnowledgeGraphPage() {
             graphRef={graphRef}
             isDark={isDark}
             isExplicitSearch={isExplicitSearch}
+            similarityThreshold={similarityThreshold}
           />
         </div>
 
@@ -297,6 +303,8 @@ export function KnowledgeGraphPage() {
           onZoomIn={handleZoomIn}
           onZoomOut={handleZoomOut}
           onFit={handleFit}
+          similarityThreshold={similarityThreshold}
+          onSimilarityChange={setSimilarityThreshold}
         />
         <AiInputBar
           value={searchTerm}
