@@ -1,6 +1,6 @@
 import boto3
 import os
-from dotenv import load_model, load_dotenv
+from dotenv import load_dotenv
 
 load_dotenv()
 
