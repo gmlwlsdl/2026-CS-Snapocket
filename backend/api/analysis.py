@@ -13,6 +13,8 @@ from core.security import jwtAuth
 from models.analysis_job import AnalysisJob
 from models.document import Document
 from models.user import User
+from models.tag import Tag
+from models.document_tag import DocumentTag
 from services.ai_client import AIClientError, map_analysis_result, request_analysis
 from services.graph_builder import refresh_document_edges
 from services.semantic_search import (
@@ -32,9 +34,9 @@ class ConfirmAnalysisRequest(BaseModel):
     title: str
     category: str
     capture_date: datetime
-    deadline: datetime | None = None
     summary: str
     tags: list[str]
+    deadline: datetime | None = None
 
 
 def _resolve_document_file_path(file_path: str) -> str:
@@ -436,6 +438,29 @@ def save_analysis(
     document.raw_text = str(latest_result.get("raw_text") or document.raw_text or "")
     document.status = "analyzed"
     document.deadline = confirm.deadline or latest_result.get("deadline")
+
+    # 태그 저장 로직
+    existing_tags = db.query(Tag).filter(Tag.name.in_(confirm.tags)).all()
+
+    existing_tag_dict = {tag.name: tag for tag in existing_tags}
+
+    db.query(DocumentTag).filter(DocumentTag.document_id == document_id).delete()
+
+    for tag_name in confirm.tags:
+        if tag_name not in existing_tag_dict:
+            new_tag = Tag(id=str(uuid.uuid4()), name=tag_name)
+            db.add(new_tag)
+
+            db.flush()
+
+            existing_tag_dict[tag_name] = new_tag 
+            target_tag = new_tag
+
+        else:
+            target_tag = existing_tag_dict[tag_name]
+
+        new_document_tag = DocumentTag(document_id=document_id, tag_id=target_tag.id)
+        db.add(new_document_tag)
 
     if latest_job:
         updated_result = dict(latest_result)
