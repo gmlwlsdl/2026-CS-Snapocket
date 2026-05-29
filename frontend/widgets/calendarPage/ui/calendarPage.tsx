@@ -2,7 +2,7 @@
 
 import { useState, useRef, useCallback, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { SidebarNav } from '@/shared/ui'
+import { SidebarNav, ThemeToggle } from '@/shared/ui'
 import { UploadModal } from '@/features/upload'
 import { t as translate } from '@/shared/lib/i18n'
 import {
@@ -213,7 +213,7 @@ export function CalendarPage() {
   return (
     <div
       className="flex h-screen w-full overflow-hidden"
-      style={{ background: '#0c0e11' }}
+      style={{ background: 'var(--th-bg)' }}
     >
       <SidebarNav onUpload={() => setModalOpen(true)} />
 
@@ -226,15 +226,15 @@ export function CalendarPage() {
           className="flex shrink-0 items-center justify-between px-8"
           style={{
             height: 64,
-            background: 'rgba(12,14,17,0.7)',
-            borderBottom: '1px solid rgba(255,255,255,0.05)',
+            background: 'var(--th-header-bg)',
+            borderBottom: '1px solid var(--th-separator)',
             backdropFilter: 'blur(8px)',
           }}
         >
           <div className="flex items-center gap-6">
             <span
               className="font-manrope font-semibold text-sm"
-              style={{ color: '#aaabaf', letterSpacing: '1.4px' }}
+              style={{ color: 'var(--th-text-faint)', letterSpacing: '1.4px' }}
             >
               SCHEDULE
             </span>
@@ -251,11 +251,12 @@ export function CalendarPage() {
                 onClick={prevMonth}
                 className="flex h-5 w-4 items-center justify-center rounded transition-opacity hover:opacity-70"
                 aria-label="이전 달"
+                style={{ color: 'var(--th-text-faint)' }}
               >
                 <svg width="7" height="12" viewBox="0 0 7 12" fill="none">
                   <path
                     d="M6 1L1 6L6 11"
-                    stroke="#aaabaf"
+                    stroke="currentColor"
                     strokeWidth="1.5"
                     strokeLinecap="round"
                     strokeLinejoin="round"
@@ -267,11 +268,12 @@ export function CalendarPage() {
                 onClick={nextMonth}
                 className="flex h-5 w-4 items-center justify-center rounded transition-opacity hover:opacity-70"
                 aria-label="다음 달"
+                style={{ color: 'var(--th-text-faint)' }}
               >
                 <svg width="7" height="12" viewBox="0 0 7 12" fill="none">
                   <path
                     d="M1 1L6 6L1 11"
-                    stroke="#aaabaf"
+                    stroke="currentColor"
                     strokeWidth="1.5"
                     strokeLinecap="round"
                     strokeLinejoin="round"
@@ -293,16 +295,16 @@ export function CalendarPage() {
                   style={
                     isActive
                       ? {
-                          background: "#81ecff",
-                          color: "#003840",
+                          background: 'var(--th-chip-active-bg)',
+                          color: 'var(--th-chip-active-text)',
                           fontSize: 12,
                           fontWeight: 500,
                           letterSpacing: -0.4,
                         }
                       : {
-                          background: "#111417",
-                          border: "1px solid rgba(70,72,75,0.15)",
-                          color: "#aaabaf",
+                          background: 'var(--th-chip-inactive-bg)',
+                          border: '1px solid var(--th-chip-inactive-border)',
+                          color: 'var(--th-chip-inactive-text)',
                           fontSize: 12,
                           fontWeight: 500,
                           letterSpacing: -0.4,
@@ -315,47 +317,51 @@ export function CalendarPage() {
             })}
           </nav>
 
-          {/* 검색 */}
-          <div
-            className="flex items-center gap-2 rounded-full px-4"
-            style={{
-              width: 256,
-              height: 36,
-              background: '#111417',
-            }}
-          >
-            <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-              <circle cx="6" cy="6" r="5" stroke="#747579" strokeWidth="1.3" />
-              <path
-                d="M10 10L13 13"
-                stroke="#747579"
-                strokeWidth="1.3"
-                strokeLinecap="round"
+          {/* 검색 + 테마 토글 */}
+          <div className="flex items-center gap-3">
+            <div
+              className="flex items-center gap-2 rounded-full px-4"
+              style={{
+                width: 224,
+                height: 36,
+                background: 'var(--th-surface)',
+                border: '1px solid var(--th-border)',
+              }}
+            >
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style={{ color: 'var(--th-text-faint)', flexShrink: 0 }}>
+                <circle cx="6" cy="6" r="5" stroke="currentColor" strokeWidth="1.3" />
+                <path
+                  d="M10 10L13 13"
+                  stroke="currentColor"
+                  strokeWidth="1.3"
+                  strokeLinecap="round"
+                />
+              </svg>
+              <input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="flex-1 bg-transparent font-manrope text-[10px] font-medium tracking-widest outline-none th-placeholder"
+                style={{ color: 'var(--th-text-muted)', letterSpacing: '1.4px' }}
+                placeholder={translate('findDocument', 'ko')}
+                aria-label="문서 검색"
               />
-            </svg>
-            <input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="flex-1 bg-transparent font-manrope text-[10px] font-medium tracking-widest outline-none"
-              style={{ color: '#aaabaf', letterSpacing: '1.4px' }}
-              placeholder={translate('findDocument', 'ko')}
-              aria-label="문서 검색"
-            />
-            {search && (
-              <button
-                onClick={() => setSearch('')}
-                style={{ color: '#747579' }}
-              >
-                <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
-                  <path
-                    d="M1 1L9 9M9 1L1 9"
-                    stroke="currentColor"
-                    strokeWidth="1.3"
-                    strokeLinecap="round"
-                  />
-                </svg>
-              </button>
-            )}
+              {search && (
+                <button
+                  onClick={() => setSearch('')}
+                  style={{ color: 'var(--th-text-faint)' }}
+                >
+                  <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+                    <path
+                      d="M1 1L9 9M9 1L1 9"
+                      stroke="currentColor"
+                      strokeWidth="1.3"
+                      strokeLinecap="round"
+                    />
+                  </svg>
+                </button>
+              )}
+            </div>
+            <ThemeToggle />
           </div>
         </header>
 
@@ -364,7 +370,7 @@ export function CalendarPage() {
           {/* 요일 헤더 */}
           <div
             className="grid shrink-0 grid-cols-7"
-            style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}
+            style={{ borderBottom: '1px solid var(--th-separator)' }}
           >
             {WEEKDAYS.map((day) => (
               <div
@@ -372,12 +378,12 @@ export function CalendarPage() {
                 className="flex items-center justify-center"
                 style={{
                   height: 48,
-                  borderRight: '1px solid rgba(255,255,255,0.03)',
+                  borderRight: '1px solid var(--th-separator)',
                 }}
               >
                 <span
                   className="font-inter font-bold text-[10px] tracking-[2px]"
-                  style={{ color: '#aaabaf' }}
+                  style={{ color: 'var(--th-text-muted)' }}
                 >
                   {day}
                 </span>
@@ -394,7 +400,7 @@ export function CalendarPage() {
               <div
                 key={rowIdx}
                 className="grid grid-cols-7"
-                style={{ borderBottom: '1px solid rgba(255,255,255,0.03)' }}
+                style={{ borderBottom: '1px solid var(--th-separator)' }}
               >
                 {row.map((cell, colIdx) => {
                   const todayCell = isToday(cell.date)
@@ -412,9 +418,9 @@ export function CalendarPage() {
                       onKeyDown={(e) => {
                         if (e.key === 'Enter' || e.key === ' ') handleDayClick(cell.date)
                       }}
-                      className="relative flex flex-col overflow-hidden transition-colors cursor-pointer hover:bg-white/2"
+                      className="relative flex flex-col overflow-hidden transition-colors cursor-pointer"
                       style={{
-                        borderRight: '1px solid rgba(255,255,255,0.03)',
+                        borderRight: '1px solid var(--th-separator)',
                         background: isSelected
                           ? 'rgba(129,236,255,0.06)'
                           : todayCell
@@ -432,8 +438,8 @@ export function CalendarPage() {
                           color: todayCell
                             ? '#81ecff'
                             : cell.current
-                              ? '#f9f9fd'
-                              : 'rgba(170,171,175,0.3)',
+                              ? 'var(--th-text)'
+                              : 'var(--th-text-faint)',
                         }}
                       >
                         {String(cell.date.getDate()).padStart(2, '0')}
@@ -489,15 +495,15 @@ export function CalendarPage() {
             className="fixed right-0 top-0 z-20 flex h-full flex-col overflow-hidden"
             style={{
               width: 320,
-              background: '#111417',
-              borderLeft: '1px solid rgba(255,255,255,0.07)',
+              background: 'var(--th-day-panel)',
+              borderLeft: '1px solid var(--th-day-panel-border)',
             }}
           >
             <div
               className="flex shrink-0 items-center justify-between px-6"
               style={{
                 height: 64,
-                borderBottom: '1px solid rgba(255,255,255,0.05)',
+                borderBottom: '1px solid var(--th-separator)',
               }}
             >
               <span
@@ -509,12 +515,13 @@ export function CalendarPage() {
               <button
                 onClick={handleDayPanelClose}
                 className="flex h-7 w-7 items-center justify-center rounded transition-opacity hover:opacity-70"
+                style={{ color: 'var(--th-text-faint)' }}
                 aria-label="닫기"
               >
                 <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
                   <path
                     d="M1 1L11 11M11 1L1 11"
-                    stroke="#747579"
+                    stroke="currentColor"
                     strokeWidth="1.5"
                     strokeLinecap="round"
                   />
@@ -526,7 +533,7 @@ export function CalendarPage() {
               {dayItems.length === 0 ? (
                 <div
                   className="flex flex-1 items-center justify-center font-inter text-xs"
-                  style={{ color: '#747579' }}
+                  style={{ color: 'var(--th-text-faint)' }}
                 >
                   문서 없음
                 </div>
@@ -535,12 +542,12 @@ export function CalendarPage() {
                   <button
                     key={item.id}
                     onClick={() => router.push(`/analysis/${item.id}`)}
-                    className="flex flex-col gap-1.5 rounded-lg px-4 py-3 text-left transition-colors hover:bg-white/4"
-                    style={{ background: 'rgba(255,255,255,0.02)' }}
+                    className="flex flex-col gap-1.5 rounded-lg px-4 py-3 text-left transition-colors"
+                    style={{ background: 'var(--th-separator)' }}
                   >
                     <span
                       className="font-inter text-xs font-medium leading-snug"
-                      style={{ color: '#f9f9fd' }}
+                      style={{ color: 'var(--th-text)' }}
                     >
                       {item.title}
                     </span>
@@ -576,9 +583,10 @@ export function CalendarPage() {
         <div
           className="fixed bottom-6 left-1/2 -translate-x-1/2 rounded-full px-5 py-2.5 font-inter text-xs font-medium"
           style={{
-            background: '#1a1d21',
-            border: '1px solid rgba(255,255,255,0.08)',
-            color: '#aaabaf',
+            background: 'var(--th-surface-2, var(--th-surface))',
+            border: '1px solid var(--th-border)',
+            color: 'var(--th-text-muted)',
+            backdropFilter: 'blur(8px)',
           }}
         >
           {uploadToast.fileName} 업로드 중…

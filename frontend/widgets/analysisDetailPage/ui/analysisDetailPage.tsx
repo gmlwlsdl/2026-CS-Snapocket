@@ -253,6 +253,11 @@ export function AnalysisDetailPage() {
   // ── 액션 핸들러 ────────────────────────────────────────────────────────────
 
   async function handleConfirm() {
+    if (form.captureDate && !/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(form.captureDate)) {
+      toast.error('날짜 형식이 올바르지 않습니다. MM/DD/YYYY 형식으로 입력해 주세요.')
+      return
+    }
+
     setPageStatus('saving')
     try {
       await confirmAnalysis(id, {

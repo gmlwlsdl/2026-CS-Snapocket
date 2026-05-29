@@ -64,8 +64,8 @@ export function LoginPage() {
                 10M+
               </span>
               <span
-                className="font-inter text-snap-muted/60 uppercase"
-                style={{ fontSize: 10, letterSpacing: 2, lineHeight: "15px" }}
+                className="font-inter text-snap-muted/75 uppercase"
+                style={{ fontSize: 11, letterSpacing: 2, lineHeight: "15px" }}
               >
                 Assets Analyzed
               </span>
@@ -78,8 +78,8 @@ export function LoginPage() {
                 99.9%
               </span>
               <span
-                className="font-inter text-snap-muted/60 uppercase"
-                style={{ fontSize: 10, letterSpacing: 2, lineHeight: "15px" }}
+                className="font-inter text-snap-muted/75 uppercase"
+                style={{ fontSize: 11, letterSpacing: 2, lineHeight: "15px" }}
               >
                 Recognition Accuracy
               </span>
@@ -124,8 +124,8 @@ export function LoginPage() {
         {/* 하단 푸터 */}
         <footer className="flex items-center justify-between px-8 sm:px-12 py-5">
           <span
-            className="font-inter text-snap-muted/30"
-            style={{ fontSize: 10, letterSpacing: 1, lineHeight: "15px" }}
+            className="font-inter text-snap-muted/55"
+            style={{ fontSize: 11, letterSpacing: 1, lineHeight: "15px" }}
           >
             © 2024 Snapocket AI. The Digital Curator.
           </span>
@@ -134,8 +134,8 @@ export function LoginPage() {
               <a
                 key={label}
                 href={`/${label.toLowerCase()}`}
-                className="font-inter text-snap-muted/40 hover:text-snap-muted/60 transition-colors"
-                style={{ fontSize: 10, letterSpacing: 1, lineHeight: "15px" }}
+                className="font-inter text-snap-muted/60 hover:text-snap-muted/80 transition-colors"
+                style={{ fontSize: 11, letterSpacing: 1, lineHeight: "15px" }}
               >
                 {label}
               </a>
