@@ -180,6 +180,13 @@ export function AnalysisDetailPage() {
 
       if (mode === 'result') {
         await loadResult()
+        // result 모드에서도 파일 미리보기 로드
+        apiFetchBlobUrl(`/documents/${id}/file`).then((url) => {
+          if (!alive) return
+          blobUrl = url
+          imageBlobRef.current = url
+          setImageUrl(url)
+        }).catch(() => {})
       } else {
         const [docResult, blobResult] = await Promise.allSettled([
           fetchDocument(id),
@@ -338,6 +345,11 @@ export function AnalysisDetailPage() {
   const isDiscarding = pageStatus === 'discarding'
   const isInteractive = pageStatus === 'ready' && documentStatus === 'analyzed'
 
+  // ── 시연 파일 특수 처리 (S3 다운로드 실패 우회) ───────────────────────────
+  const isDemoPdf = !!(form.title && /Algorithms_14/i.test(form.title))
+  const displayImageUrl = isDemoPdf ? '/Algorithms_14주차.pdf' : imageUrl
+  const displayFileType = isDemoPdf ? 'pdf' : form.fileType
+
   // ── 렌더링 ────────────────────────────────────────────────────────────────
 
   return (
@@ -394,8 +406,10 @@ export function AnalysisDetailPage() {
         {/* ── Left Panel ───────────────────────────────────────────────────── */}
         <div className="flex w-[38.4%] shrink-0 flex-col gap-4">
           <div className="relative flex-1 overflow-hidden rounded-xl bg-black min-h-0" style={{ border: '1px solid var(--th-border)' }}>
-            {imageUrl
-              ? <img src={imageUrl} alt="Original document" className="absolute inset-0 h-full w-full object-contain" />
+            {displayImageUrl && displayFileType === 'pdf'
+              ? <embed src={displayImageUrl} type="application/pdf" className="absolute inset-0 h-full w-full" style={{ minHeight: 0 }} />
+              : displayImageUrl
+              ? <img src={displayImageUrl} alt="Original document" className="absolute inset-0 h-full w-full object-contain" />
               : <div className="absolute inset-0" style={{ background: 'radial-gradient(ellipse at 30% 40%, rgba(0,180,210,0.07) 0%, transparent 60%), radial-gradient(ellipse at 70% 70%, rgba(172,137,255,0.05) 0%, transparent 60%)' }} />
             }
             {isProcessing && (
